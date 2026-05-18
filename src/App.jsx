@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import * as XLSX from 'xlsx'
 import { supabase } from './supabase.js'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis,
@@ -934,62 +933,312 @@ function Entry({ctx}) {
   )
 }
 
-/* ════ UPLOAD ════ */
-const FDEFS=[
-  {key:'target',   label:'เป้าเดือน (Jun/Jul...)', icon:'🎯', hint:'Sheet: For_BI'},
-  {key:'hist',     label:'ประวัติยอดขาย.xlsx',      icon:'📖', hint:'Sheet: Sales History23-26'},
-  {key:'daily',    label:'ยอดขายรายวัน.xlsx',       icon:'📅', hint:'Sheet: ยอดขายรายวัน'},
-  {key:'tiredaily',label:'ยอดขายยางรายวัน.xlsx',    icon:'🛞', hint:'Sheet: ยอดขายยางรายวัน'},
+/* ═════════════════════════════════════════════════════════════
+   UPLOAD
+═════════════════════════════════════════════════════════════ */
+
+const FDEFS = [
+  {
+    key:'target',
+    label:'เป้าเดือน (Jun/Jul...)',
+    icon:'🎯',
+    hint:'Sheet: For_BI'
+  },
+  {
+    key:'hist',
+    label:'ประวัติยอดขาย.xlsx',
+    icon:'📖',
+    hint:'Sheet: Sales History23-26'
+  },
+  {
+    key:'daily',
+    label:'ยอดขายรายวัน.xlsx',
+    icon:'📅',
+    hint:'Sheet: ยอดขายรายวัน'
+  },
+  {
+    key:'tiredaily',
+    label:'ยอดขายยางรายวัน.xlsx',
+    icon:'🛞',
+    hint:'Sheet: ยอดขายยางรายวัน'
+  },
 ]
 
 function parseTgt(wb) {
-  const sn=wb.SheetNames.find(s=>s.toLowerCase().includes('for_bi')||s.includes('2026'))||wb.SheetNames[0]
-  const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1})
-  const map={'3':'003','9':'009','10':'010','12':'012','14':'014','48':'048','50':'050','96':'096','107':'107','143':'143'}
-  const res={}
-  rows.forEach(r=>{const bid=map[String(r[0]||'').trim()];if(bid&&r[3])res[bid]={sales:+r[3]||0,tire:+r[4]||0,lube:+r[5]||0,battery:+r[6]||0,brake:+r[7]||0,shock:+r[8]||0,mp:+r[9]||0,cc:+r[12]||0}})
+
+  const sn =
+    wb.SheetNames.find(
+      s =>
+        s.toLowerCase().includes('for_bi') ||
+        s.includes('2026')
+    ) || wb.SheetNames[0]
+
+  const rows = XLSX.utils.sheet_to_json(
+    wb.Sheets[sn],
+    { header:1 }
+  )
+
+  const map = {
+    '3':'003',
+    '9':'009',
+    '10':'010',
+    '12':'012',
+    '14':'014',
+    '48':'048',
+    '50':'050',
+    '96':'096',
+    '107':'107',
+    '143':'143'
+  }
+
+  const res = {}
+
+  rows.forEach(r => {
+
+    const bid = map[String(r[0] || '').trim()]
+
+    if (bid && r[3]) {
+
+      res[bid] = {
+        sales:   +r[3]  || 0,
+        tire:    +r[4]  || 0,
+        lube:    +r[5]  || 0,
+        battery: +r[6]  || 0,
+        brake:   +r[7]  || 0,
+        shock:   +r[8]  || 0,
+        mp:      +r[9]  || 0,
+        cc:      +r[12] || 0
+      }
+    }
+  })
+
   return res
 }
 
-function Upload({ctx}) {
-  const {upStat,setUpStat,setTARGET,setHIST,mobile} = ctx
-  const refs={target:useRef(),hist:useRef(),daily:useRef(),tiredaily:useRef()}
+function Upload({ ctx }) {
+
+  const {
+    upStat,
+    setUpStat,
+    setTARGET,
+    setHIST,
+    mobile
+  } = ctx
+
+  const refs = {
+    target: useRef(),
+    hist: useRef(),
+    daily: useRef(),
+    tiredaily: useRef()
+  }
+
+  /* ═════════════════════════════════════════════════════
+     HANDLE UPLOAD
+  ═════════════════════════════════════════════════════ */
 
   const handle = async (key, file) => {
+
     if (!file) return
+
     try {
-      const buf=await file.arrayBuffer(), wb=XLSX.read(buf,{type:'array',cellDates:true})
-      if (key==='target') {
-        const p=parseTgt(wb)
-        setTARGET(prev=>{const n={...prev,...p}; DB.set('cp_tgt',n); return n})
+
+      // ✅ โหลด XLSX ตอนใช้งานจริงเท่านั้น
+      const XLSX = await import('xlsx')
+
+      const buf = await file.arrayBuffer()
+
+      const wb = XLSX.read(buf, {
+        type: 'array',
+        cellDates: true
+      })
+
+      /* ─────────────────────────────────────────────
+         TARGET
+      ───────────────────────────────────────────── */
+
+      if (key === 'target') {
+
+        const p = parseTgt(wb)
+
+        setTARGET(prev => {
+
+          const n = {
+            ...prev,
+            ...p
+          }
+
+          DB.set('cp_tgt', n)
+
+          return n
+        })
       }
-      const ns={...upStat,[key]:{name:file.name,time:new Date().toLocaleTimeString('th-TH'),ok:true}}
-      setUpStat(ns); DB.set('cp_up',ns)
-    } catch(e) {
-      const ns={...upStat,[key]:{name:file.name,ok:false,err:e.message}}
+
+      /* ─────────────────────────────────────────────
+         HISTORY
+      ───────────────────────────────────────────── */
+
+      if (key === 'hist') {
+
+        setHIST(wb)
+      }
+
+      /* ─────────────────────────────────────────────
+         STATUS
+      ───────────────────────────────────────────── */
+
+      const ns = {
+        ...upStat,
+        [key]: {
+          name: file.name,
+          time: new Date().toLocaleTimeString('th-TH'),
+          ok: true
+        }
+      }
+
+      setUpStat(ns)
+
+      DB.set('cp_up', ns)
+
+    } catch (e) {
+
+      console.error(e)
+
+      const ns = {
+        ...upStat,
+        [key]: {
+          name: file.name,
+          ok: false,
+          err: e.message
+        }
+      }
+
       setUpStat(ns)
     }
   }
 
   return (
+
     <div>
-      <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?18:22,color:'#f59e0b',letterSpacing:2,marginBottom:6}}>📁 อัพโหลด Excel</div>
-      <div style={{fontSize:12,color:'#6b7280',marginBottom:16}}>อัพโหลดครั้งเดียว — ทุกเครื่องเห็นข้อมูลใหม่ทันที (Supabase Realtime)</div>
-      <div style={{display:'grid',gridTemplateColumns:mobile?'1fr':'1fr 1fr',gap:12,marginBottom:20}}>
-        {FDEFS.map(fd=>{const st=upStat[fd.key];return(
-          <div key={fd.key} style={{background:'#1a1f2e',border:`1px solid ${st?.ok?'#22c55e':st?.ok===false?'#ef4444':'#2d3548'}`,borderRadius:10,padding:14}}>
-            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,marginBottom:2}}>{fd.icon} {fd.label}</div>
-            <div style={{fontSize:10,color:'#6b7280',marginBottom:10}}>{fd.hint}</div>
-            {st&&<div style={{fontSize:11,marginBottom:8,color:st.ok?'#22c55e':'#ef4444',background:st.ok?'#0d2a1a':'#2a0d0d',padding:'4px 8px',borderRadius:4}}>{st.ok?'✅':'❌'} {st.name}</div>}
-            <input ref={refs[fd.key]} type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={e=>handle(fd.key,e.target.files[0])}/>
-            <button onClick={()=>refs[fd.key].current?.click()} style={{width:'100%',padding:'10px 0',background:'#1d4ed8',color:'#fff',border:'none',borderRadius:6,cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13}}>📂 {st?.ok?'อัพโหลดใหม่':'เลือกไฟล์'}</button>
-          </div>
-        )})}
+
+      <div style={{
+        fontFamily:'Barlow Condensed',
+        fontWeight:900,
+        fontSize:mobile ? 18 : 22,
+        color:'#f59e0b',
+        letterSpacing:2,
+        marginBottom:6
+      }}>
+        📁 อัพโหลด Excel
       </div>
+
+      <div style={{
+        fontSize:12,
+        color:'#6b7280',
+        marginBottom:16
+      }}>
+        อัพโหลดครั้งเดียว — ทุกเครื่องเห็นข้อมูลใหม่ทันที
+        (Supabase Realtime)
+      </div>
+
+      <div style={{
+        display:'grid',
+        gridTemplateColumns:mobile ? '1fr' : '1fr 1fr',
+        gap:12,
+        marginBottom:20
+      }}>
+
+        {FDEFS.map(fd => {
+
+          const st = upStat[fd.key]
+
+          return (
+
+            <div
+              key={fd.key}
+              style={{
+                background:'#1a1f2e',
+                border:`1px solid ${
+                  st?.ok
+                    ? '#22c55e'
+                    : st?.ok === false
+                    ? '#ef4444'
+                    : '#2d3548'
+                }`,
+                borderRadius:10,
+                padding:14
+              }}
+            >
+
+              <div style={{
+                fontFamily:'Barlow Condensed',
+                fontWeight:700,
+                fontSize:14,
+                marginBottom:2
+              }}>
+                {fd.icon} {fd.label}
+              </div>
+
+              <div style={{
+                fontSize:10,
+                color:'#6b7280',
+                marginBottom:10
+              }}>
+                {fd.hint}
+              </div>
+
+              {st && (
+
+                <div style={{
+                  fontSize:11,
+                  marginBottom:8,
+                  color:st.ok ? '#22c55e' : '#ef4444',
+                  background:st.ok ? '#0d2a1a' : '#2a0d0d',
+                  padding:'4px 8px',
+                  borderRadius:4
+                }}>
+                  {st.ok ? '✅' : '❌'} {st.name}
+                </div>
+              )}
+
+              <input
+                ref={refs[fd.key]}
+                type="file"
+                accept=".xlsx,.xls"
+                style={{ display:'none' }}
+                onChange={e =>
+                  handle(fd.key, e.target.files[0])
+                }
+              />
+
+              <button
+                onClick={() =>
+                  refs[fd.key].current?.click()
+                }
+                style={{
+                  width:'100%',
+                  padding:'10px 0',
+                  background:'#1d4ed8',
+                  color:'#fff',
+                  border:'none',
+                  borderRadius:6,
+                  cursor:'pointer',
+                  fontFamily:'Barlow Condensed',
+                  fontWeight:700,
+                  fontSize:13
+                }}
+              >
+                📂 {st?.ok ? 'อัพโหลดใหม่' : 'เลือกไฟล์'}
+              </button>
+
+            </div>
+          )
+        })}
+
+      </div>
+
     </div>
   )
 }
-
 /* ════ SETTINGS ════ */
 function Settings({ctx}) {
   const {cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,mobile} = ctx

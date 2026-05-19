@@ -322,18 +322,31 @@ export default function App() {
   }
 
   /* ── AI helpers ── */
+  // ── AI helper: เรียกผ่าน /api/claude (Vercel proxy) แทน direct call (CORS blocked)
+  const callAI = async (body) => {
+    const res = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`API error ${res.status}`)
+    return res.json()
+  }
+
   const genPlan = async (bid) => {
     setAiLoad(p=>({...p,[bid]:true}))
     const br = bid==='ALL'?{name:'รวมทุกสาขา'}:BRANCHES.find(x=>x.id===bid)
     const t=getT(bid), m=bid==='ALL'?getAllMTD():getMTD(bid), ts=bid==='ALL'?getAllTS():getTS(bid), h=getH(bid)
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:900,messages:[{role:'user',
-          content:`ที่ปรึกษา Cockpit ร้านยาง\nสาขา: ${br.name} | MTD ${TODAY_D} ${MONTH_TH} ${cfg.year}\nเป้า: ${N(t.sales)}฿ | ยาง: ${t.tire} เส้น\nMTD: ${N(ts)}฿ (${P(ts,t.sales*MTD_R).toFixed(1)}%) | ยาง ${m.tire} เส้น\n2025: ${(h[2025]||[]).join(',')}\n2026 YTD: ${(h[2026]||[]).slice(0,cfg.month).join(',')}\nวิเคราะห์จุดอ่อน 3-5 ข้อ + แนวทาง ภาษาไทย`}]})})
-      const d = await res.json()
+      const d = await callAI({
+        model:'claude-sonnet-4-20250514', max_tokens:900,
+        messages:[{role:'user', content:
+          `ที่ปรึกษา Cockpit ร้านยาง\nสาขา: ${br.name} | MTD ${TODAY_D} ${MONTH_TH} ${cfg.year}\nเป้า: ${N(t.sales)}฿ | ยาง: ${t.tire} เส้น\nMTD: ${N(ts)}฿ (${P(ts,t.sales*MTD_R).toFixed(1)}%) | ยาง ${m.tire} เส้น\n2025: ${(h[2025]||[]).join(',')}\n2026 YTD: ${(h[2026]||[]).slice(0,cfg.month).join(',')}\nวิเคราะห์จุดอ่อน 3-5 ข้อ + แนวทาง ภาษาไทย`
+        }]
+      })
       const n = {...aiAna, [bid]:d.content[0].text}
       setAiAna(n); DB.set('cp_ai', n)
-    } catch(e) { console.error(e) }
+    } catch(e) { console.error('genPlan error:', e) }
     setAiLoad(p=>({...p,[bid]:false}))
   }
 
@@ -341,13 +354,15 @@ export default function App() {
     setFcstLoad(true)
     const s = BRANCHES.map(b=>`${b.short}: PY25=${fM((MAY_SALES[b.id]?.[2025]||0)*MTD_R)} เป้า=${fM(getT(b.id).sales)}`).join('\n')
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',
-          content:`Forecast วันที่ ${TODAY_D+1}-${TOTAL_D} (${DAYS_LEFT}ค่า)\n${s}\nJSON: {"003":{"dailyForecast":[${DAYS_LEFT}ค่า],"comment":""},...} ครบ 10 สาขา`}]})})
-      const d = await res.json()
+      const d = await callAI({
+        model:'claude-sonnet-4-20250514', max_tokens:1200,
+        messages:[{role:'user', content:
+          `Forecast วันที่ ${TODAY_D+1}-${TOTAL_D} (${DAYS_LEFT}ค่า)\n${s}\nJSON: {"003":{"dailyForecast":[${DAYS_LEFT}ค่า],"comment":""},...} ครบ 10 สาขา`
+        }]
+      })
       const p = JSON.parse(d.content[0].text.replace(/```json|```/g,'').trim())
       setFcst(p); DB.set('cp_fcst', p)
-    } catch(e) { console.error(e) }
+    } catch(e) { console.error('genFcst error:', e) }
     setFcstLoad(false)
   }
 

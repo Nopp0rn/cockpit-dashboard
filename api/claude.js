@@ -1,36 +1,46 @@
-// api/claude.js — Vercel Serverless Function
-// Browser → /api/claude → api.anthropic.com (ไม่มี CORS)
-// ใส่ ANTHROPIC_API_KEY ใน Vercel Dashboard → Settings → Environment Variables
+// api/claude.js — Vercel Serverless Function (Groq)
+// Browser → /api/claude → api.groq.com (ไม่มี CORS)
+// ใส่ GROQ_API_KEY ใน Vercel Dashboard → Settings → Environment Variables
 
 export default async function handler(req, res) {
 
-  // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // Get API key from environment variable
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured in Vercel environment variables' })
+    return res.status(500).json({ error: 'GROQ_API_KEY not configured in Vercel environment variables' })
   }
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // แปลง Anthropic format → Groq (OpenAI-compatible) format
+    const { messages, max_tokens } = req.body
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify({
+        model:       'llama-3.3-70b-versatile',
+        messages:    messages,
+        max_tokens:  max_tokens || 1000,
+        temperature: 0.7,
+      }),
     })
 
     const data = await response.json()
-    return res.status(response.status).json(data)
+
+    // แปลง Groq response → Anthropic format (ให้ App.jsx ใช้ได้เหมือนเดิม)
+    const text = data.choices?.[0]?.message?.content || ''
+    return res.status(200).json({
+      content: [{ type: 'text', text }]
+    })
 
   } catch (err) {
-    console.error('Anthropic API error:', err)
+    console.error('Groq API error:', err)
     return res.status(500).json({ error: err.message })
   }
 }

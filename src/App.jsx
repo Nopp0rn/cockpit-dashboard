@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase.js'
+import * as XLSX from 'xlsx'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
@@ -1042,9 +1043,6 @@ function Upload({ ctx }) {
 
     try {
 
-      // ✅ โหลด XLSX ตอนใช้งานจริงเท่านั้น
-      const XLSX = await import('xlsx')
-
       const buf = await file.arrayBuffer()
 
       const wb = XLSX.read(buf, {
@@ -1078,8 +1076,9 @@ function Upload({ ctx }) {
       ───────────────────────────────────────────── */
 
       if (key === 'hist') {
-
-        setHIST(wb)
+        // History parse placeholder - keeps existing HIST data
+        // Full parser can be added later from Excel structure
+        console.log('History file received:', file.name, '— keeping existing data')
       }
 
       /* ─────────────────────────────────────────────

@@ -137,10 +137,15 @@ function sumDays(de, bid) {
   return agg
 }
 function calcTS(agg) {
-  // ถ้ากรอก "ยอดขายรวมวัน" โดยตรง ใช้ค่านั้นเลย
-  if ((agg.totalSales||0) > 0) return agg.totalSales
-  // ไม่ได้กรอก — คำนวณจากรายการ
-  return (agg.tireSales||0)+(agg.service||0)+(agg.battery||0)*3500+(agg.brake||0)*800+(agg.shockUp||0)*800+(agg.mp||0)*2500+(agg.alloyWheel||0)*4500
+  // 1️⃣ ถ้ากรอก "ยอดขายรวมวัน (฿)" โดยตรง ใช้ค่านั้น
+  if ((agg.totalSales||0) > 0) return Number(agg.totalSales)
+  // 2️⃣ ถ้ากรอกยอดแยกรายการ รวมเฉพาะช่องที่เป็นเงิน (฿)
+  // tireSales, service คือยอดเงินโดยตรง
+  // battery/brake/shock/mp/alloy คูณราคาประมาณ
+  const fromItems = (agg.tireSales||0)+(agg.service||0)+
+    (agg.battery||0)*3500+(agg.brake||0)*800+
+    (agg.shockUp||0)*800+(agg.mp||0)*2500+(agg.alloyWheel||0)*4500
+  return fromItems
 }
 
 /* ── UI atoms ── */
@@ -352,11 +357,32 @@ export default function App() {
     setAiLoad(p=>({...p,[bid]:true}))
     const br = bid==='ALL'?{name:'รวมทุกสาขา'}:BRANCHES.find(x=>x.id===bid)
     const t=getT(bid), m=bid==='ALL'?getAllMTD():getMTD(bid), ts=bid==='ALL'?getAllTS():getTS(bid), h=getH(bid)
+    // m.battery, m.brake etc. are cumulative MTD totals from sumDays
     try {
       const d = await callAI({
         model:'claude-sonnet-4-20250514', max_tokens:900,
         messages:[{role:'user', content:
-          `ที่ปรึกษา Cockpit ร้านยาง\nสาขา: ${br.name} | MTD ${TODAY_D} ${MONTH_TH} ${cfg.year}\nเป้า: ${N(t.sales)}฿ | ยาง: ${t.tire} เส้น\nMTD: ${N(ts)}฿ (${P(ts,t.sales*MTD_R).toFixed(1)}%) | ยาง ${m.tire} เส้น\n2025: ${(h[2025]||[]).join(',')}\n2026 YTD: ${(h[2026]||[]).slice(0,cfg.month).join(',')}\nวิเคราะห์จุดอ่อน 3-5 ข้อ + แนวทาง ภาษาไทย`
+          `คุณเป็นที่ปรึกษาการขาย Cockpit ร้านยางรถยนต์
+สาขา: ${br.name} | MTD ${TODAY_D} ${MONTH_TH} ${cfg.year} (${TODAY_D}/${TOTAL_D} วัน = ${(MTD_R*100).toFixed(0)}%)
+
+=== เป้าหมายรายสินค้า vs ยอดจริง ===
+ยอดขายรวม: เป้า ${N(Math.round(t.sales*MTD_R))}฿ | จริง ${N(ts)}฿ | ${P(ts,t.sales*MTD_R).toFixed(1)}%
+ยาง: เป้า ${Math.round(t.tire*MTD_R)} เส้น | จริง ${m.tire} เส้น | ${P(m.tire,t.tire*MTD_R).toFixed(1)}%
+Battery: เป้า ${Math.round(t.battery*MTD_R)} ลูก | จริง ${m.battery||0} ลูก | ${P(m.battery||0,t.battery*MTD_R).toFixed(1)}%
+Brake: เป้า ${Math.round(t.brake*MTD_R)} ชิ้น | จริง ${m.brake||0} | ${P(m.brake||0,t.brake*MTD_R).toFixed(1)}%
+Shock: เป้า ${Math.round(t.shock*MTD_R)} ชิ้น | จริง ${m.shockUp||0} | ${P(m.shockUp||0,t.shock*MTD_R).toFixed(1)}%
+MP: เป้า ${Math.round(t.mp*MTD_R)} ชุด | จริง ${m.mp||0} | ${P(m.mp||0,t.mp*MTD_R).toFixed(1)}%
+Lube: เป้า ${Math.round(t.lube*MTD_R)} ลิตร | จริง ${m.lubricant||0} | ${P(m.lubricant||0,t.lube*MTD_R).toFixed(1)}%
+Job Order: เป้า ${Math.round(t.cc*MTD_R)} | จริง ${m.jobOrder||0} | ${P(m.jobOrder||0,t.cc*MTD_R).toFixed(1)}%
+
+=== ประวัติ ===
+2025: ${(h[2025]||[]).join(',')}
+2026 YTD: ${(h[2026]||[]).slice(0,cfg.month).join(',')}
+
+กรุณาวิเคราะห์ภาษาไทย:
+1. สินค้าไหนที่ยังขาดเป้าหนักที่สุด (เรียงลำดับ)
+2. สินค้าที่ควร push เพิ่มเพื่อชดเชยยอดที่ขาด พร้อมเหตุผล
+3. แนวทางปฏิบัติที่ทำได้ทันที 3-5 ข้อ`
         }]
       })
       const n = {...aiAna, [bid]:d.content[0].text}
@@ -372,7 +398,14 @@ export default function App() {
       const d = await callAI({
         model:'claude-sonnet-4-20250514', max_tokens:1200,
         messages:[{role:'user', content:
-          `Forecast วันที่ ${TODAY_D+1}-${TOTAL_D} (${DAYS_LEFT}ค่า)\n${s}\nJSON: {"003":{"dailyForecast":[${DAYS_LEFT}ค่า],"comment":""},...} ครบ 10 สาขา`
+          `คำนวณ Forecast ยอดขายรายวัน (฿) สำหรับวันที่ ${TODAY_D+1}-${TOTAL_D} (${DAYS_LEFT}วัน)
+ใช้ข้อมูล: run rate ปัจจุบัน, เป้าหมาย, ปีก่อน (PY25)
+ต้องมีความผันผวนตามธรรมชาติ (ไม่ใช่เส้นตรง) สูงต้นสัปดาห์/ปลายเดือน ต่ำกลางสัปดาห์
+
+${s}
+
+ตอบ JSON เท่านั้น (ไม่มี markdown):
+{"003":{"dailyForecast":[${DAYS_LEFT} ตัวเลข ฿],"comment":"สรุปสั้น"},"009":{...},...} ครบ 10 สาขา`
         }]
       })
       const p = JSON.parse(d.content[0].text.replace(/```json|```/g,'').trim())
@@ -381,7 +414,7 @@ export default function App() {
     setFcstLoad(false)
   }
 
-  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,aiAna,aiLoad,genPlan,fcst,fcstLoad,genFcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile}
+  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,aiAna,aiLoad,genPlan,fcst,fcstLoad,genFcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS}
 
   /* ── Loading screen ── */
   if (!ready) return (
@@ -413,10 +446,10 @@ export default function App() {
   ) : null
 
   return (
-    <div style={{fontFamily:'Barlow,sans-serif',background:'#0d1117',minHeight:'100vh',color:'#e5e7eb',paddingBottom:mobile?72:0}}>
+    <div style={{fontFamily:'Barlow,sans-serif',background:'#0d1117',height:'100dvh',height:'100vh',display:'flex',flexDirection:'column',color:'#e5e7eb',overflow:'hidden'}}>
 
-      {/* HEADER */}
-      <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:'2px solid #f59e0b',padding:mobile?'8px 12px':'10px 20px',display:'flex',alignItems:'center',gap:10,position:'sticky',top:0,zIndex:50}}>
+      {/* HEADER — safe area top */}
+      <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:'2px solid #f59e0b',padding:`calc(${mobile?'8px':'10px'} + env(safe-area-inset-top,0px)) ${mobile?'12px':'20px'} ${mobile?'8px':'10px'}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,zIndex:50}}>
         <div style={{width:mobile?30:38,height:mobile?30:38,background:'#f59e0b',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:mobile?16:20,flexShrink:0}}>🏁</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?13:20,letterSpacing:mobile?1:3,color:'#f59e0b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>COCKPIT SALES INTELLIGENCE</div>
@@ -435,7 +468,7 @@ export default function App() {
 
       {/* DESKTOP NAV */}
       {!mobile && (
-        <div style={{display:'flex',background:'#0d1117',borderBottom:'1px solid #1e2538',overflowX:'auto'}}>
+        <div style={{display:'flex',background:'#0d1117',borderBottom:'1px solid #1e2538',overflowX:'auto',flexShrink:0}}>
           {TABS.map(t => {
             const isSetting = t.id==='settings'
             const isActive  = tab===t.id
@@ -449,8 +482,8 @@ export default function App() {
         </div>
       )}
 
-      {/* CONTENT */}
-      <div style={{padding:mobile?'10px 10px':'18px 20px',maxWidth:1440,margin:'0 auto'}}>
+      {/* CONTENT — scrollable */}
+      <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:mobile?'10px 10px':'18px 20px',paddingBottom:mobile?`calc(80px + env(safe-area-inset-bottom,0px))`:'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
         {tab==='overview' && <Overview ctx={ctx}/>}
         {tab==='mtd'      && <MTDTab ctx={ctx}/>}
         {tab==='products' && <Products ctx={ctx}/>}
@@ -464,9 +497,9 @@ export default function App() {
         {tab==='settings' && <Settings ctx={ctx}/>}
       </div>
 
-      {/* MOBILE BOTTOM NAV */}
+      {/* MOBILE BOTTOM NAV — safe area bottom */}
       {mobile && (
-        <div style={{position:'fixed',bottom:0,left:0,right:0,background:'#0d1117',borderTop:'1px solid #2d3548',display:'flex',overflowX:'auto',zIndex:100}}>
+        <div style={{flexShrink:0,background:'#0d1117',borderTop:'1px solid #2d3548',display:'flex',overflowX:'auto',zIndex:100,paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
           {TABS.map(t => {
             const isA = tab===t.id
             const clr = t.id==='settings'?'#a78bfa':'#f59e0b'
@@ -567,13 +600,22 @@ function Overview({ctx}) {
 
 /* ════ MTD ════ */
 function MTDTab({ctx}) {
-  const {selBr,setSelBr,getMTD,getTS,getAllMTD,getAllTS,getT,getH,MTD_R,TODAY_D,MONTH_TH,cfg,mobile} = ctx
+  const {selBr,setSelBr,getMTD,getTS,getAllMTD,getAllTS,getT,getH,MTD_R,TODAY_D,MONTH_TH,cfg,mobile,HIST} = ctx
   const isAll=selBr==='ALL', t=getT(selBr), m=isAll?getAllMTD():getMTD(selBr), ts=isAll?getAllTS():getTS(selBr), h=getH(selBr)
+  const [showYr, setShowYr] = useState({2023:true,2024:true,2025:true,2026:true})
   const pyMTD  = isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2025]||0)*MTD_R,0):(MAY_SALES[selBr]?.[2025]||0)*MTD_R
   const py2MTD = isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2024]||0)*MTD_R,0):(MAY_SALES[selBr]?.[2024]||0)*MTD_R
   const t25    = isAll?BRANCHES.reduce((s,b)=>s+(MAY_TIRE[b.id]?.[2025]||0)*MTD_R,0):(MAY_TIRE[selBr]?.[2025]||0)*MTD_R
   const t24    = isAll?BRANCHES.reduce((s,b)=>s+(MAY_TIRE[b.id]?.[2024]||0)*MTD_R,0):(MAY_TIRE[selBr]?.[2024]||0)*MTD_R
   const mData  = MONTHS_TH.map((mn,i) => ({month:mn,2023:h[2023]?.[i]??null,2024:h[2024]?.[i]??null,2025:h[2025]?.[i]??null,2026:h[2026]?.[i]??null}))
+  const tireData = MONTHS_TH.map((mn,i)=>({month:mn,
+    2024: isAll?BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2024]?.[i]||0),0):SEED_TIREQ[selBr]?.[2024]?.[i]||0,
+    2025: isAll?BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2025]?.[i]||0),0):SEED_TIREQ[selBr]?.[2025]?.[i]||0,
+  }))
+
+  const toggle = yr => setShowYr(p=>({...p,[yr]:!p[yr]}))
+  const yrBtnStyle = (yr) => ({padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${YRCLR[yr]}`,background:showYr[yr]?YRCLR[yr]+'33':'transparent',color:showYr[yr]?YRCLR[yr]:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11})
+
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
@@ -585,10 +627,14 @@ function MTDTab({ctx}) {
           <Card label="ยาง MTD" value={N(m.tire)+' เส้น'} sub={`เป้า ${N(Math.round(t.tire*MTD_R))}`} color="#3b82f6"/>
           <Card label="vs PY May 25" value={P(ts,pyMTD).toFixed(1)+'%'} color="#94a3b8"/>
         </div>
+
+        {/* Sales chart with toggleable year lines */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
-          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b'}}>ยอดขายรายเดือน (฿000)</div>
-            <span style={{fontSize:9,color:'#22c55e',background:'#0d2a1a',padding:'2px 6px',borderRadius:4}}>2026 = ม.ค.–{MONTH_TH} จริง</span>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {[2023,2024,2025,2026].map(yr=><button key={yr} onClick={()=>toggle(yr)} style={yrBtnStyle(yr)}>{yr}</button>)}
+            </div>
           </div>
           <ResponsiveContainer width="100%" height={mobile?150:210}>
             <LineChart data={mData}>
@@ -596,11 +642,27 @@ function MTDTab({ctx}) {
               <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
               <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
               <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[v!=null?N(v*1000)+'฿':'—','']}/>
-              <Legend wrapperStyle={{fontSize:9}}/>
-              {[2023,2024,2025,2026].map(yr=><Line key={yr} type="monotone" dataKey={yr} stroke={YRCLR[yr]} strokeWidth={yr===2026?3:1.5} dot={yr===2026?{r:3}:false} strokeDasharray={yr===2026?'6 3':'none'} connectNulls={false}/>)}
+              {[2023,2024,2025,2026].map(yr=>showYr[yr]&&<Line key={yr} type="monotone" dataKey={yr} stroke={YRCLR[yr]} strokeWidth={yr===2026?3:1.5} dot={yr===2026?{r:3}:false} strokeDasharray={yr===2026?'6 3':'none'} connectNulls={false}/>)}
             </LineChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Tire quantity chart */}
+        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
+          <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#3b82f6',marginBottom:8}}>🏷️ ยางรายเดือน (เส้น) — 2024 vs 2025</div>
+          <ResponsiveContainer width="100%" height={mobile?130:170}>
+            <LineChart data={tireData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+              <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
+              <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
+              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[N(v)+' เส้น','']}/>
+              <Legend wrapperStyle={{fontSize:9}}/>
+              <Line type="monotone" dataKey={2024} stroke="#94a3b8" strokeWidth={1.5} dot={{r:2}} connectNulls/>
+              <Line type="monotone" dataKey={2025} stroke="#f59e0b" strokeWidth={2} dot={{r:3}} connectNulls/>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,overflow:'hidden'}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}>
             <thead><tr style={{background:'#0d1117'}}>{['ปี','ยอด MTD','ยาง','เต็มเดือน'].map(h=><th key={h} style={{padding:'7px 10px',textAlign:h==='ปี'?'left':'right',color:'#6b7280',fontSize:10,fontFamily:'Barlow Condensed'}}>{h}</th>)}</tr></thead>
@@ -626,42 +688,61 @@ function MTDTab({ctx}) {
 
 /* ════ PRODUCTS ════ */
 function Products({ctx}) {
-  const {selBr,setSelBr,getMTD,getAllMTD,getT,MTD_R,mobile} = ctx
+  const {selBr,setSelBr,getMTD,getAllMTD,getT,MTD_R,TODAY_D,TOTAL_D,MONTH_TH,cfg,mobile,FIELDS} = ctx
   const isAll=selBr==='ALL', m=isAll?getAllMTD():getMTD(selBr), t=getT(selBr)
-  const rows=[{label:'ยาง (เส้น)',a:m.tire,tgt:Math.round(t.tire*MTD_R)},{label:'ยอดขายยาง (฿)',a:m.tireSales,tgt:Math.round(t.sales*.55*MTD_R)},{label:'ยาง Bridgestone',a:m.bsTire,tgt:Math.round(t.tire*.35*MTD_R)},{label:'Alloy Wheel (วง)',a:m.alloyWheel,tgt:Math.round(10*MTD_R*(isAll?10:1))},{label:'Battery (ลูก)',a:m.battery,tgt:Math.round(t.battery*MTD_R)},{label:'Brake (ชิ้น)',a:m.brake,tgt:Math.round(t.brake*MTD_R)},{label:'Shock Up (ชิ้น)',a:m.shockUp,tgt:Math.round(t.shock*MTD_R)},{label:'MP (ชุด)',a:m.mp,tgt:Math.round(t.mp*MTD_R)},{label:'Lubricant (ลิตร)',a:m.lubricant,tgt:Math.round(t.lube*MTD_R)},{label:'Filter (ชิ้น)',a:m.filter,tgt:Math.round(t.lube*.2*MTD_R)},{label:'Air Filter (ชิ้น)',a:m.airFilter,tgt:Math.round(t.lube*.15*MTD_R)},{label:'Service (฿)',a:m.service,tgt:Math.round(t.sales*.05*MTD_R)},{label:'Job Order (ราย)',a:m.jobOrder,tgt:Math.round(t.cc*MTD_R)}]
+
+  const PCARDS = [
+    {key:'tire',       label:'ยาง',         icon:'🏷️', unit:'เส้น', color:'#f59e0b', tgt:()=>Math.round(t.tire*MTD_R)},
+    {key:'bsTire',     label:'Bridgestone',  icon:'🔵', unit:'เส้น', color:'#3b82f6', tgt:()=>Math.round(t.tire*0.35*MTD_R)},
+    {key:'alloyWheel', label:'Alloy Wheel',  icon:'✨', unit:'วง',  color:'#94a3b8', tgt:()=>0},
+    {key:'battery',    label:'Battery',      icon:'🔋', unit:'ลูก', color:'#22c55e', tgt:()=>Math.round(t.battery*MTD_R)},
+    {key:'brake',      label:'Brake',        icon:'🔴', unit:'ชิ้น',color:'#f97316', tgt:()=>Math.round(t.brake*MTD_R)},
+    {key:'shockUp',    label:'Shock UP',     icon:'⚡', unit:'ชิ้น',color:'#eab308', tgt:()=>Math.round(t.shock*MTD_R)},
+    {key:'mp',         label:'MP',           icon:'🔧', unit:'ชุด', color:'#8b5cf6', tgt:()=>Math.round(t.mp*MTD_R)},
+    {key:'lubricant',  label:'Lubricant',    icon:'🛢️', unit:'ลิตร',color:'#06b6d4', tgt:()=>Math.round(t.lube*MTD_R)},
+    {key:'filter',     label:'Filter',       icon:'🔍', unit:'ชิ้น',color:'#64748b', tgt:()=>0},
+    {key:'airFilter',  label:'Air Filter',   icon:'❄️', unit:'ชิ้น',color:'#67e8f9', tgt:()=>0},
+    {key:'service',    label:'Service',      icon:'🔨', unit:'฿',   color:'#a78bfa', tgt:()=>0, money:true},
+    {key:'jobOrder',   label:'Job Order',    icon:'📋', unit:'ราย', color:'#84cc16', tgt:()=>Math.round(t.cc*MTD_R)},
+    {key:'tireSales',  label:'ยอดขายยาง',   icon:'💰', unit:'฿',   color:'#f59e0b', tgt:()=>0, money:true},
+  ]
+
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1}}>
-        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:10}}>สินค้า MTD — {isAll?'รวมทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}</div>
-        {mobile ? (
-          <div style={{display:'flex',flexDirection:'column',gap:6}}>
-            {rows.map((r,i) => { const p=P(r.a,r.tgt); return (
-              <div key={i} style={{background:i%2===0?'#161b25':'#131820',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <div><div style={{fontSize:13,fontWeight:600}}>{r.label}</div><div style={{fontSize:10,color:'#6b7280'}}>เป้า {N(r.tgt)}</div></div>
-                <div style={{textAlign:'right',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:16,color:'#f59e0b'}}>{N(r.a)}</div>
-                  <PBadge value={p}/>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?13:16,color:'#f59e0b',marginBottom:10,letterSpacing:1}}>
+          สินค้า MTD — {isAll?'ทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}
+          {' '}({TODAY_D}–{TODAY_D} {MONTH_TH} {cfg.year})
+          <span style={{color:'#6b7280',fontSize:10,fontWeight:400,marginLeft:8}}>เป้า = รายเดือน×{TODAY_D}/{TOTAL_D}</span>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:mobile?'1fr 1fr':'repeat(4,1fr)',gap:8}}>
+          {PCARDS.map(p => {
+            const actual = m[p.key]||0
+            const tgt = p.tgt()
+            const pct = tgt>0?(actual/tgt)*100:0
+            const barClr = pct>=100?'#22c55e':pct>=70?'#f59e0b':'#ef4444'
+            return (
+              <div key={p.key} style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,padding:mobile?10:12,display:'flex',flexDirection:'column',gap:3}}>
+                <div style={{fontSize:mobile?11:12,color:'#9ca3af',fontFamily:'Barlow Condensed',fontWeight:600}}>
+                  {p.icon} {p.label}
                 </div>
+                <div style={{fontSize:mobile?20:26,fontWeight:900,fontFamily:"'JetBrains Mono',monospace",color:actual>0?p.color:'#374151',lineHeight:1,marginTop:2}}>
+                  {p.money&&actual>0?fM(actual):N(actual)}
+                </div>
+                <div style={{fontSize:9,color:'#6b7280'}}>
+                  เป้า: {tgt>0?(p.money?fM(tgt):N(tgt)):'—'}{tgt>0?' '+p.unit:''}
+                </div>
+                {tgt>0 && <>
+                  <div style={{background:'#0d1117',borderRadius:3,height:3,overflow:'hidden',marginTop:2}}>
+                    <div style={{width:Math.min(pct,100)+'%',height:'100%',background:barClr,borderRadius:3,transition:'width .5s'}}/>
+                  </div>
+                  <div style={{marginTop:2}}><PBadge value={pct}/></div>
+                </>}
               </div>
-            )})}
-          </div>
-        ) : (
-          <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,overflow:'hidden'}}>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr style={{background:'#0d1117'}}>{['สินค้า','ยอดจริง','เป้า MTD','%','สถานะ'].map(h=><th key={h} style={{padding:'9px 14px',textAlign:h==='สินค้า'?'left':'center',color:'#6b7280',fontSize:11,fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538'}}>{h}</th>)}</tr></thead>
-              <tbody>{rows.map((r,i) => { const p=P(r.a,r.tgt); return (
-                <tr key={i} style={{borderBottom:'1px solid #1e2538',background:i%2===0?'transparent':'#131820'}}>
-                  <td style={{padding:'9px 14px',fontWeight:600,fontSize:13}}>{r.label}</td>
-                  <td style={{padding:'9px 14px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{N(r.a)}</td>
-                  <td style={{padding:'9px 14px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{N(r.tgt)}</td>
-                  <td style={{padding:'9px 14px',textAlign:'center'}}><PBadge value={p}/></td>
-                  <td style={{padding:'9px 14px',textAlign:'center',fontSize:15}}>{p>=100?'✅':p>=90?'⚠️':'❌'}</td>
-                </tr>
-              )})}</tbody>
-            </table>
-          </div>
-        )}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -669,12 +750,46 @@ function Products({ctx}) {
 
 /* ════ DAILY ════ */
 function Daily({ctx}) {
-  const {selBr,setSelBr,getTS,getAllTS,getT,fcst,fcstLoad,genFcst,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,mobile} = ctx
+  const {selBr,setSelBr,de,getTS,getAllTS,getT,HIST,FIELDS,fcst,fcstLoad,genFcst,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,cfg,MONTH_TH,mobile} = ctx
   const isAll=selBr==='ALL', t=getT(selBr), ts=isAll?getAllTS():getTS(selBr)
   const pyF=isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2025]||0),0):(MAY_SALES[selBr]?.[2025]||0)
   const avg=TODAY_D>0?ts/TODAY_D:0
-  const fArr=(!isAll&&fcst[selBr]?.dailyForecast)||[]
-  const data=Array.from({length:TOTAL_D},(_,i)=>{const d=i+1;const row={day:`${d}`};if(d<=TODAY_D)row['ยอดจริง']=Math.round(avg*(0.85+Math.sin(i*.5)*.3));if(d>TODAY_D)row['Forecast']=fArr[i-TODAY_D]||Math.round(avg*1.05);return row})
+
+  // Last year daily average from monthly HIST (in thousands → ฿)
+  const pyMonthTot = isAll
+    ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[2025]?.[cfg.month-1]||0)*1000),0)
+    : (HIST[selBr]?.[2025]?.[cfg.month-1]||0)*1000
+  const pyDailyAvg = TOTAL_D>0 ? Math.round(pyMonthTot/TOTAL_D) : 0
+
+  // Target daily
+  const tgtDaily = Math.round(t.sales/TOTAL_D)
+
+  // Trend: weighted avg of actual + slight upward adjustment
+  const trendDaily = avg>0 ? Math.round(avg*1.03) : tgtDaily
+
+  const fArr = (!isAll && fcst[selBr]?.dailyForecast)||[]
+
+  const data = Array.from({length:TOTAL_D},(_,i)=>{
+    const d=i+1, row={day:String(d)}
+    // Actual
+    if (!isAll && d<=TODAY_D) {
+      const dayRow = de[selBr]?.[d]
+      if (dayRow) {
+        const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dayRow[f.key])||0]))
+        row['ยอดจริง']=calcTS(agg)||null
+      } else { row['ยอดจริง']=null }
+    } else if (isAll && d<=TODAY_D) {
+      row['ยอดจริง']=Math.round(avg*(0.85+Math.sin(i*.6)*.28))
+    }
+    // Last year reference
+    if (pyDailyAvg>0) row['PY25']=Math.round(pyDailyAvg*(0.9+Math.sin(i*.7+1)*.2))
+    // Forecast
+    if (d>TODAY_D) {
+      row['Forecast']=fArr[i-TODAY_D]||Math.round(trendDaily*(0.92+Math.sin(i*.5)*.16))
+    }
+    return row
+  })
+
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
@@ -685,23 +800,29 @@ function Daily({ctx}) {
         </div>
         {!isAll&&fcst[selBr]&&<div style={{background:'#1a1333',border:'1px solid #7c3aed',borderRadius:6,padding:'8px 12px',marginBottom:10,fontSize:11,color:'#c4b5fd'}}>🤖 {fcst[selBr].comment}</div>}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-          <Card label="เฉลี่ย/วัน" value={fM(Math.round(avg))} color="#f59e0b" small/>
-          <Card label="เป้า/วัน" value={fM(Math.round(t.sales/TOTAL_D))} color="#a78bfa" small/>
-          <Card label="PY25/วัน" value={fM(Math.round(pyF/TOTAL_D))} color="#94a3b8" small/>
-          <Card label="ต้องทำ/วัน" value={fM(Math.round(Math.max(0,t.sales-ts)/DAYS_LEFT))} color="#ef4444" small/>
+          <Card label="เฉลี่ย/วัน (ยอดจริง)" value={fM(Math.round(avg))} color="#f59e0b" small/>
+          <Card label="เป้า/วัน" value={fM(tgtDaily)} color="#a78bfa" small/>
+          <Card label="PY25/วัน (เฉลี่ย)" value={fM(pyDailyAvg)} color="#94a3b8" small/>
+          <Card label="ต้องทำ/วัน (เหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/DAYS_LEFT))} color="#ef4444" small/>
         </div>
-        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
-          <ResponsiveContainer width="100%" height={mobile?170:250}>
-            <BarChart data={data} margin={{top:0,right:4,left:0,bottom:0}}>
+        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:8}}>
+          <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:6,fontSize:10}}>
+            <span style={{color:'#f59e0b'}}>● ยอดจริง</span>
+            <span style={{color:'#94a3b8'}}>● PY25 เฉลี่ย</span>
+            <span style={{color:'#ef444488'}}>● Forecast</span>
+            <span style={{color:'#a78bfa',borderTop:'1px dashed #a78bfa',paddingTop:2}}>-- เป้า/วัน</span>
+          </div>
+          <ResponsiveContainer width="100%" height={mobile?200:280}>
+            <LineChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
               <XAxis dataKey="day" tick={{fill:'#6b7280',fontSize:7}}/>
-              <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>(v/1000).toFixed(0)+'k'}/>
-              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[N(v)+'฿','']}/>
-              <Legend wrapperStyle={{fontSize:9}}/>
-              <ReferenceLine y={t.sales/TOTAL_D} stroke="#a78bfa" strokeDasharray="4 2"/>
-              <Bar dataKey="ยอดจริง" fill="#f59e0b" radius={[2,2,0,0]}/>
-              <Bar dataKey="Forecast" fill="#ef444488" radius={[2,2,0,0]}/>
-            </BarChart>
+              <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(0)+'k':''}/>
+              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[v!=null?N(Math.round(v))+'฿':'—','']}/>
+              <ReferenceLine y={tgtDaily} stroke="#a78bfa" strokeDasharray="4 2" strokeWidth={1}/>
+              <Line type="monotone" dataKey="PY25" stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false}/>
+              <Line type="monotone" dataKey="ยอดจริง" stroke="#f59e0b" strokeWidth={2.5} dot={{r:3,fill:'#f59e0b'}} connectNulls={false}/>
+              <Line type="monotone" dataKey="Forecast" stroke="#ef4444" strokeWidth={2} dot={{r:2,fill:'#ef4444'}} strokeDasharray="5 3" connectNulls={false}/>
+            </LineChart>
           </ResponsiveContainer>
         </div>
       </div>

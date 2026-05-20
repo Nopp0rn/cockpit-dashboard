@@ -136,6 +136,15 @@ function sumDays(de, bid) {
   Object.values(de[bid]||{}).forEach(r => FIELDS.forEach(f => { agg[f.key] += parseFloat(r[f.key])||0 }))
   return agg
 }
+// Sum days 1..toDay only (for dynamic daily target calculation)
+function sumDaysUpTo(de, bid, toDay) {
+  const agg = Object.fromEntries(FIELDS.map(f=>[f.key,0]))
+  for (let d=1; d<=toDay; d++) {
+    const r = de[bid]?.[d]
+    if (r) FIELDS.forEach(f => { agg[f.key] += parseFloat(r[f.key])||0 })
+  }
+  return agg
+}
 function calcTS(agg) {
   // 1️⃣ ถ้ากรอก "ยอดขายรวมวัน (฿)" โดยตรง ใช้ค่านั้น
   if ((agg.totalSales||0) > 0) return Number(agg.totalSales)
@@ -521,73 +530,144 @@ ${s}
    OVERVIEW TAB
 ════════════════════════════════════════════════════════ */
 function Overview({ctx}) {
-  const {getMTD,getTS,TARGET,MTD_R,TODAY_D,MONTH_TH,cfg,mobile} = ctx
+  const {getMTD,getTS,TARGET,MTD_R,TODAY_D,MONTH_TH,cfg,mobile,de,HIST} = ctx
+
   const rows = BRANCHES.map((b,i) => {
     const t=TARGET[b.id]||SEED_T[b.id], m=getMTD(b.id), ts=getTS(b.id)
-    return {...b,t,m,ts,mtd:t.sales*MTD_R,py:(MAY_SALES[b.id]?.[2025]||0)*MTD_R,idx:i}
+    const py25Sales = (MAY_SALES[b.id]?.[2025]||0)*MTD_R
+    const py24Sales = (MAY_SALES[b.id]?.[2024]||0)*MTD_R
+    const py25Tire  = (MAY_TIRE[b.id]?.[2025]||0)*MTD_R
+    const py24Tire  = (MAY_TIRE[b.id]?.[2024]||0)*MTD_R
+    return {
+      ...b, t, m, ts, idx:i,
+      tgtSales:t.sales*MTD_R, tgtTire:t.tire*MTD_R,
+      py25Sales, py24Sales, py25Tire, py24Tire,
+      vsPY25: P(ts,py25Sales), vsPY24: P(ts,py24Sales),
+      tirePY25: P(m.tire,py25Tire), tirePY24: P(m.tire,py24Tire),
+    }
   })
-  const totS=rows.reduce((s,r)=>s+r.ts,0), totT=rows.reduce((s,r)=>s+r.mtd,0)
-  const totTire=rows.reduce((s,r)=>s+r.m.tire,0), totTT=rows.reduce((s,r)=>s+r.t.tire*MTD_R,0)
+
+  const totS     = rows.reduce((s,r)=>s+r.ts,0)
+  const totT     = rows.reduce((s,r)=>s+r.tgtSales,0)
+  const totTire  = rows.reduce((s,r)=>s+r.m.tire,0)
+  const totTireT = rows.reduce((s,r)=>s+r.tgtTire,0)
+  const totPY25  = rows.reduce((s,r)=>s+r.py25Sales,0)
+  const totPY24  = rows.reduce((s,r)=>s+r.py24Sales,0)
+  const totTirePY25 = rows.reduce((s,r)=>s+r.py25Tire,0)
+  const totTirePY24 = rows.reduce((s,r)=>s+r.py24Tire,0)
+
+  // Summary KPI cards
+  const GrowthBadge = ({pct,label}) => {
+    const clr = pct>=110?'#22c55e':pct>=100?'#84cc16':pct>=90?'#f59e0b':'#ef4444'
+    return <span style={{fontSize:9,color:clr,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>vs{label} {pct.toFixed(0)}%</span>
+  }
+
   return (
     <div>
+      {/* Summary cards row */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-        <Card label="ยอดขายรวม MTD" value={fM(totS)} sub={`เป้า ${fM(Math.round(totT))}`}/>
-        <Card label="% เทียบเป้า" value={P(totS,totT).toFixed(1)+'%'} color={P(totS,totT)>=100?'#22c55e':P(totS,totT)>=90?'#f59e0b':'#ef4444'}/>
-        <Card label="ยางรวม MTD" value={N(totTire)+' เส้น'} sub={`เป้า ${N(Math.round(totTT))}`} color="#3b82f6"/>
-        <Card label="% ยาง" value={P(totTire,totTT).toFixed(1)+'%'} color={P(totTire,totTT)>=100?'#22c55e':P(totTire,totTT)>=90?'#f59e0b':'#ef4444'}/>
+        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
+          <div style={{fontSize:9,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>ยอดขายรวม MTD</div>
+          <div style={{fontSize:22,fontWeight:700,color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace"}}>{fM(totS)}</div>
+          <div style={{fontSize:9,color:'#6b7280'}}>เป้า {fM(Math.round(totT))}</div>
+          <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
+            <GrowthBadge pct={P(totS,totT)} label="เป้า"/>
+            <GrowthBadge pct={P(totS,totPY25)} label="PY25"/>
+            <GrowthBadge pct={P(totS,totPY24)} label="PY24"/>
+          </div>
+        </div>
+        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
+          <div style={{fontSize:9,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>ยางรวม MTD</div>
+          <div style={{fontSize:22,fontWeight:700,color:'#3b82f6',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
+          <div style={{fontSize:9,color:'#6b7280'}}>เป้า {N(Math.round(totTireT))}</div>
+          <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
+            <GrowthBadge pct={P(totTire,totTireT)} label="เป้า"/>
+            <GrowthBadge pct={P(totTire,totTirePY25)} label="PY25"/>
+            <GrowthBadge pct={P(totTire,totTirePY24)} label="PY24"/>
+          </div>
+        </div>
+        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
+          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>PY25 MTD รวม</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#94a3b8',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY25))}</div>
+          <div style={{fontSize:9,color:'#4b5563'}}>ยาง: {N(Math.round(totTirePY25))} เส้น</div>
+        </div>
+        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
+          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>PY24 MTD รวม</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#475569',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY24))}</div>
+          <div style={{fontSize:9,color:'#4b5563'}}>ยาง: {N(Math.round(totTirePY24))} เส้น</div>
+        </div>
       </div>
+
       {mobile ? (
+        /* Mobile: cards per branch */
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
           {rows.map((r,i) => (
             <div key={r.id} style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,padding:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
                 <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:BCLR[i]}}>{r.id} {r.short}</div>
-                <PBadge value={P(r.ts,r.mtd)}/>
+                <PBadge value={P(r.ts,r.tgtSales)}/>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,fontSize:11,marginBottom:6}}>
+                <div><div style={{color:'#6b7280',fontSize:8}}>ยอด MTD</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(r.ts)}</div></div>
+                <div><div style={{color:'#6b7280',fontSize:8}}>PY25</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(r.py25Sales))}</div></div>
+                <div><div style={{color:'#6b7280',fontSize:8}}>PY24</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#475569'}}>{fM(Math.round(r.py24Sales))}</div></div>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,fontSize:11}}>
-                <div><div style={{color:'#6b7280',fontSize:9}}>ยอด MTD</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(r.ts)}</div></div>
-                <div><div style={{color:'#6b7280',fontSize:9}}>เป้า MTD</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{fM(Math.round(r.mtd))}</div></div>
-                <div><div style={{color:'#6b7280',fontSize:9}}>ยาง/เป้า</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#3b82f6'}}>{r.m.tire}/{Math.round(r.t.tire*MTD_R)}</div></div>
+                <div><div style={{color:'#6b7280',fontSize:8}}>ยาง MTD</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{r.m.tire} เส้น</div></div>
+                <div><div style={{color:'#6b7280',fontSize:8}}>vs PY25</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:r.vsPY25>=100?'#22c55e':r.vsPY25>=90?'#f59e0b':'#ef4444',fontWeight:700}}>{r.vsPY25.toFixed(0)}%</div></div>
+                <div><div style={{color:'#6b7280',fontSize:8}}>vs PY24</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:r.vsPY24>=100?'#22c55e':r.vsPY24>=90?'#f59e0b':'#ef4444',fontWeight:700}}>{r.vsPY24.toFixed(0)}%</div></div>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div style={{background:'#161b25',borderRadius:10,border:'1px solid #2d3548',overflow:'hidden',marginBottom:16}}>
+        /* Desktop: table with PY24+PY25 for both metrics */
+        <div style={{background:'#161b25',borderRadius:10,border:'1px solid #2d3548',overflow:'hidden'}}>
           <div style={{padding:'11px 15px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,color:'#f59e0b',borderBottom:'1px solid #2d3548'}}>
             📊 ภาพรวมทุกสาขา — MTD 1-{TODAY_D} {MONTH_TH} {cfg.year}
           </div>
           <div style={{overflowX:'auto'}}>
-            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-              <thead><tr style={{background:'#0d1117'}}>
-                {['รหัส','ชื่อสาขา','ยอด MTD','เป้า MTD','% เป้า','PY25 MTD','% vs PY','ยาง','เป้ายาง','% ยาง'].map(h=>(
-                  <th key={h} style={{padding:'8px 10px',textAlign:h==='ชื่อสาขา'?'left':'center',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:11,borderBottom:'1px solid #1e2538'}}>{h}</th>
-                ))}
-              </tr></thead>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+              <thead>
+                <tr style={{background:'#0d1117'}}>
+                  <th rowSpan={2} style={{padding:'6px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538',textAlign:'left',verticalAlign:'bottom'}}>สาขา</th>
+                  <th colSpan={5} style={{padding:'5px 8px',color:'#f59e0b',fontFamily:'Barlow Condensed',borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548',textAlign:'center',fontSize:10}}>💰 ยอดขายรวม (฿)</th>
+                  <th colSpan={4} style={{padding:'5px 8px',color:'#3b82f6',fontFamily:'Barlow Condensed',borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548',textAlign:'center',fontSize:10}}>🏷️ ยาง (เส้น)</th>
+                </tr>
+                <tr style={{background:'#0d1117'}}>
+                  {['2024','2025','2026','% เป้า','% PY25'].map(h=><th key={h} style={{padding:'5px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',textAlign:'right',borderLeft:h==='2024'?'1px solid #2d3548':'none'}}>{h}</th>)}
+                  {['2024','2025','2026','% PY25'].map(h=><th key={'t'+h} style={{padding:'5px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',textAlign:'right',borderLeft:h==='2024'?'1px solid #2d3548':'none'}}>{h}</th>)}
+                </tr>
+              </thead>
               <tbody>
                 {rows.map((r,i) => (
                   <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:i%2===0?'transparent':'#131820'}}>
-                    <td style={{padding:'8px 10px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:BCLR[i],fontWeight:700,fontSize:11}}>{r.id}</td>
-                    <td style={{padding:'8px 10px',fontWeight:600}}>{r.name}</td>
-                    <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{N(r.ts)}</td>
-                    <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{N(Math.round(r.mtd))}</td>
-                    <td style={{padding:'8px 10px',textAlign:'center'}}><PBadge value={P(r.ts,r.mtd)}/></td>
-                    <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{N(Math.round(r.py))}</td>
-                    <td style={{padding:'8px 10px',textAlign:'center'}}><PBadge value={P(r.ts,r.py)}/></td>
-                    <td style={{padding:'8px 10px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{r.m.tire}</td>
-                    <td style={{padding:'8px 10px',textAlign:'center',color:'#6b7280'}}>{Math.round(r.t.tire*MTD_R)}</td>
-                    <td style={{padding:'8px 10px',textAlign:'center'}}><PBadge value={P(r.m.tire,r.t.tire*MTD_R)}/></td>
+                    <td style={{padding:'7px 8px',fontFamily:'Barlow Condensed',fontWeight:700,color:BCLR[i],fontSize:12,whiteSpace:'nowrap'}}>{r.id} {r.short}</td>
+                    {/* Sales */}
+                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{fM(Math.round(r.py24Sales))}</td>
+                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(r.py25Sales))}</td>
+                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(r.ts)}</td>
+                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(r.ts,r.tgtSales)}/></td>
+                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.vsPY25}/></td>
+                    {/* Tire */}
+                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{Math.round(r.py24Tire)}</td>
+                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{Math.round(r.py25Tire)}</td>
+                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{r.m.tire}</td>
+                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.tirePY25}/></td>
                   </tr>
                 ))}
+                {/* Total row */}
                 <tr style={{background:'#1e2538',borderTop:'2px solid #f59e0b'}}>
-                  <td colSpan={2} style={{padding:'8px 10px',fontWeight:900,fontFamily:'Barlow Condensed',fontSize:13}}>รวมทุกสาขา</td>
-                  <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#f59e0b'}}>{N(totS)}</td>
-                  <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{N(Math.round(totT))}</td>
-                  <td style={{padding:'8px 10px',textAlign:'center'}}><PBadge value={P(totS,totT)}/></td>
-                  <td colSpan={2}/>
-                  <td style={{padding:'8px 10px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#3b82f6'}}>{N(totTire)}</td>
-                  <td style={{padding:'8px 10px',textAlign:'center',color:'#6b7280'}}>{Math.round(totTT)}</td>
-                  <td style={{padding:'8px 10px',textAlign:'center'}}><PBadge value={P(totTire,totTT)}/></td>
+                  <td style={{padding:'7px 8px',fontWeight:900,fontFamily:'Barlow Condensed',fontSize:13}}>รวมทุกสาขา</td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #2d3548'}}>{fM(Math.round(totPY24))}</td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(totPY25))}</td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#f59e0b'}}>{fM(totS)}</td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totS,totT)}/></td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totS,totPY25)}/></td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #2d3548'}}>{Math.round(totTirePY24)}</td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{Math.round(totTirePY25)}</td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#3b82f6'}}>{N(totTire)}</td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totTire,totTirePY25)}/></td>
                 </tr>
               </tbody>
             </table>
@@ -600,75 +680,162 @@ function Overview({ctx}) {
 
 /* ════ MTD ════ */
 function MTDTab({ctx}) {
-  const {selBr,setSelBr,getMTD,getTS,getAllMTD,getAllTS,getT,getH,MTD_R,TODAY_D,MONTH_TH,cfg,mobile,HIST} = ctx
-  const isAll=selBr==='ALL', t=getT(selBr), m=isAll?getAllMTD():getMTD(selBr), ts=isAll?getAllTS():getTS(selBr), h=getH(selBr)
-  const [showYr, setShowYr] = useState({2023:true,2024:true,2025:true,2026:true})
+  const {selBr,setSelBr,getMTD,getTS,getAllMTD,getAllTS,getT,getH,de,
+         MTD_R,TODAY_D,TOTAL_D,MONTH_TH,cfg,mobile,HIST,FIELDS} = ctx
+  const isAll=selBr==='ALL', t=getT(selBr), m=isAll?getAllMTD():getMTD(selBr), ts=isAll?getAllTS():getTS(selBr)
+  const h=getH(selBr)
+  const [showYr, setShowYr] = useState({2024:true,2025:true,2026:true})
+  const toggle = yr => setShowYr(p=>({...p,[yr]:!p[yr]}))
+
   const pyMTD  = isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2025]||0)*MTD_R,0):(MAY_SALES[selBr]?.[2025]||0)*MTD_R
   const py2MTD = isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2024]||0)*MTD_R,0):(MAY_SALES[selBr]?.[2024]||0)*MTD_R
   const t25    = isAll?BRANCHES.reduce((s,b)=>s+(MAY_TIRE[b.id]?.[2025]||0)*MTD_R,0):(MAY_TIRE[selBr]?.[2025]||0)*MTD_R
   const t24    = isAll?BRANCHES.reduce((s,b)=>s+(MAY_TIRE[b.id]?.[2024]||0)*MTD_R,0):(MAY_TIRE[selBr]?.[2024]||0)*MTD_R
-  const mData  = MONTHS_TH.map((mn,i) => ({month:mn,2023:h[2023]?.[i]??null,2024:h[2024]?.[i]??null,2025:h[2025]?.[i]??null,2026:h[2026]?.[i]??null}))
-  const tireData = MONTHS_TH.map((mn,i)=>({month:mn,
-    2024: isAll?BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2024]?.[i]||0),0):SEED_TIREQ[selBr]?.[2024]?.[i]||0,
-    2025: isAll?BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2025]?.[i]||0),0):SEED_TIREQ[selBr]?.[2025]?.[i]||0,
-  }))
 
-  const toggle = yr => setShowYr(p=>({...p,[yr]:!p[yr]}))
-  const yrBtnStyle = (yr) => ({padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${YRCLR[yr]}`,background:showYr[yr]?YRCLR[yr]+'33':'transparent',color:showYr[yr]?YRCLR[yr]:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11})
+  /* ── Daily chart: วันที่ 1-TODAY_D เทียบ PY ── */
+  // Get monthly HIST for same month in prior years (in ฿, HIST stored as ฿000)
+  const histMonth24 = isAll
+    ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[2024]?.[cfg.month-1]||0)*1000),0)
+    : (HIST[selBr]?.[2024]?.[cfg.month-1]||0)*1000
+  const histMonth25 = isAll
+    ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[2025]?.[cfg.month-1]||0)*1000),0)
+    : (HIST[selBr]?.[2025]?.[cfg.month-1]||0)*1000
+
+  // Average daily for PY years
+  const avg24 = histMonth24>0 ? histMonth24/TOTAL_D : 0
+  const avg25 = histMonth25>0 ? histMonth25/TOTAL_D : 0
+
+  // Build daily series for days 1..TODAY_D
+  // Distribute monthly historical data with slight natural variation per day
+  const seed = (d,offset) => 0.85 + Math.sin(d*0.42+offset)*0.18 + Math.sin(d*0.9+offset*2)*0.08
+
+  const dailyData = Array.from({length:TODAY_D}, (_,i)=>{
+    const d = i+1
+    const row = {day:String(d)}
+
+    // 2026 actual — from de entries
+    if (!isAll) {
+      const dayRow = de[selBr]?.[d]
+      if (dayRow) {
+        const agg = Object.fromEntries(FIELDS.map(f=>[f.key,Number(dayRow[f.key])||0]))
+        const v = calcTS(agg)
+        if (v>0) row[2026]=v
+      }
+    } else {
+      // All branches: use MTD running average per day
+      const allDayTotal = BRANCHES.reduce((s,b)=>{
+        const dr=de[b.id]?.[d]
+        if(!dr)return s
+        const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]))
+        return s+calcTS(agg)
+      },0)
+      if(allDayTotal>0) row[2026]=allDayTotal
+    }
+
+    // PY25 estimated daily (realistic variation from monthly total)
+    if (avg25>0) row[2025] = Math.round(avg25*seed(d,1.2))
+    // PY24 estimated daily
+    if (avg24>0) row[2024] = Math.round(avg24*seed(d,2.7))
+
+    return row
+  })
+
+  // Monthly chart (Jan–Dec all years)
+  const mData = MONTHS_TH.map((mn,i)=>({month:mn,2023:h[2023]?.[i]??null,2024:h[2024]?.[i]??null,2025:h[2025]?.[i]??null,2026:h[2026]?.[i]??null}))
+  const [showMoYr, setShowMoYr] = useState({2023:false,2024:true,2025:true,2026:true})
+  const toggleMo = yr => setShowMoYr(p=>({...p,[yr]:!p[yr]}))
+  const yrBtnStyle=(yr,map)=>({padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${YRCLR[yr]}`,background:map[yr]?YRCLR[yr]+'33':'transparent',color:map[yr]?YRCLR[yr]:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11})
+
+  // Target per day reference
+  const tgtPerDay = Math.round(t.sales/TOTAL_D)
 
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
-      <div style={{flex:1}}>
-        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:10}}>{isAll?'🌐 รวมทุกสาขา':`${selBr} — ${BRANCHES.find(x=>x.id===selBr)?.name}`}</div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:10}}>
+          {isAll?'🌐 รวมทุกสาขา':`${selBr} — ${BRANCHES.find(x=>x.id===selBr)?.name}`}
+        </div>
+
+        {/* KPI Cards */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
           <Card label="ยอดขาย MTD" value={fM(ts)} sub={`เป้า ${fM(Math.round(t.sales*MTD_R))}`}/>
           <Card label="% เทียบเป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={P(ts,t.sales*MTD_R)>=100?'#22c55e':P(ts,t.sales*MTD_R)>=90?'#f59e0b':'#ef4444'}/>
           <Card label="ยาง MTD" value={N(m.tire)+' เส้น'} sub={`เป้า ${N(Math.round(t.tire*MTD_R))}`} color="#3b82f6"/>
           <Card label="vs PY May 25" value={P(ts,pyMTD).toFixed(1)+'%'} color="#94a3b8"/>
         </div>
 
-        {/* Sales chart with toggleable year lines */}
-        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
+        {/* ══ DAILY COMPARISON CHART — main chart ══ */}
+        <div style={{background:'#161b25',border:'2px solid #f59e0b33',borderRadius:10,padding:12,marginBottom:12}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
-            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b'}}>ยอดขายรายเดือน (฿000)</div>
+            <div>
+              <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#f59e0b'}}>
+                📅 ยอดขายรายวัน {MONTH_TH} {cfg.year} — วันที่ 1–{TODAY_D}
+              </div>
+              <div style={{fontSize:9,color:'#6b7280',marginTop:1}}>เทียบช่วงเดียวกัน PY24/PY25 (ประมาณการจากยอดรายเดือน)</div>
+            </div>
             <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-              {[2023,2024,2025,2026].map(yr=><button key={yr} onClick={()=>toggle(yr)} style={yrBtnStyle(yr)}>{yr}</button>)}
+              {[2024,2025,2026].map(yr=>(
+                <button key={yr} onClick={()=>toggle(yr)} style={yrBtnStyle(yr,showYr)}>{yr}</button>
+              ))}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={mobile?150:210}>
+          <ResponsiveContainer width="100%" height={mobile?190:260}>
+            <LineChart data={dailyData} margin={{top:4,right:4,left:0,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+              <XAxis dataKey="day" tick={{fill:'#6b7280',fontSize:8}} label={{value:`วัน (${MONTH_TH})`,position:'insideBottomRight',offset:-5,fill:'#4b5563',fontSize:9}}/>
+              <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(0)+'k':''}/>
+              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
+                formatter={(v,name)=>[v!=null?N(Math.round(v))+'฿':'—',name==='2026'?`${cfg.year} จริง`:name==='2025'?'PY25 ประมาณ':'PY24 ประมาณ']}
+                labelFormatter={l=>`วันที่ ${l} ${MONTH_TH}`}/>
+              <ReferenceLine y={tgtPerDay} stroke="#a78bfa" strokeDasharray="5 3" strokeWidth={1.5} label={{value:'เป้า/วัน',position:'right',fill:'#a78bfa',fontSize:9}}/>
+              {showYr[2024]&&<Line type="monotone" dataKey={2024} stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls/>}
+              {showYr[2025]&&<Line type="monotone" dataKey={2025} stroke="#f59e0b" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls/>}
+              {showYr[2026]&&<Line type="monotone" dataKey={2026} stroke="#22c55e" strokeWidth={2.5} dot={{r:3,fill:'#22c55e'}} connectNulls={false}/>}
+            </LineChart>
+          </ResponsiveContainer>
+          {/* Legend */}
+          <div style={{display:'flex',gap:14,marginTop:6,fontSize:10,flexWrap:'wrap'}}>
+            <span style={{color:'#22c55e'}}>● {cfg.year} ยอดจริง</span>
+            <span style={{color:'#f59e0b'}}>⟶ PY25 ประมาณ</span>
+            <span style={{color:'#94a3b8'}}>⟶ PY24 ประมาณ</span>
+            <span style={{color:'#a78bfa'}}>-- เป้า/วัน</span>
+          </div>
+        </div>
+
+        {/* ══ MONTHLY TREND CHART ══ */}
+        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#94a3b8'}}>📈 ยอดขายรายเดือน (฿000) 2023–2026</div>
+            <div style={{display:'flex',gap:5}}>
+              {[2023,2024,2025,2026].map(yr=>(
+                <button key={yr} onClick={()=>toggleMo(yr)} style={yrBtnStyle(yr,showMoYr)}>{yr}</button>
+              ))}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={mobile?130:180}>
             <LineChart data={mData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
               <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
               <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
               <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[v!=null?N(v*1000)+'฿':'—','']}/>
-              {[2023,2024,2025,2026].map(yr=>showYr[yr]&&<Line key={yr} type="monotone" dataKey={yr} stroke={YRCLR[yr]} strokeWidth={yr===2026?3:1.5} dot={yr===2026?{r:3}:false} strokeDasharray={yr===2026?'6 3':'none'} connectNulls={false}/>)}
+              {[2023,2024,2025,2026].filter(yr=>showMoYr[yr]).map(yr=>(
+                <Line key={yr} type="monotone" dataKey={yr} stroke={YRCLR[yr]} strokeWidth={yr===2026?3:1.5}
+                  dot={yr===2026?{r:3}:false} strokeDasharray={yr===2026?'6 3':'none'} connectNulls={false}/>
+              ))}
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Tire quantity chart */}
-        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
-          <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#3b82f6',marginBottom:8}}>🏷️ ยางรายเดือน (เส้น) — 2024 vs 2025</div>
-          <ResponsiveContainer width="100%" height={mobile?130:170}>
-            <LineChart data={tireData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
-              <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
-              <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
-              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[N(v)+' เส้น','']}/>
-              <Legend wrapperStyle={{fontSize:9}}/>
-              <Line type="monotone" dataKey={2024} stroke="#94a3b8" strokeWidth={1.5} dot={{r:2}} connectNulls/>
-              <Line type="monotone" dataKey={2025} stroke="#f59e0b" strokeWidth={2} dot={{r:3}} connectNulls/>
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
+        {/* Comparison table */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,overflow:'hidden'}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}>
-            <thead><tr style={{background:'#0d1117'}}>{['ปี','ยอด MTD','ยาง','เต็มเดือน'].map(h=><th key={h} style={{padding:'7px 10px',textAlign:h==='ปี'?'left':'right',color:'#6b7280',fontSize:10,fontFamily:'Barlow Condensed'}}>{h}</th>)}</tr></thead>
+            <thead><tr style={{background:'#0d1117'}}>
+              {['ปี','ยอด MTD','ยาง','เต็มเดือน'].map(h=><th key={h} style={{padding:'7px 10px',textAlign:h==='ปี'?'left':'right',color:'#6b7280',fontSize:10,fontFamily:'Barlow Condensed'}}>{h}</th>)}
+            </tr></thead>
             <tbody>{[
               {yr:'2024',sm:py2MTD,tire:t24,full:isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2024]||0),0):(MAY_SALES[selBr]?.[2024]||0)},
-              {yr:'2025',sm:pyMTD,tire:t25,full:isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2025]||0),0):(MAY_SALES[selBr]?.[2025]||0)},
+              {yr:'2025',sm:pyMTD, tire:t25,full:isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2025]||0),0):(MAY_SALES[selBr]?.[2025]||0)},
               {yr:`${cfg.year} MTD`,sm:ts,tire:m.tire,full:'—',hl:true},
               {yr:`${cfg.year} เป้า`,sm:t.sales*MTD_R,tire:Math.round(t.tire*MTD_R),full:t.sales,tgt:true},
             ].map((r,i)=>(
@@ -832,24 +999,111 @@ function Daily({ctx}) {
 
 /* ════ MONTHLY ════ */
 function Monthly({ctx}) {
-  const {selBr,setSelBr,getH,mobile} = ctx
+  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS} = ctx
   const isAll=selBr==='ALL', h=getH(selBr)
-  const data=MONTHS_TH.map((mn,i)=>({month:mn,2023:h[2023]?.[i]??null,2024:h[2024]?.[i]??null,2025:h[2025]?.[i]??null,2026:h[2026]?.[i]??null}))
-  const tData=MONTHS_TH.map((mn,i)=>({month:mn,'ยาง 2024':isAll?BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2024]?.[i]||0),0):SEED_TIREQ[selBr]?.[2024]?.[i]||0,'ยาง 2025':isAll?BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2025]?.[i]||0),0):SEED_TIREQ[selBr]?.[2025]?.[i]||0}))
+  const [showSales, setShowSales] = useState({2023:false,2024:true,2025:true,2026:true})
+  const [showTire,  setShowTire]  = useState({2024:true,2025:true,2026:true})
+  const toggleS = yr => setShowSales(p=>({...p,[yr]:!p[yr]}))
+  const toggleT = yr => setShowTire(p=>({...p,[yr]:!p[yr]}))
+  const yrBtn = (yr,map,clr) => ({
+    padding:'4px 10px',borderRadius:4,cursor:'pointer',
+    border:`1px solid ${clr||YRCLR[yr]}`,
+    background:map[yr]?(clr||YRCLR[yr])+'33':'transparent',
+    color:map[yr]?(clr||YRCLR[yr]):'#4b5563',
+    fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11
+  })
+
+  // Sales chart data — all 4 years
+  const salesData = MONTHS_TH.map((mn,i) => ({
+    month: mn,
+    2023: h[2023]?.[i] ?? null,
+    2024: h[2024]?.[i] ?? null,
+    2025: h[2025]?.[i] ?? null,
+    2026: h[2026]?.[i] ?? null,
+  }))
+
+  // Tire chart data — 2024, 2025, 2026
+  // 2024/2025: from SEED_TIREQ
+  // 2026: current month from de MTD, rest null
+  const mtd2026 = isAll ? getAllMTD() : getMTD(selBr)
+  const tire2026 = Array(12).fill(null)
+  if (mtd2026.tire > 0) tire2026[cfg.month-1] = mtd2026.tire
+
+  const tireData = MONTHS_TH.map((mn,i) => {
+    const row = {month: mn}
+    row[2024] = isAll
+      ? BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2024]?.[i]||0),0)
+      : SEED_TIREQ[selBr]?.[2024]?.[i] ?? null
+    row[2025] = isAll
+      ? BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2025]?.[i]||0),0)
+      : SEED_TIREQ[selBr]?.[2025]?.[i] ?? null
+    row[2026] = tire2026[i]
+    return row
+  })
+
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
-      <div style={{flex:1}}>
-        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:12}}>รายเดือน — {isAll?'รวมทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:12}}>
+          รายเดือน — {isAll?'รวมทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}
+        </div>
+
+        {/* ══ SALES CHART ══ */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
-          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}><div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b'}}>ยอดขายรายเดือน (฿000) 2023–2026</div><span style={{fontSize:9,color:'#22c55e',background:'#0d2a1a',padding:'2px 6px',borderRadius:4}}>2026 รวม MTD</span></div>
-          <ResponsiveContainer width="100%" height={mobile?150:240}>
-            <LineChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/><XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/><YAxis tick={{fill:'#6b7280',fontSize:8}}/><Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[v!=null?N(v*1000)+'฿':'—','']}/><Legend wrapperStyle={{fontSize:9}}/>{[2023,2024,2025,2026].map(yr=><Line key={yr} type="monotone" dataKey={yr} stroke={YRCLR[yr]} strokeWidth={yr===2026?3:1.5} dot={yr===2026?{r:3}:false} strokeDasharray={yr===2026?'6 3':'none'} connectNulls={false}/>)}</LineChart>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
+            <div>
+              <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#f59e0b'}}>💰 ยอดขายรายเดือน (฿000)</div>
+              <div style={{fontSize:9,color:'#6b7280'}}>เส้นประ 2026 = ม.ค.–{cfg.month<=12?'ปัจจุบัน':''} รวม MTD</div>
+            </div>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {[2023,2024,2025,2026].map(yr=>(
+                <button key={yr} onClick={()=>toggleS(yr)} style={yrBtn(yr,showSales)}>{yr}</button>
+              ))}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={mobile?170:240}>
+            <LineChart data={salesData} margin={{top:4,right:4,left:0,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+              <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
+              <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(1)+'M':''}/>
+              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
+                formatter={v=>[v!=null?N(v*1000)+'฿':'—','']}/>
+              <Legend wrapperStyle={{fontSize:9}}/>
+              {showSales[2023]&&<Line type="monotone" dataKey={2023} stroke={YRCLR[2023]} strokeWidth={1.5} dot={false} connectNulls={false}/>}
+              {showSales[2024]&&<Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} connectNulls={false}/>}
+              {showSales[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={{r:2}} connectNulls={false}/>}
+              {showSales[2026]&&<Line type="monotone" dataKey={2026} stroke={YRCLR[2026]} strokeWidth={3} dot={{r:4,fill:YRCLR[2026]}} strokeDasharray="6 3" connectNulls={false}/>}
+            </LineChart>
           </ResponsiveContainer>
         </div>
+
+        {/* ══ TIRE CHART ══ */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
-          <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#3b82f6',marginBottom:8}}>ยาง (เส้น) — 2024 vs 2025</div>
-          <ResponsiveContainer width="100%" height={mobile?130:180}><BarChart data={tData}><CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/><XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/><YAxis tick={{fill:'#6b7280',fontSize:8}}/><Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}/><Legend wrapperStyle={{fontSize:9}}/><Bar dataKey="ยาง 2024" fill="#475569" radius={[2,2,0,0]}/><Bar dataKey="ยาง 2025" fill="#3b82f6" radius={[2,2,0,0]}/></BarChart></ResponsiveContainer>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
+            <div>
+              <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#3b82f6'}}>🏷️ ยางรายเดือน (เส้น)</div>
+              <div style={{fontSize:9,color:'#6b7280'}}>2026 = เฉพาะเดือนที่กรอกข้อมูลแล้ว</div>
+            </div>
+            <div style={{display:'flex',gap:5}}>
+              {[2024,2025,2026].map(yr=>(
+                <button key={yr} onClick={()=>toggleT(yr)} style={yrBtn(yr,showTire,yr===2026?'#22c55e':yr===2025?'#f59e0b':'#94a3b8')}>{yr}</button>
+              ))}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={mobile?150:200}>
+            <LineChart data={tireData} margin={{top:4,right:4,left:0,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+              <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
+              <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
+              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
+                formatter={v=>[v!=null?N(v)+' เส้น':'—','']}/>
+              <Legend wrapperStyle={{fontSize:9}}/>
+              {showTire[2024]&&<Line type="monotone" dataKey={2024} stroke="#94a3b8" strokeWidth={1.5} dot={{r:2}} connectNulls={false}/>}
+              {showTire[2025]&&<Line type="monotone" dataKey={2025} stroke="#f59e0b" strokeWidth={2} dot={{r:3}} connectNulls={false}/>}
+              {showTire[2026]&&<Line type="monotone" dataKey={2026} stroke="#22c55e" strokeWidth={3} dot={{r:6,fill:'#22c55e',strokeWidth:2,stroke:'#0d2a1a'}} connectNulls={false}/>}
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>
@@ -858,53 +1112,195 @@ function Monthly({ctx}) {
 
 /* ════ TRACKER ════ */
 function Tracker({ctx}) {
-  const {getMTD,getTS,getT,fcst,MTD_R,TODAY_D,DAYS_LEFT,MONTH_TH,cfg,mobile} = ctx
-  const rows=BRANCHES.map((b,i)=>{const t=getT(b.id),m=getMTD(b.id),ts=getTS(b.id),dT=Math.round(Math.max(0,t.sales-ts)/DAYS_LEFT),fT=fcst[b.id]?.dailyForecast?.[0]||Math.round(t.sales/31);return{...b,t,m,ts,dT,fT,diff:fT-dT,idx:i}})
-  const totS=rows.reduce((s,r)=>s+r.ts,0),totT=rows.reduce((s,r)=>s+r.t.sales*MTD_R,0)
-  const totTire=rows.reduce((s,r)=>s+r.m.tire,0),totTT=rows.reduce((s,r)=>s+r.t.tire*MTD_R,0)
+  const {getMTD,getTS,getT,fcst,de,MTD_R,TODAY_D,TOTAL_D,DAYS_LEFT,MONTH_TH,cfg,mobile,FIELDS} = ctx
+
+  // Build per-branch data with today's entry vs dynamic daily target
+  const rows = BRANCHES.map((b,i) => {
+    const t = getT(b.id)
+    const m = getMTD(b.id)              // cumulative MTD all days
+    const ts = getTS(b.id)             // MTD total sales
+
+    // Sum days BEFORE today (1..TODAY_D-1) for dynamic target
+    const beforeToday = sumDaysUpTo(de, b.id, TODAY_D - 1)
+    const tsBeforeToday = calcTS(beforeToday)
+    const tireBeforeToday = beforeToday.tire || 0
+
+    // Days remaining including today
+    const daysInclToday = TOTAL_D - TODAY_D + 1
+
+    // Dynamic daily target = (remaining_target) / (remaining_days_incl_today)
+    const salesDayTgt = Math.max(0, Math.round((t.sales - tsBeforeToday) / daysInclToday))
+    const tireDayTgt  = Math.max(0, Math.round((t.tire  - tireBeforeToday) / daysInclToday))
+
+    // Today's actual from entry
+    const todayRow = de[b.id]?.[TODAY_D] || {}
+    const todayAgg = Object.fromEntries(FIELDS.map(f=>[f.key, Number(todayRow[f.key])||0]))
+    const todaySales = calcTS(todayAgg)
+    const todayTire  = todayAgg.tire || 0
+    const hasToday   = todaySales > 0 || todayTire > 0
+
+    const salesAch = salesDayTgt > 0 ? P(todaySales, salesDayTgt) : null
+    const tireAch  = tireDayTgt  > 0 ? P(todayTire,  tireDayTgt)  : null
+
+    // AI forecast reference
+    const fT = fcst[b.id]?.dailyForecast?.[0] || salesDayTgt
+
+    return {
+      ...b, t, m, ts, idx:i, hasToday,
+      tsBeforeToday, tireBeforeToday,
+      salesDayTgt, tireDayTgt,
+      todaySales, todayTire,
+      salesAch, tireAch,
+      fT,
+      mtdSalesPct: P(ts, t.sales*MTD_R),
+      mtdTirePct:  P(m.tire, t.tire*MTD_R),
+    }
+  })
+
+  const totTS    = rows.reduce((s,r)=>s+r.ts,0)
+  const totTgt   = rows.reduce((s,r)=>s+r.t.sales*MTD_R,0)
+  const totTire  = rows.reduce((s,r)=>s+r.m.tire,0)
+  const totTireT = rows.reduce((s,r)=>s+r.t.tire*MTD_R,0)
+  const todayTotSales = rows.reduce((s,r)=>s+r.todaySales,0)
+  const todayTotTire  = rows.reduce((s,r)=>s+r.todayTire,0)
+  const todayTotTgt   = rows.reduce((s,r)=>s+r.salesDayTgt,0)
+  const todayTotTireT = rows.reduce((s,r)=>s+r.tireDayTgt,0)
+
+  const AchBadge = ({pct}) => {
+    if (pct===null) return <span style={{fontSize:10,color:'#4b5563'}}>—</span>
+    const bg=pct>=100?'#166534':pct>=80?'#92400e':'#991b1b'
+    const tx=pct>=100?'#bbf7d0':pct>=80?'#fef3c7':'#fecaca'
+    return <span style={{background:bg,color:tx,borderRadius:4,padding:'2px 6px',fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{pct.toFixed(0)}%</span>
+  }
+
   return (
     <div>
-      <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:22,color:'#f59e0b',letterSpacing:2,marginBottom:12}}>🎯 TRACKER — {TODAY_D} {MONTH_TH} {cfg.year}</div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-        <Card label="ยอด MTD รวม" value={fM(totS)} sub={`เป้า ${fM(Math.round(totT))}`}/>
-        <Card label="% เป้า" value={P(totS,totT).toFixed(1)+'%'} color={P(totS,totT)>=90?'#22c55e':'#ef4444'}/>
-        <Card label="ยางรวม" value={N(totTire)+' เส้น'} sub={`เป้า ${N(Math.round(totTT))}`} color="#3b82f6"/>
-        <Card label="% ยาง" value={P(totTire,totTT).toFixed(1)+'%'} color={P(totTire,totTT)>=90?'#22c55e':'#ef4444'}/>
+      <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:22,color:'#f59e0b',letterSpacing:2,marginBottom:6}}>
+        🎯 TRACKER — {TODAY_D} {MONTH_TH} {cfg.year}
       </div>
+      <div style={{fontSize:10,color:'#6b7280',marginBottom:12}}>
+        เป้าวัน = (เป้าเดือน − ยอด MTD วันก่อนหน้า) ÷ {TOTAL_D - TODAY_D + 1} วันที่เหลือ (รวมวันนี้)
+      </div>
+
+      {/* Summary cards */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
+        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
+          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed',textTransform:'uppercase'}}>วันนี้รวม (ยอดขาย)</div>
+          <div style={{fontSize:22,fontWeight:700,color:todayTotSales>0?'#22c55e':'#374151',fontFamily:"'JetBrains Mono',monospace"}}>{fM(todayTotSales)}</div>
+          <div style={{fontSize:9,color:'#6b7280'}}>เป้า/วัน {fM(todayTotTgt)}</div>
+          {todayTotTgt>0&&<AchBadge pct={P(todayTotSales,todayTotTgt)}/>}
+        </div>
+        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
+          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed',textTransform:'uppercase'}}>วันนี้รวม (ยาง)</div>
+          <div style={{fontSize:22,fontWeight:700,color:todayTotTire>0?'#3b82f6':'#374151',fontFamily:"'JetBrains Mono',monospace"}}>{N(todayTotTire)} <span style={{fontSize:13}}>เส้น</span></div>
+          <div style={{fontSize:9,color:'#6b7280'}}>เป้า/วัน {N(todayTotTireT)} เส้น</div>
+          {todayTotTireT>0&&<AchBadge pct={P(todayTotTire,todayTotTireT)}/>}
+        </div>
+        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
+          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>MTD ยอดขายรวม</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace"}}>{fM(totTS)}</div>
+          <AchBadge pct={P(totTS,totTgt)}/>
+        </div>
+        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
+          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>MTD ยางรวม</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#3b82f6',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} เส้น</div>
+          <AchBadge pct={P(totTire,totTireT)}/>
+        </div>
+      </div>
+
+      {/* Per branch */}
       {mobile ? (
-        <div style={{display:'flex',flexDirection:'column',gap:6}}>
-          {rows.map((r,i)=>(
-            <div key={r.id} style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,padding:12}}>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {rows.map((r,i) => (
+            <div key={r.id} style={{background:'#161b25',border:`1px solid ${r.hasToday?'#22c55e33':'#2d3548'}`,borderRadius:10,padding:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
                 <span style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:BCLR[i]}}>{r.id} {r.short}</span>
-                <PBadge value={P(r.ts,r.t.sales*MTD_R)}/>
+                <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                  {!r.hasToday&&<span style={{fontSize:9,color:'#ef4444',background:'#450a0a',padding:'2px 6px',borderRadius:3}}>ยังไม่กรอกวันนี้</span>}
+                  <PBadge value={r.mtdSalesPct}/>
+                </div>
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,fontSize:11}}>
-                <div><div style={{color:'#6b7280',fontSize:9}}>MTD</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(r.ts)}</div></div>
-                <div><div style={{color:'#6b7280',fontSize:9}}>เป้า/วัน</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#a78bfa'}}>{fM(r.dT)}</div></div>
-                <div><div style={{color:'#6b7280',fontSize:9}}>ยาง/เป้า</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#3b82f6'}}>{r.m.tire}/{Math.round(r.t.tire*MTD_R)}</div></div>
+              {/* Today row */}
+              <div style={{background:'#0d1117',borderRadius:8,padding:'8px 10px',marginBottom:8}}>
+                <div style={{fontSize:9,color:'#22c55e',fontFamily:'Barlow Condensed',fontWeight:700,marginBottom:4}}>⚡ วันนี้ (วันที่ {TODAY_D})</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                  <div>
+                    <div style={{fontSize:9,color:'#6b7280'}}>ยอดขาย</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:15,color:r.todaySales>0?'#22c55e':'#374151'}}>{r.todaySales>0?fM(r.todaySales):'—'}</div>
+                    <div style={{fontSize:9,color:'#6b7280'}}>เป้า {fM(r.salesDayTgt)}</div>
+                    <AchBadge pct={r.salesAch}/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:9,color:'#6b7280'}}>ยาง</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:15,color:r.todayTire>0?'#3b82f6':'#374151'}}>{r.todayTire>0?N(r.todayTire)+' เส้น':'—'}</div>
+                    <div style={{fontSize:9,color:'#6b7280'}}>เป้า {N(r.tireDayTgt)} เส้น</div>
+                    <AchBadge pct={r.tireAch}/>
+                  </div>
+                </div>
+              </div>
+              {/* MTD row */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,fontSize:10}}>
+                <div><div style={{color:'#6b7280',fontSize:8}}>MTD ยอด</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#f59e0b',fontWeight:700}}>{fM(r.ts)}</div></div>
+                <div><div style={{color:'#6b7280',fontSize:8}}>MTD ยาง</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#3b82f6',fontWeight:700}}>{r.m.tire} เส้น</div></div>
+                <div><div style={{color:'#6b7280',fontSize:8}}>% MTD</div><AchBadge pct={r.mtdTirePct}/></div>
               </div>
             </div>
           ))}
         </div>
       ) : (
         <div style={{background:'#161b25',borderRadius:10,border:'1px solid #2d3548',overflow:'auto'}}>
-          <div style={{padding:'10px 14px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b',borderBottom:'1px solid #2d3548'}}>เป้าวันที่เหลือ = (เป้า − MTD) ÷ {DAYS_LEFT} วัน</div>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-            <thead><tr style={{background:'#0d1117'}}>{['สาขา','ยอด MTD','เป้า MTD','% เป้า','ยาง','% ยาง','เป้า/วัน','AI Fcst','Diff'].map(h=><th key={h} style={{padding:'7px 10px',textAlign:'center',color:'#6b7280',fontSize:11,fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538'}}>{h}</th>)}</tr></thead>
-            <tbody>{rows.map((r,i)=>(
-              <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:i%2===0?'transparent':'#131820'}}>
-                <td style={{padding:'7px 10px',fontWeight:600,color:BCLR[r.idx],fontSize:11}}>{r.short}</td>
-                <td style={{padding:'7px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{N(r.ts)}</td>
-                <td style={{padding:'7px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{N(Math.round(r.t.sales*MTD_R))}</td>
-                <td style={{padding:'7px 10px',textAlign:'center'}}><PBadge value={P(r.ts,r.t.sales*MTD_R)}/></td>
-                <td style={{padding:'7px 10px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{r.m.tire}</td>
-                <td style={{padding:'7px 10px',textAlign:'center'}}><PBadge value={P(r.m.tire,r.t.tire*MTD_R)}/></td>
-                <td style={{padding:'7px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#a78bfa'}}>{N(r.dT)}</td>
-                <td style={{padding:'7px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#ef4444'}}>{N(r.fT)}</td>
-                <td style={{padding:'7px 10px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.diff>=0?'#22c55e':'#ef4444'}}>{r.diff>=0?'+':''}{N(Math.round(r.diff))}</td>
+          <div style={{padding:'10px 14px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b',borderBottom:'1px solid #2d3548'}}>
+            เป้าวัน = (เป้าเดือน − MTD วันก่อน) ÷ {TOTAL_D - TODAY_D + 1} วัน — วันที่ {TODAY_D} {MONTH_TH} {cfg.year}
+          </div>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+            <thead>
+              <tr style={{background:'#0d1117'}}>
+                <th rowSpan={2} style={{padding:'6px 8px',textAlign:'left',color:'#6b7280',fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538',verticalAlign:'bottom'}}>สาขา</th>
+                <th colSpan={3} style={{padding:'5px 8px',textAlign:'center',color:'#22c55e',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>⚡ วันนี้ (ยอดขาย)</th>
+                <th colSpan={3} style={{padding:'5px 8px',textAlign:'center',color:'#3b82f6',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>🏷️ วันนี้ (ยาง)</th>
+                <th colSpan={2} style={{padding:'5px 8px',textAlign:'center',color:'#f59e0b',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>MTD ยอด</th>
+                <th colSpan={2} style={{padding:'5px 8px',textAlign:'center',color:'#94a3b8',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>MTD ยาง</th>
               </tr>
-            ))}</tbody>
+              <tr style={{background:'#0d1117'}}>
+                {['จริง','เป้า/วัน','%','จริง (เส้น)','เป้า/วัน','%','ยอด','%เป้า','เส้น','%เป้า'].map((h,i)=>(
+                  <th key={i} style={{padding:'5px 8px',textAlign:'center',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',borderLeft:i===0||i===3||i===6||i===8?'1px solid #1e2538':'none'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r,i) => (
+                <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:r.hasToday?'#0d1a0d':i%2===0?'transparent':'#131820'}}>
+                  <td style={{padding:'7px 8px',fontFamily:'Barlow Condensed',fontWeight:700,color:BCLR[r.idx],fontSize:12,whiteSpace:'nowrap'}}>{r.id} {r.short}{!r.hasToday&&<span style={{color:'#ef4444',fontSize:8,marginLeft:4}}>⚠</span>}</td>
+                  {/* Today sales */}
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.todaySales>0?'#22c55e':'#374151',borderLeft:'1px solid #1e2538'}}>{r.todaySales>0?fM(r.todaySales):'—'}</td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{fM(r.salesDayTgt)}</td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><AchBadge pct={r.salesAch}/></td>
+                  {/* Today tire */}
+                  <td style={{padding:'7px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.todayTire>0?'#3b82f6':'#374151',borderLeft:'1px solid #1e2538'}}>{r.todayTire>0?N(r.todayTire):'—'}</td>
+                  <td style={{padding:'7px 8px',textAlign:'center',color:'#6b7280'}}>{N(r.tireDayTgt)}</td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><AchBadge pct={r.tireAch}/></td>
+                  {/* MTD */}
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b',borderLeft:'1px solid #1e2538'}}>{fM(r.ts)}</td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.mtdSalesPct}/></td>
+                  <td style={{padding:'7px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#3b82f6',fontWeight:700,borderLeft:'1px solid #1e2538'}}>{r.m.tire}</td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.mtdTirePct}/></td>
+                </tr>
+              ))}
+              {/* Total */}
+              <tr style={{background:'#1e2538',borderTop:'2px solid #f59e0b'}}>
+                <td style={{padding:'7px 8px',fontWeight:900,fontFamily:'Barlow Condensed',fontSize:13}}>รวม</td>
+                <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#22c55e',borderLeft:'1px solid #2d3548'}}>{fM(todayTotSales)}</td>
+                <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{fM(todayTotTgt)}</td>
+                <td style={{padding:'7px 8px',textAlign:'center'}}><AchBadge pct={todayTotTgt>0?P(todayTotSales,todayTotTgt):null}/></td>
+                <td style={{padding:'7px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6',borderLeft:'1px solid #2d3548'}}>{N(todayTotTire)}</td>
+                <td style={{padding:'7px 8px',textAlign:'center',color:'#6b7280'}}>{N(todayTotTireT)}</td>
+                <td style={{padding:'7px 8px',textAlign:'center'}}><AchBadge pct={todayTotTireT>0?P(todayTotTire,todayTotTireT):null}/></td>
+                <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#f59e0b',borderLeft:'1px solid #2d3548'}}>{fM(totTS)}</td>
+                <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totTS,totTgt)}/></td>
+                <td style={{padding:'7px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#3b82f6',borderLeft:'1px solid #2d3548'}}>{N(totTire)}</td>
+                <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totTire,totTireT)}/></td>
+              </tr>
+            </tbody>
           </table>
         </div>
       )}

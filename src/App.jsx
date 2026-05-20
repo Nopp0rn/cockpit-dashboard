@@ -114,19 +114,20 @@ const dIM = (y,m) => new Date(y,m,0).getDate()
 
 /* ── Entry field definitions ── */
 const FIELDS = [
-  {key:'tire',       label:'ยาง (เส้น)',             tgt:'tire'},
-  {key:'tireSales',  label:'ยอดขายยาง (฿)',          tgt:null},
-  {key:'bsTire',     label:'ยาง Bridgestone (เส้น)',  tgt:null},
-  {key:'alloyWheel', label:'Alloy Wheel (วง)',         tgt:null},
-  {key:'battery',    label:'Battery (ลูก)',            tgt:'battery'},
-  {key:'brake',      label:'Brake (ชิ้น)',             tgt:'brake'},
-  {key:'shockUp',    label:'Shock Up (ชิ้น)',          tgt:'shock'},
-  {key:'mp',         label:'MP (ชุด)',                 tgt:'mp'},
-  {key:'lubricant',  label:'Lubricant (ลิตร)',         tgt:'lube'},
-  {key:'filter',     label:'Filter (ชิ้น)',            tgt:null},
-  {key:'airFilter',  label:'Air Filter (ชิ้น)',        tgt:null},
-  {key:'service',    label:'Service (฿)',              tgt:null},
-  {key:'jobOrder',   label:'Job Order (ราย)',          tgt:'cc'},
+  {key:'totalSales', label:'ยอดขายรวมวัน (฿)',         tgt:null},   // ← เพิ่มใหม่
+  {key:'tire',       label:'ยาง (เส้น)',                tgt:'tire'},
+  {key:'tireSales',  label:'ยอดขายยาง (฿)',             tgt:null},
+  {key:'bsTire',     label:'ยาง Bridgestone (เส้น)',    tgt:null},
+  {key:'alloyWheel', label:'Alloy Wheel (วง)',           tgt:null},
+  {key:'battery',    label:'Battery (ลูก)',              tgt:'battery'},
+  {key:'brake',      label:'Brake (ชิ้น)',               tgt:'brake'},
+  {key:'shockUp',    label:'Shock Up (ชิ้น)',            tgt:'shock'},
+  {key:'mp',         label:'MP (ชุด)',                   tgt:'mp'},
+  {key:'lubricant',  label:'Lubricant (ลิตร)',           tgt:'lube'},
+  {key:'filter',     label:'Filter (ชิ้น)',              tgt:null},
+  {key:'airFilter',  label:'Air Filter (ชิ้น)',          tgt:null},
+  {key:'service',    label:'Service (฿)',                tgt:null},
+  {key:'jobOrder',   label:'Job Order (ราย)',            tgt:'cc'},
 ]
 const EMPTY_ROW = () => Object.fromEntries(FIELDS.map(f=>[f.key,0]))
 
@@ -136,6 +137,9 @@ function sumDays(de, bid) {
   return agg
 }
 function calcTS(agg) {
+  // ถ้ากรอก "ยอดขายรวมวัน" โดยตรง ใช้ค่านั้นเลย
+  if ((agg.totalSales||0) > 0) return agg.totalSales
+  // ไม่ได้กรอก — คำนวณจากรายการ
   return (agg.tireSales||0)+(agg.service||0)+(agg.battery||0)*3500+(agg.brake||0)*800+(agg.shockUp||0)*800+(agg.mp||0)*2500+(agg.alloyWheel||0)*4500
 }
 
@@ -226,8 +230,14 @@ export default function App() {
 
   /* ── Load all data & subscribe to realtime changes ── */
   useEffect(() => {
-    let done = 0
-    const tick = () => { done++; if (done >= 3) setReady(true) }
+    let settled = false
+
+    const finish = (isErr = false) => {
+      if (settled) return
+      settled = true
+      if (isErr) setConnErr(true)
+      setReady(true)
+    }
 
     ;(async () => {
       try {
@@ -248,17 +258,15 @@ export default function App() {
             if (r.key==='cp_up')    setUpStat(r.value)
           })
         }
-        clearTimeout(t)       // โหลดสำเร็จ — ยกเลิก timeout
-        setConnErr(false)     // ซ่อน banner ถ้าเคยแสดง
-        tick(); tick(); tick()
+        finish(false)  // ✅ โหลดสำเร็จ ไม่โชว์ banner
+
       } catch(e) {
-        console.error('Supabase load error:', e)
-        setConnErr(true)
-        setReady(true)
+        console.error('Supabase error:', e)
+        finish(true)   // ❌ error จริง โชว์ banner
       }
     })()
 
-    /* Realtime subscription — any change triggers state update */
+    /* Realtime subscription */
     const ch = DB.listen(payload => {
       const r = payload.new
       if (!r) return
@@ -271,8 +279,8 @@ export default function App() {
       if (r.key==='cp_up')   setUpStat(r.value)
     })
 
-    // Fallback: show app after 8s (Supabase cold-start can be slow)
-    const t = setTimeout(() => { setConnErr(true); setReady(true) }, 8000)
+    // Timeout 10s — แสดง app แต่ไม่โชว์ banner (ช้าไม่ใช่ error)
+    const t = setTimeout(() => finish(false), 10000)
     return () => { clearTimeout(t); supabase.removeChannel(ch) }
   }, [])
 
@@ -935,15 +943,19 @@ function Entry({ctx}) {
             </div>
           </div>
           <div style={{display:'grid',gridTemplateColumns:mobile?'1fr':'1fr 1fr'}}>
-            {FIELDS.map((f,i)=>{const tV=f.tgt?(t[f.tgt]||0):0;return(
-              <div key={f.key} style={{padding:'10px 12px',borderBottom:'1px solid #1e2538',borderRight:(!mobile&&i%2===0)?'1px solid #1e2538':'none',background:i%4<2?'transparent':'#0d1117'}}>
+            {FIELDS.map((f,i)=>{
+              const tV=f.tgt?(t[f.tgt]||0):0
+              const isTotalSales = f.key==='totalSales'
+              return(
+              <div key={f.key} style={{padding:'10px 12px',borderBottom:'1px solid #1e2538',borderRight:(!mobile&&i%2===0)?'1px solid #1e2538':'none',background:isTotalSales?'#1a1228':i%4<2?'transparent':'#0d1117',gridColumn:isTotalSales?'1 / -1':'auto'}}>
                 <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                  <label style={{fontSize:12,fontWeight:600,color:'#9ca3af'}}>{f.label}</label>
+                  <label style={{fontSize:isTotalSales?14:12,fontWeight:700,color:isTotalSales?'#f59e0b':'#9ca3af'}}>{isTotalSales?'💰 ':''}{f.label}</label>
                   {tV>0&&<span style={{fontSize:9,color:'#4b5563'}}>เป้า/วัน≈{Math.round(tV/TOTAL_D)}</span>}
+                  {isTotalSales&&<span style={{fontSize:10,color:'#a78bfa'}}>← กรอกตรงนี้ก่อน ถ้ามีตัวเลขรวม</span>}
                 </div>
-                <input type="number" inputMode="numeric" value={row[f.key]||''} placeholder="0"
+                <input type="number" inputMode="numeric" value={row[f.key]||''} placeholder={isTotalSales?"0":"0"}
                   onChange={e=>saveDay(selBr,selDay,f.key,e.target.value)}
-                  style={{width:'100%',boxSizing:'border-box',background:'#0d1117',border:'1px solid #2d3548',borderRadius:5,padding:mobile?'10px 12px':'7px 10px',color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace",fontSize:mobile?18:15,fontWeight:700,outline:'none'}}/>
+                  style={{width:'100%',boxSizing:'border-box',background:'#0d1117',border:isTotalSales?'2px solid #f59e0b':'1px solid #2d3548',borderRadius:5,padding:mobile?'10px 12px':'7px 10px',color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace",fontSize:mobile?18:isTotalSales?18:15,fontWeight:700,outline:'none'}}/>
               </div>
             )})}
           </div>
@@ -954,10 +966,11 @@ function Entry({ctx}) {
             <div style={{padding:'8px 12px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#3b82f6',borderBottom:'1px solid #2d3548'}}>📋 ประวัติ {filled.length} วัน (คลิกแถวเพื่อแก้ไข)</div>
             <div style={{overflowX:'auto'}}>
               <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-                <thead><tr style={{background:'#0d1117'}}>{['วัน','ยาง','ยอดยาง','Battery','Brake','MP','Job',''].map(h=><th key={h} style={{padding:'6px 8px',textAlign:'center',color:'#6b7280',fontSize:10,fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
-                <tbody>{filled.map((d,i)=>{const r=de[selBr][d]||{};return(
+                <thead><tr style={{background:'#0d1117'}}>{['วัน','ยอดรวม','ยาง','ยอดยาง','Battery','Brake','MP','Job',''].map(h=><th key={h} style={{padding:'6px 8px',textAlign:'center',color:'#6b7280',fontSize:10,fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
+                <tbody>{filled.map((d,i)=>{const r=de[selBr][d]||{};const ts=r.totalSales>0?+r.totalSales:calcTS(Object.fromEntries(FIELDS.map(f=>[f.key,+r[f.key]||0])));return(
                   <tr key={d} onClick={()=>setSelDay(d)} style={{borderBottom:'1px solid #1e2538',background:d===selDay?'#1e2538':i%2===0?'transparent':'#131820',cursor:'pointer'}}>
                     <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:d===selDay?'#f59e0b':'#e5e7eb'}}>{d} {MONTH_TH}</td>
+                    <td style={{padding:'6px 8px',textAlign:'right',color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>{ts>0?fM(ts):'—'}</td>
                     <td style={{padding:'6px 8px',textAlign:'center',color:'#3b82f6',fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>{r.tire||'—'}</td>
                     <td style={{padding:'6px 8px',textAlign:'right',color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace"}}>{r.tireSales?fM(+r.tireSales):'—'}</td>
                     <td style={{padding:'6px 8px',textAlign:'center'}}>{r.battery||'—'}</td>

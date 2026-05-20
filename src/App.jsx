@@ -961,6 +961,12 @@ const FDEFS = [
     hint:'Sheet: For_BI'
   },
   {
+    key:'salesdata',
+    label:'Data_sale_by_Store.xlsx',
+    icon:'📊',
+    hint:'Sheet: 003-xxx, 009-xxx, ... (รายสาขา)'
+  },
+  {
     key:'hist',
     label:'ประวัติยอดขาย.xlsx',
     icon:'📖',
@@ -980,7 +986,87 @@ const FDEFS = [
   },
 ]
 
-function parseTgt(wb) {
+/* ── Parse Data_sale_by_Store.xlsx ──────────────────────────
+   Sheet names: "003-Cockpit Srinakarin", "009-xxx", ...
+   Rows (1-indexed):
+     4  = Job Order (Car count)
+     25 = Total Tire units
+     40 = Tire Net Sales ฿
+     48 = Lube Net Sales ฿
+     56 = MP Net Sales ฿
+     58 = Battery Net Sales ฿
+     60 = Brake Net Sales ฿
+     62 = Shock Net Sales ฿
+     63 = Service Tire ฿
+     64 = Service Non-Tire ฿
+   Columns (0-indexed):
+     2024: 4-15 (Jan-Dec)
+     2025: 17-28 (Jan-Dec)
+     2026: 30-34 (Jan-May so far)
+─────────────────────────────────────────────────────────── */
+function parseSalesData(wb) {
+  const histOut  = {}  // { bid: { 2024:[12], 2025:[12], 2026:[12] } }
+  const tireqOut = {}  // { bid: { 2024:[12], 2025:[12] } }
+  const parsed   = []  // summary for display
+
+  const COL_START = { 2024: 4, 2025: 17, 2026: 30 }
+  const MON_COUNT = { 2024: 12, 2025: 12, 2026: 5 }
+  // Revenue rows (0-indexed from sheet_to_json)
+  const REV_ROWS = [39, 47, 55, 57, 59, 61, 62, 63]
+  const TIRE_ROW = 24   // Total tires
+  const JOB_ROW  = 3    // Car count / Job Order
+  const BAT_ROW  = 56   // Battery units
+  const BRK_ROW  = 58   // Brake units
+  const SHK_ROW  = 60   // Shock units
+  const MP_ROW   = 51   // MP units
+
+  wb.SheetNames.forEach(sn => {
+    const match = sn.match(/^(\d{3})/)
+    if (!match) return
+    const bid = match[1]
+
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1 })
+
+    histOut[bid]  = {}
+    tireqOut[bid] = {}
+
+    ;[2024, 2025, 2026].forEach(yr => {
+      const start  = COL_START[yr]
+      const months = MON_COUNT[yr]
+      const hist   = []
+      const tireq  = []
+
+      for (let m = 0; m < months; m++) {
+        const col = start + m
+        // Sum all revenue rows for total monthly sales
+        const total = REV_ROWS.reduce((s, r) => s + (Number(rows[r]?.[col]) || 0), 0)
+        hist.push(Math.round(total / 1000))
+        tireq.push(Number(rows[TIRE_ROW]?.[col]) || 0)
+      }
+
+      // Pad months not yet available with null
+      while (hist.length  < 12) hist.push(null)
+      while (tireq.length < 12) tireq.push(null)
+
+      histOut[bid][yr]  = hist
+      tireqOut[bid][yr] = tireq
+    })
+
+    // Summary of latest month with data
+    const latestCol = COL_START[2026] + MON_COUNT[2026] - 1  // May 2026
+    const latestSales = REV_ROWS.reduce((s, r) => s + (Number(rows[r]?.[latestCol]) || 0), 0)
+    parsed.push({
+      bid,
+      name: sn,
+      sales: Math.round(latestSales / 1000),
+      tire:  Number(rows[TIRE_ROW]?.[latestCol]) || 0,
+      job:   Number(rows[JOB_ROW]?.[latestCol])  || 0,
+    })
+  })
+
+  return { histOut, tireqOut, parsed }
+}
+
 
   const sn =
     wb.SheetNames.find(
@@ -1042,9 +1128,10 @@ function Upload({ ctx }) {
   } = ctx
 
   const refs = {
-    target: useRef(),
-    hist: useRef(),
-    daily: useRef(),
+    target:    useRef(),
+    salesdata: useRef(),
+    hist:      useRef(),
+    daily:     useRef(),
     tiredaily: useRef()
   }
 
@@ -1064,6 +1151,31 @@ function Upload({ ctx }) {
         type: 'array',
         cellDates: true
       })
+
+      /* ─────────────────────────────────────────────
+         SALES DATA (Data_sale_by_Store.xlsx)
+         อัพเดท HIST รายเดือน 2024-2026 ทุกสาขา
+      ───────────────────────────────────────────── */
+
+      if (key === 'salesdata') {
+
+        const { histOut, parsed } = parseSalesData(wb)
+
+        setHIST(prev => {
+          const n = { ...prev }
+          Object.entries(histOut).forEach(([bid, years]) => {
+            n[bid] = { ...(n[bid] || {}), ...years }
+          })
+          DB.set('cp_hist', n)
+          return n
+        })
+
+        // Show parsed summary in status
+        const summary = parsed.map(p =>
+          `${p.bid}: ฿${p.sales}K | ยาง ${p.tire} เส้น | Job ${p.job}`
+        ).join('\n')
+        console.log('Sales data parsed:\n' + summary)
+      }
 
       /* ─────────────────────────────────────────────
          TARGET

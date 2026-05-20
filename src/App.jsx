@@ -232,7 +232,11 @@ export default function App() {
     ;(async () => {
       try {
         const keys = ['cp_de','cp_tgt','cp_hist','cp_cfg','cp_ai','cp_fcst','cp_up']
-        const { data: rows } = await supabase.from('app_data').select('key,value').in('key', keys)
+        const { data: rows, error } = await supabase
+          .from('app_data').select('key,value').in('key', keys)
+
+        if (error) throw error
+
         if (rows) {
           rows.forEach(r => {
             if (r.key==='cp_de')    setDe(r.value)
@@ -248,7 +252,7 @@ export default function App() {
       } catch(e) {
         console.error('Supabase load error:', e)
         setConnErr(true)
-        setReady(true)
+        setReady(true)   // show app with default data even if offline
       }
     })()
 
@@ -265,8 +269,9 @@ export default function App() {
       if (r.key==='cp_up')   setUpStat(r.value)
     })
 
-    setTimeout(() => setReady(true), 6000) // fallback
-    return () => { supabase.removeChannel(ch) }
+    // Fallback: show app after 3s regardless (handles Supabase pause/slow)
+    const t = setTimeout(() => { setConnErr(true); setReady(true) }, 3000)
+    return () => { clearTimeout(t); supabase.removeChannel(ch) }
   }, [])
 
   /* ── Write helpers ── */
@@ -370,15 +375,32 @@ export default function App() {
 
   /* ── Loading screen ── */
   if (!ready) return (
-    <div style={{background:'#0d1117',minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16}}>
-      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABYgAAAWIBXyfQUwAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAANpSURBVHic7ZpNaBNBGIafd3eTbVI1/lRsUGqtJ0+ePHgQPHjw4kVBEMSrF0FERBC8eBNBRPDgwYMXBcGDB/HkxYMHL168iCCCiKCIiIh4UFEURUXxV0VFxb/d9SBJmyaTbHYns7vwwTLszrzzfbO/O7OzgBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEJIPhljzFJKdSmla0qp70qpL8aYqVLKK6XWSil3SimXlVIupXQ5pZRSSudCKaXUWuuNUkrnnBsopfS11vscj7quRwCQJEmSJEmSJMdx0HVd13VdRETkvu/7vu8jIiIiHcdRUkoppZRSSinlOM4bERFLKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSjkAfgHYO9VtTUgAAAAASUVORK5CYII=" alt="logo" style={{width:64,height:64,borderRadius:8,background:'#f59e0b',padding:8}}/>
+    <div style={{background:'#0d1117',minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14,padding:20}}>
+      <img src="/icons/apple-touch-icon.png" alt="Cockpit" style={{width:80,height:80,borderRadius:16}}
+        onError={e=>{e.target.style.display='none'}}/>
       <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:22,color:'#f59e0b',letterSpacing:3}}>COCKPIT</div>
-      <div style={{fontSize:12,color:'#6b7280'}}>กำลังเชื่อมต่อ Supabase...</div>
-      {connErr && <div style={{fontSize:11,color:'#ef4444',background:'#2a0d0d',padding:'8px 16px',borderRadius:6,maxWidth:320,textAlign:'center'}}>⚠️ เชื่อมต่อไม่ได้ — กรุณาตรวจสอบ Supabase URL/Key ใน src/supabase.js</div>}
+      <div style={{fontFamily:'Barlow Condensed',fontSize:14,color:'#6b7280'}}>SALES INTELLIGENCE</div>
       <style>{`@keyframes slide{0%{width:0}60%{width:70%}100%{width:100%}}.bar{animation:slide 1.8s ease-in-out infinite}`}</style>
       <div style={{width:180,height:3,background:'#1e2538',borderRadius:2,overflow:'hidden'}}><div className="bar" style={{height:'100%',background:'#f59e0b',borderRadius:2}}/></div>
+      <div style={{fontSize:11,color:'#4b5563'}}>กำลังเชื่อมต่อ Supabase...</div>
     </div>
   )
+
+  /* ── Connection error banner (shown inside app) ── */
+  const ConnBanner = connErr ? (
+    <div style={{background:'#7c2d12',borderBottom:'1px solid #ea580c',padding:'8px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+      <div style={{fontSize:12,color:'#fed7aa'}}>
+        ⚠️ Supabase ออฟไลน์ — ข้อมูลอาจไม่ sync · ไปที่{' '}
+        <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer"
+          style={{color:'#fb923c',fontWeight:700}}>supabase.com/dashboard</a>
+        {' '}เพื่อ Resume project
+      </div>
+      <button onClick={()=>window.location.reload()}
+        style={{padding:'4px 12px',background:'#ea580c',color:'#fff',border:'none',borderRadius:4,cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12,whiteSpace:'nowrap'}}>
+        🔄 ลองใหม่
+      </button>
+    </div>
+  ) : null
 
   return (
     <div style={{fontFamily:'Barlow,sans-serif',background:'#0d1117',minHeight:'100vh',color:'#e5e7eb',paddingBottom:mobile?72:0}}>
@@ -397,6 +419,9 @@ export default function App() {
         </div>
         <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
       </div>
+
+      {/* CONNECTION ERROR BANNER */}
+      {ConnBanner}
 
       {/* DESKTOP NAV */}
       {!mobile && (

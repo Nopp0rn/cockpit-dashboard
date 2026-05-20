@@ -1092,6 +1092,7 @@ function parseSalesData(wb) {
   return { histOut, tireqOut, parsed }
 }
 
+function parseTgt(wb) {
 
   const sn =
     wb.SheetNames.find(

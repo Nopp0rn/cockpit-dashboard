@@ -248,11 +248,13 @@ export default function App() {
             if (r.key==='cp_up')    setUpStat(r.value)
           })
         }
+        clearTimeout(t)       // โหลดสำเร็จ — ยกเลิก timeout
+        setConnErr(false)     // ซ่อน banner ถ้าเคยแสดง
         tick(); tick(); tick()
       } catch(e) {
         console.error('Supabase load error:', e)
         setConnErr(true)
-        setReady(true)   // show app with default data even if offline
+        setReady(true)
       }
     })()
 
@@ -269,8 +271,8 @@ export default function App() {
       if (r.key==='cp_up')   setUpStat(r.value)
     })
 
-    // Fallback: show app after 3s regardless (handles Supabase pause/slow)
-    const t = setTimeout(() => { setConnErr(true); setReady(true) }, 3000)
+    // Fallback: show app after 8s (Supabase cold-start can be slow)
+    const t = setTimeout(() => { setConnErr(true); setReady(true) }, 8000)
     return () => { clearTimeout(t); supabase.removeChannel(ch) }
   }, [])
 

@@ -331,7 +331,16 @@ export default function App() {
   const getTS     = (bid) => calcTS(getMTD(bid))
   const getAllMTD  = () => { const agg=Object.fromEntries(FIELDS.map(f=>[f.key,0])); BRANCHES.forEach(b=>{const m=getMTD(b.id);FIELDS.forEach(f=>{agg[f.key]+=m[f.key]})}); return agg }
   const getAllTS   = () => BRANCHES.reduce((s,b)=>s+getTS(b.id),0)
-  const getT      = (bid) => bid==='ALL'?Object.values(TARGET).reduce((a,t)=>({sales:a.sales+t.sales,tire:a.tire+t.tire,lube:a.lube+t.lube,battery:a.battery+t.battery,brake:a.brake+t.brake,shock:a.shock+t.shock,mp:a.mp+t.mp,cc:a.cc+t.cc}),{sales:0,tire:0,lube:0,battery:0,brake:0,shock:0,mp:0,cc:0}):(TARGET[bid]||SEED_T[bid])
+  const getT      = (bid) => {
+    const base = bid==='ALL'
+      ? Object.values(TARGET).reduce((a,t)=>({sales:a.sales+t.sales,tire:a.tire+t.tire,lube:a.lube+t.lube,battery:a.battery+t.battery,brake:a.brake+t.brake,shock:a.shock+t.shock,mp:a.mp+t.mp,cc:a.cc+t.cc}),{sales:0,tire:0,lube:0,battery:0,brake:0,shock:0,mp:0,cc:0})
+      : (TARGET[bid]||SEED_T[bid])
+    return {
+      ...base,
+      tireSalesTgt: base.tire * 3800,            // ยอดขายยาง เป้า = ยาง×3,800฿
+      ccFormula: Math.round(base.sales / 5100),  // Job Order เป้า = ยอดขาย÷5,100฿
+    }
+  }
 
   const getH26 = (bid) => {
     const base = [...((bid==='ALL'
@@ -371,27 +380,28 @@ export default function App() {
       const d = await callAI({
         model:'claude-sonnet-4-20250514', max_tokens:900,
         messages:[{role:'user', content:
-          `คุณเป็นที่ปรึกษาการขาย Cockpit ร้านยางรถยนต์
+          `คุณเป็นที่ปรึกษาการขาย Cockpit ร้านยางรถยนต์ ตอบเป็นภาษาไทยเท่านั้น ห้ามใช้ภาษาอื่นใด
 สาขา: ${br.name} | MTD ${TODAY_D} ${MONTH_TH} ${cfg.year} (${TODAY_D}/${TOTAL_D} วัน = ${(MTD_R*100).toFixed(0)}%)
 
 === เป้าหมายรายสินค้า vs ยอดจริง ===
 ยอดขายรวม: เป้า ${N(Math.round(t.sales*MTD_R))}฿ | จริง ${N(ts)}฿ | ${P(ts,t.sales*MTD_R).toFixed(1)}%
-ยาง: เป้า ${Math.round(t.tire*MTD_R)} เส้น | จริง ${m.tire} เส้น | ${P(m.tire,t.tire*MTD_R).toFixed(1)}%
-Battery: เป้า ${Math.round(t.battery*MTD_R)} ลูก | จริง ${m.battery||0} ลูก | ${P(m.battery||0,t.battery*MTD_R).toFixed(1)}%
-Brake: เป้า ${Math.round(t.brake*MTD_R)} ชิ้น | จริง ${m.brake||0} | ${P(m.brake||0,t.brake*MTD_R).toFixed(1)}%
-Shock: เป้า ${Math.round(t.shock*MTD_R)} ชิ้น | จริง ${m.shockUp||0} | ${P(m.shockUp||0,t.shock*MTD_R).toFixed(1)}%
-MP: เป้า ${Math.round(t.mp*MTD_R)} ชุด | จริง ${m.mp||0} | ${P(m.mp||0,t.mp*MTD_R).toFixed(1)}%
-Lube: เป้า ${Math.round(t.lube*MTD_R)} ลิตร | จริง ${m.lubricant||0} | ${P(m.lubricant||0,t.lube*MTD_R).toFixed(1)}%
-Job Order: เป้า ${Math.round(t.cc*MTD_R)} | จริง ${m.jobOrder||0} | ${P(m.jobOrder||0,t.cc*MTD_R).toFixed(1)}%
+ยาง (เส้น): เป้า ${Math.round(t.tire*MTD_R)} | จริง ${m.tire} | ${P(m.tire,t.tire*MTD_R).toFixed(1)}%
+ยอดขายยาง (฿): เป้า ${N(Math.round(t.tireSalesTgt*MTD_R))} | จริง ${N(m.tireSales||0)} | ${P(m.tireSales||0,t.tireSalesTgt*MTD_R).toFixed(1)}%
+Battery (ลูก): เป้า ${Math.round(t.battery*MTD_R)} | จริง ${m.battery||0} | ${P(m.battery||0,t.battery*MTD_R).toFixed(1)}%
+Brake (ชิ้น): เป้า ${Math.round(t.brake*MTD_R)} | จริง ${m.brake||0} | ${P(m.brake||0,t.brake*MTD_R).toFixed(1)}%
+Shock Up (ชิ้น): เป้า ${Math.round(t.shock*MTD_R)} | จริง ${m.shockUp||0} | ${P(m.shockUp||0,t.shock*MTD_R).toFixed(1)}%
+MP (ชุด): เป้า ${Math.round(t.mp*MTD_R)} | จริง ${m.mp||0} | ${P(m.mp||0,t.mp*MTD_R).toFixed(1)}%
+Lubricant (ลิตร): เป้า ${Math.round(t.lube*MTD_R)} | จริง ${m.lubricant||0} | ${P(m.lubricant||0,t.lube*MTD_R).toFixed(1)}%
+Job Order (จำนวนลูกค้า/งาน ไม่ใช่สินค้า): เป้า ${Math.round(t.ccFormula*MTD_R)} ราย | จริง ${m.jobOrder||0} ราย | ${P(m.jobOrder||0,t.ccFormula*MTD_R).toFixed(1)}%
 
-=== ประวัติ ===
+=== ประวัติยอดขายรายเดือน (฿000) ===
 2025: ${(h[2025]||[]).join(',')}
 2026 YTD: ${(h[2026]||[]).slice(0,cfg.month).join(',')}
 
-กรุณาวิเคราะห์ภาษาไทย:
-1. สินค้าไหนที่ยังขาดเป้าหนักที่สุด (เรียงลำดับ)
-2. สินค้าที่ควร push เพิ่มเพื่อชดเชยยอดที่ขาด พร้อมเหตุผล
-3. แนวทางปฏิบัติที่ทำได้ทันที 3-5 ข้อ`
+วิเคราะห์เป็นภาษาไทยเท่านั้น:
+1. หมวดสินค้าที่ขาดเป้าหนักที่สุด (เรียงลำดับจากมากไปน้อย)
+2. สินค้าที่ควร push เพิ่มเพื่อชดเชยยอดที่ขาด พร้อมเหตุผล (Job Order = จำนวนลูกค้าเข้าร้าน)
+3. แนวทางปฏิบัติที่ทำได้ทันที 3-5 ข้อ (เป็นภาษาไทยเท่านั้น)`
         }]
       })
       const n = {...aiAna, [bid]:d.content[0].text}
@@ -682,170 +692,211 @@ function Overview({ctx}) {
 function MTDTab({ctx}) {
   const {selBr,setSelBr,getMTD,getTS,getAllMTD,getAllTS,getT,getH,de,
          MTD_R,TODAY_D,TOTAL_D,MONTH_TH,cfg,mobile,HIST,FIELDS} = ctx
-  const isAll=selBr==='ALL', t=getT(selBr), m=isAll?getAllMTD():getMTD(selBr), ts=isAll?getAllTS():getTS(selBr)
-  const h=getH(selBr)
-  const [showYr, setShowYr] = useState({2024:true,2025:true,2026:true})
-  const toggle = yr => setShowYr(p=>({...p,[yr]:!p[yr]}))
 
-  const pyMTD  = isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2025]||0)*MTD_R,0):(MAY_SALES[selBr]?.[2025]||0)*MTD_R
-  const py2MTD = isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2024]||0)*MTD_R,0):(MAY_SALES[selBr]?.[2024]||0)*MTD_R
-  const t25    = isAll?BRANCHES.reduce((s,b)=>s+(MAY_TIRE[b.id]?.[2025]||0)*MTD_R,0):(MAY_TIRE[selBr]?.[2025]||0)*MTD_R
-  const t24    = isAll?BRANCHES.reduce((s,b)=>s+(MAY_TIRE[b.id]?.[2024]||0)*MTD_R,0):(MAY_TIRE[selBr]?.[2024]||0)*MTD_R
+  // Thai Buddhist year display (e.g. 2024 → "67", 2025 → "68", 2026 → "69")
+  const BE2 = yr => String(yr+543).slice(-2)
 
-  /* ── Daily chart: วันที่ 1-TODAY_D เทียบ PY ── */
-  // Get monthly HIST for same month in prior years (in ฿, HIST stored as ฿000)
-  const histMonth24 = isAll
-    ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[2024]?.[cfg.month-1]||0)*1000),0)
-    : (HIST[selBr]?.[2024]?.[cfg.month-1]||0)*1000
-  const histMonth25 = isAll
-    ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[2025]?.[cfg.month-1]||0)*1000),0)
-    : (HIST[selBr]?.[2025]?.[cfg.month-1]||0)*1000
-
-  // Average daily for PY years
-  const avg24 = histMonth24>0 ? histMonth24/TOTAL_D : 0
-  const avg25 = histMonth25>0 ? histMonth25/TOTAL_D : 0
-
-  // Build daily series for days 1..TODAY_D
-  // Distribute monthly historical data with slight natural variation per day
-  const seed = (d,offset) => 0.85 + Math.sin(d*0.42+offset)*0.18 + Math.sin(d*0.9+offset*2)*0.08
-
-  const dailyData = Array.from({length:TODAY_D}, (_,i)=>{
-    const d = i+1
-    const row = {day:String(d)}
-
-    // 2026 actual — from de entries
-    if (!isAll) {
-      const dayRow = de[selBr]?.[d]
-      if (dayRow) {
-        const agg = Object.fromEntries(FIELDS.map(f=>[f.key,Number(dayRow[f.key])||0]))
-        const v = calcTS(agg)
-        if (v>0) row[2026]=v
-      }
-    } else {
-      // All branches: use MTD running average per day
-      const allDayTotal = BRANCHES.reduce((s,b)=>{
-        const dr=de[b.id]?.[d]
-        if(!dr)return s
-        const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]))
-        return s+calcTS(agg)
-      },0)
-      if(allDayTotal>0) row[2026]=allDayTotal
+  // ── All-branches summary data ──────────────────────────────────
+  const allRows = BRANCHES.map((b,i) => {
+    const t  = getT(b.id)
+    const m  = getMTD(b.id)
+    const ts = getTS(b.id)
+    const tire24 = (MAY_TIRE[b.id]?.[2024]||0)*MTD_R
+    const tire25 = (MAY_TIRE[b.id]?.[2025]||0)*MTD_R
+    const sale25 = (MAY_SALES[b.id]?.[2025]||0)*MTD_R
+    return {
+      ...b, i, t, m, ts,
+      tire24:Math.round(tire24), tire25:Math.round(tire25), tire26:m.tire,
+      tireTgt:Math.round(t.tire*MTD_R), tirePct:P(m.tire,t.tire*MTD_R),
+      sale25:Math.round(sale25), sale26:Math.round(ts),
+      saleTgt:Math.round(t.sales*MTD_R), salePct:P(ts,t.sales*MTD_R),
     }
-
-    // PY25 estimated daily (realistic variation from monthly total)
-    if (avg25>0) row[2025] = Math.round(avg25*seed(d,1.2))
-    // PY24 estimated daily
-    if (avg24>0) row[2024] = Math.round(avg24*seed(d,2.7))
-
-    return row
   })
 
-  // Monthly chart (Jan–Dec all years)
-  const mData = MONTHS_TH.map((mn,i)=>({month:mn,2023:h[2023]?.[i]??null,2024:h[2024]?.[i]??null,2025:h[2025]?.[i]??null,2026:h[2026]?.[i]??null}))
-  const [showMoYr, setShowMoYr] = useState({2023:false,2024:true,2025:true,2026:true})
-  const toggleMo = yr => setShowMoYr(p=>({...p,[yr]:!p[yr]}))
-  const yrBtnStyle=(yr,map)=>({padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${YRCLR[yr]}`,background:map[yr]?YRCLR[yr]+'33':'transparent',color:map[yr]?YRCLR[yr]:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11})
+  // Chart data per branch (for bar charts)
+  const barData = allRows.map(r=>({
+    name: r.short,
+    'ยาง24':r.tire24, 'ยาง25':r.tire25, 'ยาง26':r.tire26,
+    'เป้ายาง':r.tireTgt,
+    'ยอด25':Math.round(r.sale25/1000), 'ยอด26':Math.round(r.sale26/1000),
+    'เป้าขาย':Math.round(r.saleTgt/1000),
+  }))
 
-  // Target per day reference
-  const tgtPerDay = Math.round(t.sales/TOTAL_D)
+  const totTire24=allRows.reduce((s,r)=>s+r.tire24,0)
+  const totTire25=allRows.reduce((s,r)=>s+r.tire25,0)
+  const totTire26=allRows.reduce((s,r)=>s+r.tire26,0)
+  const totTireTgt=allRows.reduce((s,r)=>s+r.tireTgt,0)
+  const totSale25=allRows.reduce((s,r)=>s+r.sale25,0)
+  const totSale26=allRows.reduce((s,r)=>s+r.sale26,0)
+  const totSaleTgt=allRows.reduce((s,r)=>s+r.saleTgt,0)
 
+  // ── Single branch data ─────────────────────────────────────────
+  const isAll=selBr==='ALL'
+  const t=getT(selBr), m=isAll?getAllMTD():getMTD(selBr)
+  const ts=isAll?getAllTS():getTS(selBr)
+  const h=getH(selBr)
+  const pyMTD =(MAY_SALES[selBr]?.[2025]||0)*MTD_R
+  const py2MTD=(MAY_SALES[selBr]?.[2024]||0)*MTD_R
+  const t25   =(MAY_TIRE[selBr]?.[2025]||0)*MTD_R
+  const t24   =(MAY_TIRE[selBr]?.[2024]||0)*MTD_R
+
+  const [showMoYr,setShowMoYr]=useState({2023:false,2024:true,2025:true,2026:true})
+  const mData=MONTHS_TH.map((mn,i)=>({month:mn,2023:h[2023]?.[i]??null,2024:h[2024]?.[i]??null,2025:h[2025]?.[i]??null,2026:h[2026]?.[i]??null}))
+
+  const yrBtn=(yr,map)=>({padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${YRCLR[yr]}`,background:map[yr]?YRCLR[yr]+'33':'transparent',color:map[yr]?YRCLR[yr]:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11})
+
+  const PctBadge=({v})=>{const c=v>=100?'#22c55e':v>=90?'#f59e0b':v>=80?'#f97316':'#ef4444';const bg=c+'22';return<span style={{background:bg,color:c,borderRadius:4,padding:'1px 7px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{v.toFixed(0)}%</span>}
+
+  if (isAll) return (
+    /* ══ ALL BRANCHES — Image 3 style ══ */
+    <div style={{display:'flex',gap:14,flexDirection:mobile?'column':'row'}}>
+      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?14:18,color:'#f59e0b',marginBottom:3}}>
+          MTD VS เป้า — ทุกสาขา (1–{TODAY_D} {MONTH_TH} {cfg.year})
+        </div>
+        <div style={{background:'#1a1f2e',border:'1px solid #f59e0b44',borderRadius:6,padding:'6px 12px',marginBottom:10,fontSize:11,color:'#f59e0b'}}>
+          ⚡ เป้า MTD = เป้ารายเดือน × ({TODAY_D} ÷ {TOTAL_D}) คำนวณตามวันปฏิบัติการ
+        </div>
+
+        {/* ── Summary table ── */}
+        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,overflow:'hidden',marginBottom:12}}>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:mobile?10:11}}>
+              <thead>
+                <tr style={{background:'#0d1117'}}>
+                  <th rowSpan={2} style={{padding:'7px 10px',textAlign:'left',color:'#6b7280',fontFamily:'Barlow Condensed',verticalAlign:'bottom',borderBottom:'1px solid #1e2538'}}>สาขา</th>
+                  <th colSpan={5} style={{padding:'5px 8px',textAlign:'center',color:'#3b82f6',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>🏷️ ยาง (เส้น)</th>
+                  <th colSpan={4} style={{padding:'5px 8px',textAlign:'center',color:'#f59e0b',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>💰 ยอดขาย (฿)</th>
+                </tr>
+                <tr style={{background:'#0d1117'}}>
+                  {[`ยาง ${BE2(2024)}`,`ยาง ${BE2(2025)}`,`ยาง ${BE2(2026)}`,'เป้า MTD','%',`Sale ${BE2(2025)}`,`Sale ${BE2(2026)}`,'เป้า MTD','%'].map((h,i)=>(
+                    <th key={i} style={{padding:'5px 8px',textAlign:'center',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',borderLeft:i===0||i===5?'1px solid #2d3548':'none',whiteSpace:'nowrap'}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allRows.map((r,i)=>(
+                  <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:i%2===0?'transparent':'#131820',cursor:'pointer'}} onClick={()=>setSelBr(r.id)}>
+                    <td style={{padding:'7px 10px',fontFamily:'Barlow Condensed',fontWeight:700,color:BCLR[i],fontSize:12,whiteSpace:'nowrap'}}>{r.id} {r.short}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{N(r.tire24)}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{N(r.tire25)}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{N(r.tire26)}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center',color:'#6b7280'}}>{N(r.tireTgt)}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center'}}><PctBadge v={r.tirePct}/></td>
+                    <td style={{padding:'6px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8',borderLeft:'1px solid #1e2538'}}>{fM(r.sale25)}</td>
+                    <td style={{padding:'6px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(r.sale26)}</td>
+                    <td style={{padding:'6px 8px',textAlign:'right',color:'#6b7280'}}>{fM(r.saleTgt)}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center'}}><PctBadge v={r.salePct}/></td>
+                  </tr>
+                ))}
+                <tr style={{background:'#1e2538',borderTop:'2px solid #f59e0b'}}>
+                  <td style={{padding:'7px 10px',fontWeight:900,fontFamily:'Barlow Condensed',fontSize:12}}>รวมทุกสาขา</td>
+                  <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #2d3548'}}>{N(totTire24)}</td>
+                  <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{N(totTire25)}</td>
+                  <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{N(totTire26)}</td>
+                  <td style={{padding:'6px 8px',textAlign:'center',color:'#6b7280'}}>{N(totTireTgt)}</td>
+                  <td style={{padding:'6px 8px',textAlign:'center'}}><PctBadge v={P(totTire26,totTireTgt)}/></td>
+                  <td style={{padding:'6px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8',borderLeft:'1px solid #2d3548'}}>{fM(totSale25)}</td>
+                  <td style={{padding:'6px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#f59e0b'}}>{fM(totSale26)}</td>
+                  <td style={{padding:'6px 8px',textAlign:'right',color:'#6b7280'}}>{fM(totSaleTgt)}</td>
+                  <td style={{padding:'6px 8px',textAlign:'center'}}><PctBadge v={P(totSale26,totSaleTgt)}/></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ── Bar charts ── */}
+        <div style={{display:'grid',gridTemplateColumns:mobile?'1fr':'1fr 1fr',gap:12}}>
+          {/* Tire by branch */}
+          <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#3b82f6',marginBottom:8}}>🏷️ ยาง MTD ปี {BE2(2024)}/{BE2(2025)}/{BE2(2026)}</div>
+            <ResponsiveContainer width="100%" height={mobile?180:220}>
+              <BarChart data={barData} margin={{top:4,right:4,left:0,bottom:30}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+                <XAxis dataKey="name" tick={{fill:'#6b7280',fontSize:8}} angle={-35} textAnchor="end" interval={0}/>
+                <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
+                <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[N(v)+' เส้น','']}/>
+                <Legend wrapperStyle={{fontSize:9}}/>
+                <Bar dataKey="ยาง24" fill="#475569" radius={[2,2,0,0]}/>
+                <Bar dataKey="ยาง25" fill="#f59e0b" radius={[2,2,0,0]}/>
+                <Bar dataKey="ยาง26" fill="#3b82f6" radius={[2,2,0,0]}/>
+                <Line type="monotone" dataKey="เป้ายาง" stroke="#a78bfa" strokeWidth={2} strokeDasharray="4 2" dot={{r:3}}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Sale by branch */}
+          <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b',marginBottom:8}}>💰 ยอดขาย MTD ปี {BE2(2025)}/{BE2(2026)} (฿000)</div>
+            <ResponsiveContainer width="100%" height={mobile?180:220}>
+              <BarChart data={barData} margin={{top:4,right:4,left:0,bottom:30}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+                <XAxis dataKey="name" tick={{fill:'#6b7280',fontSize:8}} angle={-35} textAnchor="end" interval={0}/>
+                <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
+                <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[fM(v*1000),'']}/>
+                <Legend wrapperStyle={{fontSize:9}}/>
+                <Bar dataKey="ยอด25" fill="#f59e0b" radius={[2,2,0,0]}/>
+                <Bar dataKey="ยอด26" fill="#22c55e" radius={[2,2,0,0]}/>
+                <Line type="monotone" dataKey="เป้าขาย" stroke="#a78bfa" strokeWidth={2} strokeDasharray="4 2" dot={{r:3}}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  /* ══ SINGLE BRANCH — daily + monthly trend ══ */
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:10}}>
-          {isAll?'🌐 รวมทุกสาขา':`${selBr} — ${BRANCHES.find(x=>x.id===selBr)?.name}`}
+          {selBr} — {BRANCHES.find(x=>x.id===selBr)?.name}
         </div>
-
-        {/* KPI Cards */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
           <Card label="ยอดขาย MTD" value={fM(ts)} sub={`เป้า ${fM(Math.round(t.sales*MTD_R))}`}/>
           <Card label="% เทียบเป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={P(ts,t.sales*MTD_R)>=100?'#22c55e':P(ts,t.sales*MTD_R)>=90?'#f59e0b':'#ef4444'}/>
           <Card label="ยาง MTD" value={N(m.tire)+' เส้น'} sub={`เป้า ${N(Math.round(t.tire*MTD_R))}`} color="#3b82f6"/>
-          <Card label="vs PY May 25" value={P(ts,pyMTD).toFixed(1)+'%'} color="#94a3b8"/>
+          <Card label="vs PY25" value={P(ts,pyMTD).toFixed(1)+'%'} color="#94a3b8"/>
         </div>
-
-        {/* ══ DAILY COMPARISON CHART — main chart ══ */}
-        <div style={{background:'#161b25',border:'2px solid #f59e0b33',borderRadius:10,padding:12,marginBottom:12}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
-            <div>
-              <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#f59e0b'}}>
-                📅 ยอดขายรายวัน {MONTH_TH} {cfg.year} — วันที่ 1–{TODAY_D}
-              </div>
-              <div style={{fontSize:9,color:'#6b7280',marginTop:1}}>เทียบช่วงเดียวกัน PY24/PY25 (ประมาณการจากยอดรายเดือน)</div>
-            </div>
-            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-              {[2024,2025,2026].map(yr=>(
-                <button key={yr} onClick={()=>toggle(yr)} style={yrBtnStyle(yr,showYr)}>{yr}</button>
-              ))}
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={mobile?190:260}>
-            <LineChart data={dailyData} margin={{top:4,right:4,left:0,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
-              <XAxis dataKey="day" tick={{fill:'#6b7280',fontSize:8}} label={{value:`วัน (${MONTH_TH})`,position:'insideBottomRight',offset:-5,fill:'#4b5563',fontSize:9}}/>
-              <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(0)+'k':''}/>
-              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
-                formatter={(v,name)=>[v!=null?N(Math.round(v))+'฿':'—',name==='2026'?`${cfg.year} จริง`:name==='2025'?'PY25 ประมาณ':'PY24 ประมาณ']}
-                labelFormatter={l=>`วันที่ ${l} ${MONTH_TH}`}/>
-              <ReferenceLine y={tgtPerDay} stroke="#a78bfa" strokeDasharray="5 3" strokeWidth={1.5} label={{value:'เป้า/วัน',position:'right',fill:'#a78bfa',fontSize:9}}/>
-              {showYr[2024]&&<Line type="monotone" dataKey={2024} stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls/>}
-              {showYr[2025]&&<Line type="monotone" dataKey={2025} stroke="#f59e0b" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls/>}
-              {showYr[2026]&&<Line type="monotone" dataKey={2026} stroke="#22c55e" strokeWidth={2.5} dot={{r:3,fill:'#22c55e'}} connectNulls={false}/>}
-            </LineChart>
-          </ResponsiveContainer>
-          {/* Legend */}
-          <div style={{display:'flex',gap:14,marginTop:6,fontSize:10,flexWrap:'wrap'}}>
-            <span style={{color:'#22c55e'}}>● {cfg.year} ยอดจริง</span>
-            <span style={{color:'#f59e0b'}}>⟶ PY25 ประมาณ</span>
-            <span style={{color:'#94a3b8'}}>⟶ PY24 ประมาณ</span>
-            <span style={{color:'#a78bfa'}}>-- เป้า/วัน</span>
-          </div>
-        </div>
-
-        {/* ══ MONTHLY TREND CHART ══ */}
-        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
+        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#94a3b8'}}>📈 ยอดขายรายเดือน (฿000) 2023–2026</div>
             <div style={{display:'flex',gap:5}}>
-              {[2023,2024,2025,2026].map(yr=>(
-                <button key={yr} onClick={()=>toggleMo(yr)} style={yrBtnStyle(yr,showMoYr)}>{yr}</button>
-              ))}
+              {[2023,2024,2025,2026].map(yr=>(<button key={yr} onClick={()=>setShowMoYr(p=>({...p,[yr]:!p[yr]}))} style={yrBtn(yr,showMoYr)}>{yr}</button>))}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={mobile?130:180}>
+          <ResponsiveContainer width="100%" height={mobile?150:200}>
             <LineChart data={mData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
               <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
               <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
               <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[v!=null?N(v*1000)+'฿':'—','']}/>
               {[2023,2024,2025,2026].filter(yr=>showMoYr[yr]).map(yr=>(
-                <Line key={yr} type="monotone" dataKey={yr} stroke={YRCLR[yr]} strokeWidth={yr===2026?3:1.5}
-                  dot={yr===2026?{r:3}:false} strokeDasharray={yr===2026?'6 3':'none'} connectNulls={false}/>
+                <Line key={yr} type="monotone" dataKey={yr} stroke={YRCLR[yr]} strokeWidth={yr===2026?3:1.5} dot={yr===2026?{r:3}:false} strokeDasharray={yr===2026?'6 3':'none'} connectNulls={false}/>
               ))}
             </LineChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Comparison table */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,overflow:'hidden'}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}>
             <thead><tr style={{background:'#0d1117'}}>
-              {['ปี','ยอด MTD','ยาง','เต็มเดือน'].map(h=><th key={h} style={{padding:'7px 10px',textAlign:h==='ปี'?'left':'right',color:'#6b7280',fontSize:10,fontFamily:'Barlow Condensed'}}>{h}</th>)}
+              {['ปี',`ยาง ${BE2(2024)}`,`ยาง ${BE2(2025)}`,`ยาง ${BE2(2026)}`,'เป้า %',`ยอด ${BE2(2025)}`,`ยอด ${BE2(2026)}`,'เป้าเดือน'].map(h=><th key={h} style={{padding:'7px 8px',textAlign:'right',color:'#6b7280',fontSize:10,fontFamily:'Barlow Condensed'}}>{h}</th>)}
             </tr></thead>
-            <tbody>{[
-              {yr:'2024',sm:py2MTD,tire:t24,full:isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2024]||0),0):(MAY_SALES[selBr]?.[2024]||0)},
-              {yr:'2025',sm:pyMTD, tire:t25,full:isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2025]||0),0):(MAY_SALES[selBr]?.[2025]||0)},
-              {yr:`${cfg.year} MTD`,sm:ts,tire:m.tire,full:'—',hl:true},
-              {yr:`${cfg.year} เป้า`,sm:t.sales*MTD_R,tire:Math.round(t.tire*MTD_R),full:t.sales,tgt:true},
-            ].map((r,i)=>(
-              <tr key={i} style={{borderBottom:'1px solid #1e2538',background:r.hl?'#1e2538':r.tgt?'#131820':'transparent'}}>
-                <td style={{padding:'8px 10px',fontWeight:700,color:r.hl?'#f59e0b':r.tgt?'#a78bfa':'#9ca3af',fontSize:12}}>{r.yr}</td>
-                <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:600,color:r.hl?'#f59e0b':'#e5e7eb',fontSize:12}}>{N(Math.round(r.sm))}</td>
-                <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:r.hl?'#3b82f6':'#9ca3af',fontSize:12}}>{Math.round(r.tire)}</td>
-                <td style={{padding:'8px 10px',textAlign:'right',color:'#6b7280',fontSize:11}}>{typeof r.full==='number'?fM(r.full):r.full}</td>
+            <tbody>
+              <tr style={{borderBottom:'1px solid #1e2538'}}>
+                <td style={{padding:'8px 8px',color:'#9ca3af',fontSize:11}}>ข้อมูล</td>
+                <td style={{padding:'8px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569'}}>{Math.round(t24)}</td>
+                <td style={{padding:'8px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{Math.round(t25)}</td>
+                <td style={{padding:'8px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{m.tire}</td>
+                <td style={{padding:'8px 8px',textAlign:'right'}}><PctBadge v={P(m.tire,t.tire*MTD_R)}/></td>
+                <td style={{padding:'8px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(pyMTD))}</td>
+                <td style={{padding:'8px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(ts)}</td>
+                <td style={{padding:'8px 8px',textAlign:'right',color:'#6b7280'}}>{fM(t.sales)}</td>
               </tr>
-            ))}</tbody>
+            </tbody>
           </table>
         </div>
       </div>
@@ -870,8 +921,8 @@ function Products({ctx}) {
     {key:'filter',     label:'Filter',       icon:'🔍', unit:'ชิ้น',color:'#64748b', tgt:()=>0},
     {key:'airFilter',  label:'Air Filter',   icon:'❄️', unit:'ชิ้น',color:'#67e8f9', tgt:()=>0},
     {key:'service',    label:'Service',      icon:'🔨', unit:'฿',   color:'#a78bfa', tgt:()=>0, money:true},
-    {key:'jobOrder',   label:'Job Order',    icon:'📋', unit:'ราย', color:'#84cc16', tgt:()=>Math.round(t.cc*MTD_R)},
-    {key:'tireSales',  label:'ยอดขายยาง',   icon:'💰', unit:'฿',   color:'#f59e0b', tgt:()=>0, money:true},
+    {key:'jobOrder',   label:'Job Order (ลูกค้า)', icon:'📋', unit:'ราย', color:'#84cc16', tgt:()=>Math.round(t.ccFormula*MTD_R)},
+    {key:'tireSales',  label:'ยอดขายยาง',   icon:'💰', unit:'฿',   color:'#f59e0b', tgt:()=>Math.round(t.tireSalesTgt*MTD_R), money:true},
   ]
 
   return (
@@ -917,80 +968,162 @@ function Products({ctx}) {
 
 /* ════ DAILY ════ */
 function Daily({ctx}) {
-  const {selBr,setSelBr,de,getTS,getAllTS,getT,HIST,FIELDS,fcst,fcstLoad,genFcst,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,cfg,MONTH_TH,mobile} = ctx
+  const {selBr,setSelBr,de,getTS,getAllTS,getT,HIST,FIELDS,fcst,fcstLoad,genFcst,
+         TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,cfg,MONTH_TH,mobile} = ctx
   const isAll=selBr==='ALL', t=getT(selBr), ts=isAll?getAllTS():getTS(selBr)
-  const pyF=isAll?BRANCHES.reduce((s,b)=>s+(MAY_SALES[b.id]?.[2025]||0),0):(MAY_SALES[selBr]?.[2025]||0)
-  const avg=TODAY_D>0?ts/TODAY_D:0
 
-  // Last year daily average from monthly HIST (in thousands → ฿)
-  const pyMonthTot = isAll
-    ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[2025]?.[cfg.month-1]||0)*1000),0)
-    : (HIST[selBr]?.[2025]?.[cfg.month-1]||0)*1000
-  const pyDailyAvg = TOTAL_D>0 ? Math.round(pyMonthTot/TOTAL_D) : 0
+  // ── PY monthly totals for same month ──────────────────────────
+  const histSales = (yr) => isAll
+    ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[yr]?.[cfg.month-1]||0)*1000),0)
+    : (HIST[selBr]?.[yr]?.[cfg.month-1]||0)*1000
 
-  // Target daily
-  const tgtDaily = Math.round(t.sales/TOTAL_D)
+  const histTire = (yr) => isAll
+    ? BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[yr]?.[cfg.month-1]||0),0)
+    : (SEED_TIREQ[selBr]?.[yr]?.[cfg.month-1]||0)
 
-  // Trend: weighted avg of actual + slight upward adjustment
-  const trendDaily = avg>0 ? Math.round(avg*1.03) : tgtDaily
+  const py25SalesMo=histSales(2025), py24SalesMo=histSales(2024)
+  const py25TireMo =histTire(2025),  py24TireMo =histTire(2024)
 
-  const fArr = (!isAll && fcst[selBr]?.dailyForecast)||[]
+  const avgSales = TODAY_D>0?ts/TODAY_D:0
+  const avg25S   = TOTAL_D>0?py25SalesMo/TOTAL_D:0
+  const avg24S   = TOTAL_D>0?py24SalesMo/TOTAL_D:0
+  const tgtSalesD= t.sales/TOTAL_D
 
-  const data = Array.from({length:TOTAL_D},(_,i)=>{
+  // current MTD tire
+  const getMTDTire = () => isAll
+    ? BRANCHES.reduce((s,b)=>{const m=Object.values(de[b.id]||{}).reduce((a,r)=>a+(Number(r.tire)||0),0);return s+m},0)
+    : Object.values(de[selBr]||{}).reduce((a,r)=>a+(Number(r.tire)||0),0)
+  const mtdTire = getMTDTire()
+  const avgTire = TODAY_D>0?mtdTire/TODAY_D:0
+  const avg25T  = TOTAL_D>0?py25TireMo/TOTAL_D:0
+  const avg24T  = TOTAL_D>0?py24TireMo/TOTAL_D:0
+  const tgtTireD= t.tire/TOTAL_D
+
+  // natural variation: realistic day-of-month pattern
+  const wave=(d,phi)=>0.82+Math.sin(d*0.44+phi)*0.2+Math.cos(d*0.9+phi*1.5)*0.09
+
+  // forecast: use weighted run-rate + trend vs target
+  const fArr = (!isAll&&fcst[selBr]?.dailyForecast)||[]
+  const runRateAdj = avgSales>0 ? Math.min(avgSales/tgtSalesD,1.5)*tgtSalesD : tgtSalesD
+
+  // ── Build day-by-day data ──────────────────────────────────────
+  const salesData = Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1, row={day:String(d)}
-    // Actual
-    if (!isAll && d<=TODAY_D) {
-      const dayRow = de[selBr]?.[d]
-      if (dayRow) {
-        const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dayRow[f.key])||0]))
-        row['ยอดจริง']=calcTS(agg)||null
-      } else { row['ยอดจริง']=null }
-    } else if (isAll && d<=TODAY_D) {
-      row['ยอดจริง']=Math.round(avg*(0.85+Math.sin(i*.6)*.28))
+    // PY estimates with realistic variation
+    if(avg24S>0) row[2024]=Math.round(avg24S*wave(d,2.5))
+    if(avg25S>0) row[2025]=Math.round(avg25S*wave(d,1.1))
+    // 2026 actual
+    if(!isAll && d<=TODAY_D){
+      const dr=de[selBr]?.[d]
+      if(dr){const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]));const v=calcTS(agg);if(v>0)row[2026]=v}
+    } else if(isAll && d<=TODAY_D) {
+      const tot=BRANCHES.reduce((s,b)=>{const dr=de[b.id]?.[d];if(!dr)return s;const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]));return s+calcTS(agg)},0)
+      if(tot>0)row[2026]=tot
     }
-    // Last year reference
-    if (pyDailyAvg>0) row['PY25']=Math.round(pyDailyAvg*(0.9+Math.sin(i*.7+1)*.2))
-    // Forecast
-    if (d>TODAY_D) {
-      row['Forecast']=fArr[i-TODAY_D]||Math.round(trendDaily*(0.92+Math.sin(i*.5)*.16))
+    // forecast
+    if(d>TODAY_D) row.forecast=fArr[i-TODAY_D]||Math.round(runRateAdj*wave(d,0.8))
+    return row
+  })
+
+  const tireData = Array.from({length:TOTAL_D},(_,i)=>{
+    const d=i+1, row={day:String(d)}
+    if(avg24T>0) row[2024]=Math.round(avg24T*wave(d,2.9))
+    if(avg25T>0) row[2025]=Math.round(avg25T*wave(d,1.4))
+    if(!isAll && d<=TODAY_D){
+      const dr=de[selBr]?.[d]
+      const v=Number(dr?.tire)||0; if(v>0)row[2026]=v
+    } else if(isAll && d<=TODAY_D){
+      const tot=BRANCHES.reduce((s,b)=>s+(Number(de[b.id]?.[d]?.tire)||0),0)
+      if(tot>0)row[2026]=tot
+    }
+    if(d>TODAY_D){
+      const fr=fArr[i-TODAY_D]
+      row.forecast=fr?Math.round(fr/Math.max(tgtSalesD,1)*tgtTireD):Math.round(avgTire*wave(d,1.2))
     }
     return row
   })
 
+  const CHART_H = mobile?180:240
+  const ttip = {contentStyle:{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
+  const yrBtnSt=(yr,active)=>({padding:'3px 9px',borderRadius:4,cursor:'pointer',border:`1px solid ${YRCLR[yr]||'#22c55e'}`,background:active?(YRCLR[yr]||'#22c55e')+'33':'transparent',color:active?(YRCLR[yr]||'#22c55e'):'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:10})
+  const [showYrS,setShowYrS]=useState({2024:true,2025:true,2026:true})
+  const [showYrT,setShowYrT]=useState({2024:true,2025:true,2026:true})
+
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
-      <div style={{flex:1}}>
+      <div style={{flex:1,minWidth:0}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
-          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b'}}>รายวัน — {isAll?'รวม':BRANCHES.find(x=>x.id===selBr)?.short}</div>
-          <button onClick={genFcst} disabled={fcstLoad} style={{padding:'8px 16px',background:fcstLoad?'#1e2538':'#7c3aed',color:'#fff',border:'none',borderRadius:6,cursor:fcstLoad?'wait':'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12,width:mobile?'100%':'auto'}}>{fcstLoad?'⏳ AI คำนวณ...':'🤖 AI Forecast'}</button>
+          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b'}}>รายวัน — {isAll?'รวม':BRANCHES.find(x=>x.id===selBr)?.short} ({MONTH_TH} {cfg.year})</div>
+          <button onClick={genFcst} disabled={fcstLoad} style={{padding:'8px 16px',background:fcstLoad?'#1e2538':'#7c3aed',color:'#fff',border:'none',borderRadius:6,cursor:fcstLoad?'wait':'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12}}>{fcstLoad?'⏳':'🤖 AI Forecast'}</button>
         </div>
-        {!isAll&&fcst[selBr]&&<div style={{background:'#1a1333',border:'1px solid #7c3aed',borderRadius:6,padding:'8px 12px',marginBottom:10,fontSize:11,color:'#c4b5fd'}}>🤖 {fcst[selBr].comment}</div>}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-          <Card label="เฉลี่ย/วัน (ยอดจริง)" value={fM(Math.round(avg))} color="#f59e0b" small/>
-          <Card label="เป้า/วัน" value={fM(tgtDaily)} color="#a78bfa" small/>
-          <Card label="PY25/วัน (เฉลี่ย)" value={fM(pyDailyAvg)} color="#94a3b8" small/>
-          <Card label="ต้องทำ/วัน (เหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/DAYS_LEFT))} color="#ef4444" small/>
+
+        {/* KPI */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+          <Card label="เฉลี่ย/วัน (ยอดขาย)" value={fM(Math.round(avgSales))} color="#f59e0b" small/>
+          <Card label="เป้า/วัน (ยอดขาย)"   value={fM(Math.round(tgtSalesD))} color="#a78bfa" small/>
+          <Card label="เฉลี่ย/วัน (ยาง)"     value={N(Math.round(avgTire))+' เส้น'} color="#3b82f6" small/>
+          <Card label="ต้องทำ/วัน (ยอดเหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/DAYS_LEFT))} color="#ef4444" small/>
         </div>
-        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:8}}>
-          <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:6,fontSize:10}}>
-            <span style={{color:'#f59e0b'}}>● ยอดจริง</span>
-            <span style={{color:'#94a3b8'}}>● PY25 เฉลี่ย</span>
-            <span style={{color:'#ef444488'}}>● Forecast</span>
-            <span style={{color:'#a78bfa',borderTop:'1px dashed #a78bfa',paddingTop:2}}>-- เป้า/วัน</span>
+
+        {/* ══ CHART 1: Total Sales (฿) ══ */}
+        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,flexWrap:'wrap',gap:4}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b'}}>💰 ยอดขายรายวัน (฿) — วันที่ 1–{TODAY_D}</div>
+            <div style={{display:'flex',gap:4}}>
+              {[2024,2025,2026].map(yr=><button key={yr} onClick={()=>setShowYrS(p=>({...p,[yr]:!p[yr]}))} style={yrBtnSt(yr,showYrS[yr])}>{yr}</button>)}
+            </div>
           </div>
-          <ResponsiveContainer width="100%" height={mobile?200:280}>
-            <LineChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
+          <ResponsiveContainer width="100%" height={CHART_H}>
+            <LineChart data={salesData} margin={{top:4,right:4,left:0,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
               <XAxis dataKey="day" tick={{fill:'#6b7280',fontSize:7}}/>
               <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(0)+'k':''}/>
-              <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[v!=null?N(Math.round(v))+'฿':'—','']}/>
-              <ReferenceLine y={tgtDaily} stroke="#a78bfa" strokeDasharray="4 2" strokeWidth={1}/>
-              <Line type="monotone" dataKey="PY25" stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false}/>
-              <Line type="monotone" dataKey="ยอดจริง" stroke="#f59e0b" strokeWidth={2.5} dot={{r:3,fill:'#f59e0b'}} connectNulls={false}/>
-              <Line type="monotone" dataKey="Forecast" stroke="#ef4444" strokeWidth={2} dot={{r:2,fill:'#ef4444'}} strokeDasharray="5 3" connectNulls={false}/>
+              <Tooltip {...ttip} formatter={(v,n)=>[v!=null?N(Math.round(v))+'฿':'—',n==='forecast'?'Forecast':n==='2026'?`${cfg.year} จริง`:`PY${String(n).slice(-2)} ประมาณ`]} labelFormatter={l=>`วันที่ ${l}`}/>
+              <ReferenceLine y={tgtSalesD} stroke="#a78bfa" strokeDasharray="4 2" strokeWidth={1.5}/>
+              {showYrS[2024]&&<Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false}/>}
+              {showYrS[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={false} strokeDasharray="5 2" connectNulls={false}/>}
+              {showYrS[2026]&&<Line type="monotone" dataKey={2026} stroke="#22c55e" strokeWidth={2.5} dot={{r:3,fill:'#22c55e'}} connectNulls={false}/>}
+              <Line type="monotone" dataKey="forecast" stroke="#ef4444" strokeWidth={2} dot={{r:2,fill:'#ef4444'}} strokeDasharray="5 3" connectNulls={false}/>
             </LineChart>
           </ResponsiveContainer>
+          <div style={{display:'flex',gap:12,fontSize:9,color:'#6b7280',marginTop:4,flexWrap:'wrap'}}>
+            <span style={{color:'#22c55e'}}>● {cfg.year} จริง</span>
+            <span style={{color:YRCLR[2025]}}>⟶ PY25 ประมาณ</span>
+            <span style={{color:YRCLR[2024]}}>⟶ PY24 ประมาณ</span>
+            <span style={{color:'#ef4444'}}>⟶ Forecast</span>
+            <span style={{color:'#a78bfa'}}>-- เป้า/วัน</span>
+          </div>
+        </div>
+
+        {/* ══ CHART 2: Tire Qty ══ */}
+        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,flexWrap:'wrap',gap:4}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#3b82f6'}}>🏷️ ยางรายวัน (เส้น) — วันที่ 1–{TODAY_D}</div>
+            <div style={{display:'flex',gap:4}}>
+              {[2024,2025,2026].map(yr=><button key={yr} onClick={()=>setShowYrT(p=>({...p,[yr]:!p[yr]}))} style={yrBtnSt(yr,showYrT[yr])}>{yr}</button>)}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={mobile?150:200}>
+            <LineChart data={tireData} margin={{top:4,right:4,left:0,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+              <XAxis dataKey="day" tick={{fill:'#6b7280',fontSize:7}}/>
+              <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
+              <Tooltip {...ttip} formatter={(v,n)=>[v!=null?N(Math.round(v))+' เส้น':'—',n==='forecast'?'Forecast':n==='2026'?`${cfg.year} จริง`:`PY${String(n).slice(-2)} ประมาณ`]} labelFormatter={l=>`วันที่ ${l}`}/>
+              <ReferenceLine y={tgtTireD} stroke="#a78bfa" strokeDasharray="4 2" strokeWidth={1.5}/>
+              {showYrT[2024]&&<Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false}/>}
+              {showYrT[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={false} strokeDasharray="5 2" connectNulls={false}/>}
+              {showYrT[2026]&&<Line type="monotone" dataKey={2026} stroke="#22c55e" strokeWidth={2.5} dot={{r:3,fill:'#22c55e'}} connectNulls={false}/>}
+              <Line type="monotone" dataKey="forecast" stroke="#ef4444" strokeWidth={2} dot={{r:2}} strokeDasharray="5 3" connectNulls={false}/>
+            </LineChart>
+          </ResponsiveContainer>
+          <div style={{display:'flex',gap:12,fontSize:9,color:'#6b7280',marginTop:4,flexWrap:'wrap'}}>
+            <span style={{color:'#22c55e'}}>● {cfg.year} จริง</span>
+            <span style={{color:YRCLR[2025]}}>⟶ PY25</span>
+            <span style={{color:YRCLR[2024]}}>⟶ PY24</span>
+            <span style={{color:'#ef4444'}}>⟶ Forecast</span>
+            <span style={{color:'#a78bfa'}}>-- เป้า/วัน</span>
+          </div>
         </div>
       </div>
     </div>

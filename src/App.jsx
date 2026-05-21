@@ -241,6 +241,9 @@ export default function App() {
   const [upStat, setUpStat] = useState({})
   const [aiLoad, setAiLoad] = useState({})
   const [fcstLoad, setFcstLoad] = useState(false)
+  const [histDailySales, setHistDailySales] = useState({})  // { bid: {'YYYY-MM':{day:฿}} }
+  const [histTireQ, setHistTireQ] = useState({})            // { bid: { 2024:[12], 2025:[12], 2026:[12] } }
+  const [histDailyTire,  setHistDailyTire]  = useState({})  // { bid: {'YYYY-MM':{day:qty}} }
 
   /* ── Load all data & subscribe to realtime changes ── */
   useEffect(() => {
@@ -255,7 +258,7 @@ export default function App() {
 
     ;(async () => {
       try {
-        const keys = ['cp_de','cp_tgt','cp_hist','cp_cfg','cp_ai','cp_fcst','cp_up']
+        const keys = ['cp_de','cp_tgt','cp_hist','cp_cfg','cp_ai','cp_fcst','cp_up','cp_hdsl','cp_hdtr','cp_tireq']
         const { data: rows, error } = await supabase
           .from('app_data').select('key,value').in('key', keys)
 
@@ -270,6 +273,9 @@ export default function App() {
             if (r.key==='cp_ai')    setAiAna(r.value)
             if (r.key==='cp_fcst')  setFcst(r.value)
             if (r.key==='cp_up')    setUpStat(r.value)
+            if (r.key==='cp_hdsl') setHistDailySales(r.value)
+            if (r.key==='cp_hdtr') setHistDailyTire(r.value)
+            if (r.key==='cp_tireq') setHistTireQ(r.value)
           })
         }
         finish(false)  // ✅ โหลดสำเร็จ ไม่โชว์ banner
@@ -291,6 +297,9 @@ export default function App() {
       if (r.key==='cp_ai')   setAiAna(r.value)
       if (r.key==='cp_fcst') setFcst(r.value)
       if (r.key==='cp_up')   setUpStat(r.value)
+      if (r.key==='cp_hdsl') setHistDailySales(r.value)
+      if (r.key==='cp_hdtr') setHistDailyTire(r.value)
+      if (r.key==='cp_tireq') setHistTireQ(r.value)
     })
 
     // Timeout 10s — แสดง app แต่ไม่โชว์ banner (ช้าไม่ใช่ error)
@@ -433,7 +442,7 @@ ${s}
     setFcstLoad(false)
   }
 
-  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,aiAna,aiLoad,genPlan,fcst,fcstLoad,genFcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS}
+  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,aiAna,aiLoad,genPlan,fcst,fcstLoad,genFcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ}
 
   /* ── Loading screen ── */
   if (!ready) return (
@@ -968,7 +977,7 @@ function Products({ctx}) {
 
 /* ════ DAILY ════ */
 function Daily({ctx}) {
-  const {selBr,setSelBr,de,getTS,getAllTS,getT,HIST,FIELDS,fcst,fcstLoad,genFcst,
+  const {selBr,setSelBr,de,getTS,getAllTS,getT,HIST,FIELDS,histDailySales,histDailyTire,fcst,fcstLoad,genFcst,
          TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,cfg,MONTH_TH,mobile} = ctx
   const isAll=selBr==='ALL', t=getT(selBr), ts=isAll?getAllTS():getTS(selBr)
 
@@ -1004,14 +1013,42 @@ function Daily({ctx}) {
 
   // forecast: use weighted run-rate + trend vs target
   const fArr = (!isAll&&fcst[selBr]?.dailyForecast)||[]
-  const runRateAdj = avgSales>0 ? Math.min(avgSales/tgtSalesD,1.5)*tgtSalesD : tgtSalesD
+  // Better forecast: use PY25 ratio of remaining days to actual if available
+  const py25RemainingAvg = (() => {
+    let sum=0, cnt=0
+    for(let d=TODAY_D+1; d<=TOTAL_D; d++){
+      const v=getRealSales(selBr,2025,cfg.month,d)
+      if(v>0){sum+=v;cnt++}
+    }
+    return cnt>0?sum/cnt:0
+  })()
+  const py25RatioToTgt = avg25S>0 ? avgSales/avg25S : 1
+  const runRateAdj = py25RemainingAvg>0
+    ? Math.round(py25RemainingAvg * Math.min(py25RatioToTgt,1.5))
+    : avgSales>0 ? Math.min(avgSales/tgtSalesD,1.5)*tgtSalesD : tgtSalesD
 
   // ── Build day-by-day data ──────────────────────────────────────
+  // Helper: get real historical daily value or fall back to estimated
+  const getRealSales=(bid,yr,mo,day)=>{
+    const key=`${yr}-${String(mo).padStart(2,'0')}`
+    if(bid==='ALL') return BRANCHES.reduce((s,b)=>{const v=histDailySales[b.id]?.[key]?.[day];return s+(v||0)},0)||null
+    return histDailySales[bid]?.[key]?.[day]||null
+  }
+  const getRealTire=(bid,yr,mo,day)=>{
+    const key=`${yr}-${String(mo).padStart(2,'0')}`
+    if(bid==='ALL') return BRANCHES.reduce((s,b)=>{const v=histDailyTire[b.id]?.[key]?.[day];return s+(v||0)},0)||null
+    return histDailyTire[bid]?.[key]?.[day]||null
+  }
+
   const salesData = Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1, row={day:String(d)}
-    // PY estimates with realistic variation
-    if(avg24S>0) row[2024]=Math.round(avg24S*wave(d,2.5))
-    if(avg25S>0) row[2025]=Math.round(avg25S*wave(d,1.1))
+    // Use real historical data if available, else estimate from monthly total
+    const real24S=getRealSales(selBr,2024,cfg.month,d)
+    const real25S=getRealSales(selBr,2025,cfg.month,d)
+    if(real24S!=null && real24S>0) row[2024]=real24S
+    else if(avg24S>0) row[2024]=Math.round(avg24S*wave(d,2.5))
+    if(real25S!=null && real25S>0) row[2025]=real25S
+    else if(avg25S>0) row[2025]=Math.round(avg25S*wave(d,1.1))
     // 2026 actual
     if(!isAll && d<=TODAY_D){
       const dr=de[selBr]?.[d]
@@ -1027,8 +1064,12 @@ function Daily({ctx}) {
 
   const tireData = Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1, row={day:String(d)}
-    if(avg24T>0) row[2024]=Math.round(avg24T*wave(d,2.9))
-    if(avg25T>0) row[2025]=Math.round(avg25T*wave(d,1.4))
+    const real24T=getRealTire(selBr,2024,cfg.month,d)
+    const real25T=getRealTire(selBr,2025,cfg.month,d)
+    if(real24T!=null && real24T>0) row[2024]=real24T
+    else if(avg24T>0) row[2024]=Math.round(avg24T*wave(d,2.9))
+    if(real25T!=null && real25T>0) row[2025]=real25T
+    else if(avg25T>0) row[2025]=Math.round(avg25T*wave(d,1.4))
     if(!isAll && d<=TODAY_D){
       const dr=de[selBr]?.[d]
       const v=Number(dr?.tire)||0; if(v>0)row[2026]=v
@@ -1089,8 +1130,8 @@ function Daily({ctx}) {
           </ResponsiveContainer>
           <div style={{display:'flex',gap:12,fontSize:9,color:'#6b7280',marginTop:4,flexWrap:'wrap'}}>
             <span style={{color:'#22c55e'}}>● {cfg.year} จริง</span>
-            <span style={{color:YRCLR[2025]}}>⟶ PY25 ประมาณ</span>
-            <span style={{color:YRCLR[2024]}}>⟶ PY24 ประมาณ</span>
+            <span style={{color:YRCLR[2025]}}>⟶ PY25 {Object.keys(histDailySales).length>0?'จริง':'ประมาณ'}</span>
+            <span style={{color:YRCLR[2024]}}>⟶ PY24 {Object.keys(histDailySales).length>0?'จริง':'ประมาณ'}</span>
             <span style={{color:'#ef4444'}}>⟶ Forecast</span>
             <span style={{color:'#a78bfa'}}>-- เป้า/วัน</span>
           </div>
@@ -1132,7 +1173,7 @@ function Daily({ctx}) {
 
 /* ════ MONTHLY ════ */
 function Monthly({ctx}) {
-  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS} = ctx
+  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS,histTireQ} = ctx
   const isAll=selBr==='ALL', h=getH(selBr)
   const [showSales, setShowSales] = useState({2023:false,2024:true,2025:true,2026:true})
   const [showTire,  setShowTire]  = useState({2024:true,2025:true,2026:true})
@@ -1162,15 +1203,30 @@ function Monthly({ctx}) {
   const tire2026 = Array(12).fill(null)
   if (mtd2026.tire > 0) tire2026[cfg.month-1] = mtd2026.tire
 
+  // Use histTireQ from uploaded Data_sale_by_Store if available, else SEED_TIREQ
+  const getTireQByMonth = (bid, yr, monthIdx) => {
+    // histTireQ has 0-indexed months matching SEED_TIREQ
+    const fromUpload = histTireQ[bid]?.[yr]?.[monthIdx]
+    if (fromUpload != null && fromUpload > 0) return fromUpload
+    return SEED_TIREQ[bid]?.[yr]?.[monthIdx] ?? null
+  }
+
   const tireData = MONTHS_TH.map((mn,i) => {
     const row = {month: mn}
     row[2024] = isAll
-      ? BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2024]?.[i]||0),0)
-      : SEED_TIREQ[selBr]?.[2024]?.[i] ?? null
+      ? BRANCHES.reduce((s,b)=>s+(getTireQByMonth(b.id,2024,i)||0),0) || null
+      : getTireQByMonth(selBr,2024,i)
     row[2025] = isAll
-      ? BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[2025]?.[i]||0),0)
-      : SEED_TIREQ[selBr]?.[2025]?.[i] ?? null
-    row[2026] = tire2026[i]
+      ? BRANCHES.reduce((s,b)=>s+(getTireQByMonth(b.id,2025,i)||0),0) || null
+      : getTireQByMonth(selBr,2025,i)
+    // 2026: from upload if available, else current month MTD
+    if (isAll) {
+      const fromUpload = BRANCHES.reduce((s,b)=>s+(histTireQ[b.id]?.[2026]?.[i]||0),0)
+      row[2026] = fromUpload > 0 ? fromUpload : tire2026[i]
+    } else {
+      const fromUpload = histTireQ[selBr]?.[2026]?.[i]
+      row[2026] = fromUpload > 0 ? fromUpload : tire2026[i]
+    }
     return row
   })
 
@@ -1643,6 +1699,100 @@ function Entry({ctx}) {
    UPLOAD
 ═════════════════════════════════════════════════════════════ */
 
+/* ── Parse ยอดขายรายวัน / ยอดขายยางรายวัน ──────────────────────
+   File structure:
+     Row 1: Year labels (2024 at col C, 2025 at col M)
+     Row 3: CustGroupName → look for "Total" to find total columns
+     Row 4: "Branch" | "DocDate" | ...
+     Data: col1=branch name (on first row of each branch), col2=date, col12=2024 total amt, col22=2025 total amt
+   Branch Map: "003-Cockpit Srinakarin" → bid "003"
+─────────────────────────────────────────────────────────────── */
+const DAILY_BID_MAP = {
+  '003':'003','009':'009','010':'010','012':'012','014':'014',
+  '048':'048','050':'050','096':'096','089':'143','107':'107','143':'143'
+}
+
+function parseDailyFile(wb, sheetHint, isAmountCol) {
+  // sheetHint: part of sheet name to match
+  // isAmountCol: true = use Amount col, false = use Qty col
+  const sn = wb.SheetNames.find(s => s.includes(sheetHint) || s.includes('ยอดขาย')) || wb.SheetNames[0]
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, cellDates:true})
+  if (!rows.length) return {}
+
+  // Detect year → column mapping from row 1
+  const yearCols = {}  // { 2024: { qty: col, amt: col }, 2025: {...} }
+  const row1 = rows[0] || []
+  for (let c = 0; c < row1.length; c++) {
+    const yr = row1[c]
+    if (yr === 2024 || yr === 2025 || yr === 2026) {
+      // Find "Total" in row 3 (index 2) starting from this column
+      const row3 = rows[2] || []
+      let totalCol = -1
+      for (let cc = c; cc < Math.min(c+15, row3.length); cc++) {
+        if (row3[cc] === 'Total') { totalCol = cc; break }
+      }
+      if (totalCol >= 0) {
+        yearCols[yr] = { qty: totalCol, amt: totalCol+1 }
+      }
+    }
+  }
+
+  const result = {}  // { bid: { 'YYYY-MM': { day: value } } }
+  let currentBid = null
+
+  for (let ri = 4; ri < rows.length; ri++) {
+    const row = rows[ri]
+    if (!row) continue
+
+    // New branch: col 0 has branch name containing "Cockpit"
+    const col0 = String(row[0] || '')
+    if (col0.includes('Cockpit') || col0.includes('cockpit')) {
+      const rawBid = col0.split('-')[0].trim().replace(/^0+/, s=>s)
+      // Normalize: '3' → '003'
+      const bid = DAILY_BID_MAP[rawBid.padStart(3,'0')] || rawBid.padStart(3,'0')
+      currentBid = bid
+      if (!result[bid]) result[bid] = {}
+      continue
+    }
+
+    if (!currentBid) continue
+
+    // Daily data row: col 1 has a date
+    const dateVal = row[1]
+    if (!dateVal) continue
+
+    // Parse date — could be Date object or serial number
+    let dt
+    if (dateVal instanceof Date) {
+      dt = dateVal
+    } else if (typeof dateVal === 'number') {
+      // Excel serial number
+      const epoch = new Date(1899,11,30)
+      dt = new Date(epoch.getTime() + dateVal*86400000)
+    } else {
+      continue
+    }
+
+    const yr = dt.getFullYear()
+    const mo = dt.getMonth()+1
+    const day = dt.getDate()
+    if (yr < 2020 || yr > 2030) continue
+
+    const colMap = yearCols[yr]
+    if (!colMap) continue
+
+    const rawVal = row[isAmountCol ? colMap.amt : colMap.qty]
+    const val = typeof rawVal === 'number' ? Math.round(rawVal) : 0
+    if (val <= 0) continue
+
+    const key = `${yr}-${String(mo).padStart(2,'0')}`
+    if (!result[currentBid][key]) result[currentBid][key] = {}
+    result[currentBid][key][day] = val
+  }
+
+  return result
+}
+
 const FDEFS = [
   {
     key:'target',
@@ -1666,13 +1816,13 @@ const FDEFS = [
     key:'daily',
     label:'ยอดขายรายวัน.xlsx',
     icon:'📅',
-    hint:'Sheet: ยอดขายรายวัน'
+    hint:'Sheet: ยอดขายรายวัน → โหลดยอดขาย 2024/2025 รายวัน'
   },
   {
     key:'tiredaily',
     label:'ยอดขายยางรายวัน.xlsx',
     icon:'🛞',
-    hint:'Sheet: ยอดขายยางรายวัน'
+    hint:'Sheet: ยอดขายยางรายวัน → โหลดยาง 2024/2025 รายวัน'
   },
 ]
 
@@ -1815,6 +1965,9 @@ function Upload({ ctx }) {
     setUpStat,
     setTARGET,
     setHIST,
+    setHistDailySales,
+    setHistDailyTire,
+    setHistTireQ,
     mobile
   } = ctx
 
@@ -1850,8 +2003,9 @@ function Upload({ ctx }) {
 
       if (key === 'salesdata') {
 
-        const { histOut, parsed } = parseSalesData(wb)
+        const { histOut, tireqOut, parsed } = parseSalesData(wb)
 
+        // Update monthly sales history
         setHIST(prev => {
           const n = { ...prev }
           Object.entries(histOut).forEach(([bid, years]) => {
@@ -1861,9 +2015,20 @@ function Upload({ ctx }) {
           return n
         })
 
-        // Show parsed summary in status
+        // Update tire quantity history (2024/2025/2026 monthly)
+        if (Object.keys(tireqOut).length > 0) {
+          setHistTireQ(prev => {
+            const n = { ...prev }
+            Object.entries(tireqOut).forEach(([bid, years]) => {
+              n[bid] = { ...(n[bid] || {}), ...years }
+            })
+            DB.set('cp_tireq', n)
+            return n
+          })
+        }
+
         const summary = parsed.map(p =>
-          `${p.bid}: ฿${p.sales}K | ยาง ${p.tire} เส้น | Job ${p.job}`
+          `${p.bid}: ฿${p.sales}K | ยาง ${p.tire} เส้น`
         ).join('\n')
         console.log('Sales data parsed:\n' + summary)
       }
@@ -1894,9 +2059,45 @@ function Upload({ ctx }) {
       ───────────────────────────────────────────── */
 
       if (key === 'hist') {
-        // History parse placeholder - keeps existing HIST data
-        // Full parser can be added later from Excel structure
         console.log('History file received:', file.name, '— keeping existing data')
+      }
+
+      /* ─────────────────────────────────────────────
+         DAILY SALES — ยอดขายรายวัน.xlsx
+      ───────────────────────────────────────────── */
+      if (key === 'daily') {
+        const parsed = parseDailyFile(wb, 'ยอดขายรายวัน', true)  // true = Amount
+        const branchCount = Object.keys(parsed).length
+        if (branchCount > 0) {
+          setHistDailySales(prev => {
+            const n = {...prev}
+            Object.entries(parsed).forEach(([bid, months]) => {
+              n[bid] = {...(n[bid]||{}), ...months}
+            })
+            DB.set('cp_hdsl', n)
+            return n
+          })
+          console.log(`Daily sales parsed: ${branchCount} branches`)
+        }
+      }
+
+      /* ─────────────────────────────────────────────
+         DAILY TIRE — ยอดขายยางรายวัน.xlsx
+      ───────────────────────────────────────────── */
+      if (key === 'tiredaily') {
+        const parsed = parseDailyFile(wb, 'ยอดขายยาง', false)  // false = Qty
+        const branchCount = Object.keys(parsed).length
+        if (branchCount > 0) {
+          setHistDailyTire(prev => {
+            const n = {...prev}
+            Object.entries(parsed).forEach(([bid, months]) => {
+              n[bid] = {...(n[bid]||{}), ...months}
+            })
+            DB.set('cp_hdtr', n)
+            return n
+          })
+          console.log(`Daily tire parsed: ${branchCount} branches`)
+        }
       }
 
       /* ─────────────────────────────────────────────

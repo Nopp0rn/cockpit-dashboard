@@ -1013,7 +1013,19 @@ function Daily({ctx}) {
   const avg24T  = TOTAL_D>0?py24TireMo/TOTAL_D:0
   const tgtTireD= t.tire/TOTAL_D
 
-  // natural variation: realistic day-of-month pattern
+  // ── Real historical data helpers (must be declared BEFORE any IIFE that uses them) ──
+  const getRealSales=(bid,yr,mo,day)=>{
+    const key=`${yr}-${String(mo).padStart(2,'0')}`
+    if(bid==='ALL') return BRANCHES.reduce((s,b)=>{const v=histDailySales[b.id]?.[key]?.[day];return s+(v||0)},0)||null
+    return histDailySales[bid]?.[key]?.[day]||null
+  }
+  const getRealTire=(bid,yr,mo,day)=>{
+    const key=`${yr}-${String(mo).padStart(2,'0')}`
+    if(bid==='ALL') return BRANCHES.reduce((s,b)=>{const v=histDailyTire[b.id]?.[key]?.[day];return s+(v||0)},0)||null
+    return histDailyTire[bid]?.[key]?.[day]||null
+  }
+
+    // natural variation: realistic day-of-month pattern
   const wave=(d,phi)=>0.82+Math.sin(d*0.44+phi)*0.2+Math.cos(d*0.9+phi*1.5)*0.09
 
   // forecast: use weighted run-rate + trend vs target
@@ -1033,18 +1045,6 @@ function Daily({ctx}) {
     : avgSales>0 ? Math.min(avgSales/tgtSalesD,1.5)*tgtSalesD : tgtSalesD
 
   // ── Build day-by-day data ──────────────────────────────────────
-  // Helper: get real historical daily value or fall back to estimated
-  const getRealSales=(bid,yr,mo,day)=>{
-    const key=`${yr}-${String(mo).padStart(2,'0')}`
-    if(bid==='ALL') return BRANCHES.reduce((s,b)=>{const v=histDailySales[b.id]?.[key]?.[day];return s+(v||0)},0)||null
-    return histDailySales[bid]?.[key]?.[day]||null
-  }
-  const getRealTire=(bid,yr,mo,day)=>{
-    const key=`${yr}-${String(mo).padStart(2,'0')}`
-    if(bid==='ALL') return BRANCHES.reduce((s,b)=>{const v=histDailyTire[b.id]?.[key]?.[day];return s+(v||0)},0)||null
-    return histDailyTire[bid]?.[key]?.[day]||null
-  }
-
   const salesData = Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1, row={day:String(d)}
     // Use real historical data if available, else estimate from monthly total

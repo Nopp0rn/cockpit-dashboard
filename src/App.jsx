@@ -573,6 +573,7 @@ function Overview({ctx}) {
       py25Sales, py24Sales, py25Tire, py24Tire,
       vsPY25: P(ts,py25Sales), vsPY24: P(ts,py24Sales),
       tirePY25: P(m.tire,py25Tire), tirePY24: P(m.tire,py24Tire),
+      tireAch: P(m.tire, t.tire*MTD_R),
     }
   })
 
@@ -655,11 +656,11 @@ function Overview({ctx}) {
                 <tr style={{background:'#0d1117'}}>
                   <th rowSpan={2} style={{padding:'6px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538',textAlign:'left',verticalAlign:'bottom'}}>สาขา</th>
                   <th colSpan={5} style={{padding:'5px 8px',color:'#f59e0b',fontFamily:'Barlow Condensed',borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548',textAlign:'center',fontSize:10}}>💰 ยอดขายรวม (฿)</th>
-                  <th colSpan={4} style={{padding:'5px 8px',color:'#3b82f6',fontFamily:'Barlow Condensed',borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548',textAlign:'center',fontSize:10}}>🏷️ ยาง (เส้น)</th>
+                  <th colSpan={5} style={{padding:'5px 8px',color:'#3b82f6',fontFamily:'Barlow Condensed',borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548',textAlign:'center',fontSize:10}}>🏷️ ยาง (เส้น)</th>
                 </tr>
                 <tr style={{background:'#0d1117'}}>
                   {['2024','2025','2026','% เป้า','% PY25'].map(h=><th key={h} style={{padding:'5px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',textAlign:'right',borderLeft:h==='2024'?'1px solid #2d3548':'none'}}>{h}</th>)}
-                  {['2024','2025','2026','% PY25'].map(h=><th key={'t'+h} style={{padding:'5px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',textAlign:'right',borderLeft:h==='2024'?'1px solid #2d3548':'none'}}>{h}</th>)}
+                  {['2024','2025','2026','% เป้า','% PY25'].map(h=><th key={'t'+h} style={{padding:'5px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',textAlign:'right',borderLeft:h==='2024'?'1px solid #2d3548':'none'}}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -676,6 +677,7 @@ function Overview({ctx}) {
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{Math.round(r.py24Tire)}</td>
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{Math.round(r.py25Tire)}</td>
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{r.m.tire}</td>
+                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.tireAch}/></td>
                     <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.tirePY25}/></td>
                   </tr>
                 ))}
@@ -1291,7 +1293,7 @@ function Monthly({ctx}) {
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
             <div>
               <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#3b82f6'}}>🏷️ ยางรายเดือน (เส้น)</div>
-              <div style={{fontSize:9,color:'#6b7280'}}>2026 = เฉพาะเดือนที่กรอกข้อมูลแล้ว</div>
+              <div style={{fontSize:9,color:Object.keys(histTireQ).length>0?'#22c55e':'#6b7280'}}>{Object.keys(histTireQ).length>0?`📊 ข้อมูลจาก Excel (${Object.keys(histTireQ).length} สาขา)`:"2026 = เฉพาะเดือนที่กรอกข้อมูลแล้ว"}</div>
             </div>
             <div style={{display:'flex',gap:5}}>
               {[2024,2025,2026].map(yr=>(
@@ -1818,13 +1820,13 @@ const FDEFS = [
     key:'salesdata',
     label:'Data_sale_by_Store.xlsx',
     icon:'📊',
-    hint:'Sheet: 003-xxx, 009-xxx, ... (รายสาขา)'
+    hint:'Sheet: 003-xxx, 009-xxx, ... → โหลดยอดขาย+ยาง 2024/2025 รายเดือน'
   },
   {
     key:'hist',
     label:'ประวัติยอดขาย.xlsx',
     icon:'📖',
-    hint:'Sheet: Sales History23-26'
+    hint:'Sheet: Data 009, Data 010... หรือ Sales History23-26 → โหลดยาง 2022-2024 รายเดือน'
   },
   {
     key:'daily',
@@ -1859,20 +1861,34 @@ const FDEFS = [
      2026: 30-34 (Jan-May so far)
 ─────────────────────────────────────────────────────────── */
 function parseSalesData(wb) {
-  const histOut  = {}  // { bid: { 2024:[12], 2025:[12], 2026:[12] } }
-  const tireqOut = {}  // { bid: { 2024:[12], 2025:[12] } }
-  const parsed   = []  // summary for display
+  const histOut  = {}
+  const tireqOut = {}
+  const parsed   = []
 
   const COL_START = { 2024: 4, 2025: 17, 2026: 30 }
   const MON_COUNT = { 2024: 12, 2025: 12, 2026: 5 }
-  // Revenue rows (0-indexed from sheet_to_json)
-  const REV_ROWS = [39, 47, 55, 57, 59, 61, 62, 63]
-  const TIRE_ROW = 24   // Total tires
-  const JOB_ROW  = 3    // Car count / Job Order
-  const BAT_ROW  = 56   // Battery units
-  const BRK_ROW  = 58   // Brake units
-  const SHK_ROW  = 60   // Shock units
-  const MP_ROW   = 51   // MP units
+  const REV_ROWS  = [39, 47, 55, 57, 59, 61, 62, 63]
+  const TIRE_ROW  = 24
+  const JOB_ROW   = 3
+  const BAT_ROW   = 56
+  const BRK_ROW   = 58
+  const SHK_ROW   = 60
+  const MP_ROW    = 51
+
+  // Dynamically find the Tire Grand Total row
+  // Searches for the row where Layer3='Total' and its parent section is '2. Tire'
+  function findTireRow(rows) {
+    let inTire = false
+    for (let r = 0; r < rows.length; r++) {
+      const c0 = String(rows[r]?.[0]||'')
+      const c1 = String(rows[r]?.[1]||'')
+      const c2 = String(rows[r]?.[2]||'')
+      const c3 = String(rows[r]?.[3]||'')
+      if (c0.includes('Tire') || c0==='2. Tire') inTire = true
+      if (inTire && (c2==='Total'||c1==='Total') && (c3==='-'||!rows[r]?.[3])) return r
+    }
+    return TIRE_ROW
+  }
 
   wb.SheetNames.forEach(sn => {
     const match = sn.match(/^(\d{3})/)
@@ -1880,6 +1896,7 @@ function parseSalesData(wb) {
     const bid = match[1]
 
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1 })
+    const tireRowIdx = findTireRow(rows)
 
     histOut[bid]  = {}
     tireqOut[bid] = {}
@@ -1895,7 +1912,7 @@ function parseSalesData(wb) {
         // Sum all revenue rows for total monthly sales
         const total = REV_ROWS.reduce((s, r) => s + (Number(rows[r]?.[col]) || 0), 0)
         hist.push(Math.round(total / 1000))
-        tireq.push(Number(rows[TIRE_ROW]?.[col]) || 0)
+        tireq.push(Number(rows[tireRowIdx]?.[col]) || 0)
       }
 
       // Pad months not yet available with null
@@ -1913,12 +1930,109 @@ function parseSalesData(wb) {
       bid,
       name: sn,
       sales: Math.round(latestSales / 1000),
-      tire:  Number(rows[TIRE_ROW]?.[latestCol]) || 0,
+      tire:  Number(rows[tireRowIdx]?.[latestCol]) || 0,
       job:   Number(rows[JOB_ROW]?.[latestCol])  || 0,
     })
   })
 
   return { histOut, tireqOut, parsed }
+}
+
+/* ── Parse ประวัติยอดขาย.xlsx → tire qty per branch per year ──────────
+   Sheet types:
+   A) "Data XXX" — rows: [bid, 'Tire', year, Jan, Feb, ..., Dec]
+                  First 'Tire' row per year = total tire qty
+   B) "XXX (2)" — Row 1: year at col E, Row 25: Tire Grand Total Jan-Dec
+──────────────────────────────────────────────────────────────────────── */
+function parseHistFile(wb) {
+  const tireqOut = {}  // { bid: { yr: [12 monthly values] } }
+
+  const BID_MAP = {'003':'003','009':'009','010':'010','012':'012',
+                   '014':'014','048':'048','050':'050','078':'078',
+                   '089':'143','096':'096','107':'107','143':'143'}
+
+  wb.SheetNames.forEach(sn => {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true})
+    if (!rows || rows.length < 3) return
+
+    // ── Type A: "Data XXX" sheets ──────────────────────────────────────
+    if (/^Data\s+\d/i.test(sn)) {
+      let bid = null
+      const seenYr = {}
+
+      for (let r = 0; r < rows.length; r++) {
+        const c0 = String(rows[r]?.[0]||'')
+        const c1 = String(rows[r]?.[1]||'')
+        const c2 = rows[r]?.[2]
+        const c3 = rows[r]?.[3]
+
+        // Extract bid from branch name in col A
+        if (!bid) {
+          const m = c0.match(/(\d{3})-Cockpit/)
+          if (m) bid = BID_MAP[m[1]] || m[1]
+        }
+        if (!bid) continue
+
+        // Tire qty row: col1='Tire', col2=year(int), col3=small number (qty not ฿)
+        const yr = typeof c2==='number' ? c2 : null
+        const isQty = c1==='Tire' && yr && yr>2020 && yr<2030
+          && typeof c3==='number' && c3 < 2000  // qty, not ฿
+        if (isQty && !seenYr[yr]) {
+          seenYr[yr] = true
+          const monthly = []
+          for (let m = 0; m < 12; m++) {
+            const v = rows[r]?.[3+m]
+            monthly.push(typeof v==='number' && v>0 ? Math.round(v) : null)
+          }
+          if (monthly.some(v => v!=null)) {
+            if (!tireqOut[bid]) tireqOut[bid] = {}
+            tireqOut[bid][yr] = monthly
+          }
+        }
+      }
+      return
+    }
+
+    // ── Type B: "XXX (2)" sheets ────────────────────────────────────────
+    const bidMatch = sn.match(/^(\d{3})/)
+    if (!bidMatch) return
+    const bid = BID_MAP[bidMatch[1]] || bidMatch[1]
+
+    // Row 1 (index 0): find year value
+    let yearVal = null, yearCol = null
+    for (let c = 0; c < (rows[0]?.length||0); c++) {
+      const v = rows[0][c]
+      if (typeof v==='number' && v>2020 && v<2030) {
+        yearVal = v; yearCol = c; break
+      }
+    }
+    if (!yearVal || yearCol==null) return
+
+    // Find Tire Grand Total row: col2='Total', col3='-' or null, within Tire section
+    let inTire = false, tireTotalRow = -1
+    for (let r = 0; r < rows.length; r++) {
+      const c0 = String(rows[r]?.[0]||'')
+      const c2 = String(rows[r]?.[2]||'')
+      const c3 = rows[r]?.[3]
+      if (c0==='2. Tire' || c0.startsWith('2. Tire')) inTire = true
+      if (inTire && c2==='Total' && (c3==='-'||c3==null)) {
+        tireTotalRow = r; break
+      }
+    }
+    if (tireTotalRow < 0) return
+
+    const monthly = []
+    for (let m = 0; m < 12; m++) {
+      const v = rows[tireTotalRow]?.[yearCol+m]
+      monthly.push(typeof v==='number' && v>0 ? Math.round(v) : null)
+    }
+    if (monthly.some(v => v!=null)) {
+      if (!tireqOut[bid]) tireqOut[bid] = {}
+      tireqOut[bid][yearVal] = monthly
+    }
+  })
+
+  return { tireqOut }
 }
 
 function parseTgt(wb) {
@@ -2073,7 +2187,19 @@ function Upload({ ctx }) {
       ───────────────────────────────────────────── */
 
       if (key === 'hist') {
-        console.log('History file received:', file.name, '— keeping existing data')
+        const { tireqOut } = parseHistFile(wb)
+        const branchCount = Object.keys(tireqOut).length
+        if (branchCount > 0) {
+          setHistTireQ(prev => {
+            const n = {...prev}
+            Object.entries(tireqOut).forEach(([bid, years]) => {
+              n[bid] = {...(n[bid]||{}), ...years}
+            })
+            DB.set('cp_tireq', n)
+            return n
+          })
+          console.log(`History parsed: ${branchCount} branches, years: ${[...new Set(Object.values(tireqOut).flatMap(y=>Object.keys(y)))].join(',')}`)
+        }
       }
 
       /* ─────────────────────────────────────────────

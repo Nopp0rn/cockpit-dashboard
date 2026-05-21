@@ -6,14 +6,14 @@ export default defineConfig({
   publicDir: 'public',
   build: {
     outDir: 'dist',
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 1400,
     rollupOptions: {
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
-          'recharts':     ['recharts'],
           'xlsx':         ['xlsx'],
           'supabase':     ['@supabase/supabase-js'],
+          // recharts ต้องไม่ split เพราะมี circular dependency ภายใน
         }
       }
     }

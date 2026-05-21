@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase.js'
 import * as XLSX from 'xlsx'
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis,
+  BarChart, Bar, ComposedChart, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from 'recharts'
 
@@ -474,7 +474,7 @@ ${s}
   ) : null
 
   return (
-    <div style={{fontFamily:'Barlow,sans-serif',background:'#0d1117',height:'100dvh',height:'100vh',display:'flex',flexDirection:'column',color:'#e5e7eb',overflow:'hidden'}}>
+    <div style={{fontFamily:'Barlow,sans-serif',background:'#0d1117',height:'100dvh',display:'flex',flexDirection:'column',color:'#e5e7eb',overflow:'hidden'}}>
 
       {/* HEADER — safe area top */}
       <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:'2px solid #f59e0b',padding:`calc(${mobile?'8px':'10px'} + env(safe-area-inset-top,0px)) ${mobile?'12px':'20px'} ${mobile?'8px':'10px'}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,zIndex:50}}>
@@ -822,7 +822,7 @@ function MTDTab({ctx}) {
           <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#3b82f6',marginBottom:8}}>🏷️ ยาง MTD ปี {BE2(2024)}/{BE2(2025)}/{BE2(2026)}</div>
             <ResponsiveContainer width="100%" height={mobile?180:220}>
-              <BarChart data={barData} margin={{top:4,right:4,left:0,bottom:30}}>
+              <ComposedChart data={barData} margin={{top:4,right:4,left:0,bottom:30}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
                 <XAxis dataKey="name" tick={{fill:'#6b7280',fontSize:8}} angle={-35} textAnchor="end" interval={0}/>
                 <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
@@ -832,14 +832,14 @@ function MTDTab({ctx}) {
                 <Bar dataKey="ยาง25" fill="#f59e0b" radius={[2,2,0,0]}/>
                 <Bar dataKey="ยาง26" fill="#3b82f6" radius={[2,2,0,0]}/>
                 <Line type="monotone" dataKey="เป้ายาง" stroke="#a78bfa" strokeWidth={2} strokeDasharray="4 2" dot={{r:3}}/>
-              </BarChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
           {/* Sale by branch */}
           <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b',marginBottom:8}}>💰 ยอดขาย MTD ปี {BE2(2025)}/{BE2(2026)} (฿000)</div>
             <ResponsiveContainer width="100%" height={mobile?180:220}>
-              <BarChart data={barData} margin={{top:4,right:4,left:0,bottom:30}}>
+              <ComposedChart data={barData} margin={{top:4,right:4,left:0,bottom:30}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
                 <XAxis dataKey="name" tick={{fill:'#6b7280',fontSize:8}} angle={-35} textAnchor="end" interval={0}/>
                 <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
@@ -848,7 +848,7 @@ function MTDTab({ctx}) {
                 <Bar dataKey="ยอด25" fill="#f59e0b" radius={[2,2,0,0]}/>
                 <Bar dataKey="ยอด26" fill="#22c55e" radius={[2,2,0,0]}/>
                 <Line type="monotone" dataKey="เป้าขาย" stroke="#a78bfa" strokeWidth={2} strokeDasharray="4 2" dot={{r:3}}/>
-              </BarChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>

@@ -1729,42 +1729,76 @@ const DAILY_BID_MAP = {
 }
 
 function parseDailyFile(wb, sheetHint, isAmountCol) {
-  // sheetHint: part of sheet name to match
-  // isAmountCol: true = use Amount col, false = use Qty col
-  const sn = wb.SheetNames.find(s => s.includes(sheetHint) || s.includes('ยอดขาย')) || wb.SheetNames[0]
-  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, cellDates:true})
-  if (!rows.length) return {}
+  /* ── Confirmed file structure (ยอดขายรายวัน / ยอดขายยางรายวัน):
+     Row 0 (row1): 'DocDate - Year', None, 2024(c2), ..., 2025(c12), ..., 'Total'
+     Row 2 (row3): 'CustGroupName', None, 'Car Dealer', None, 'Cash', None,
+                   'Fleet', None, 'SME', None, 'Total', None,   ← 2024 Total at idx 10
+                   'Car Dealer', ..., 'Total', None,             ← 2025 Total at idx 20
+     Row 3 (row4): 'Branch', 'DocDate', 'Quantity', 'Amount (ExVAT)', ...
+     Data rows: col0=BranchName (on first row of branch) or empty, col1=Date
+     2024: Qty col 10, Amt col 11
+     2025: Qty col 20, Amt col 21
+  ──────────────────────────────────────────────────────────────────────────── */
+  const sn = wb.SheetNames.find(s => s.includes(sheetHint)) || wb.SheetNames[0]
+  if (!sn) return {}
 
-  // Detect year → column mapping from row 1
-  const yearCols = {}  // { 2024: { qty: col, amt: col }, 2025: {...} }
+  // Read with raw:true to get actual numbers; cellDates may or may not work
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, defval:null})
+  if (!rows || rows.length < 5) return {}
+
+  // ── Step 1: Detect year→column mapping from row 1 and row 3 ──
   const row1 = rows[0] || []
+  const row3 = rows[2] || []
+  const yearCols = {}  // yr → { qty: colIdx, amt: colIdx }
+
   for (let c = 0; c < row1.length; c++) {
     const yr = row1[c]
     if (yr === 2024 || yr === 2025 || yr === 2026) {
-      // Find "Total" in row 3 (index 2) starting from this column
-      const row3 = rows[2] || []
-      let totalCol = -1
-      for (let cc = c; cc < Math.min(c+15, row3.length); cc++) {
-        if (row3[cc] === 'Total') { totalCol = cc; break }
-      }
-      if (totalCol >= 0) {
-        yearCols[yr] = { qty: totalCol, amt: totalCol+1 }
+      for (let cc = c; cc < Math.min(c+20, row3.length); cc++) {
+        if (row3[cc] === 'Total') {
+          yearCols[yr] = { qty: cc, amt: cc+1 }
+          break
+        }
       }
     }
   }
+  // Fallback: known positions if detection fails
+  if (!yearCols[2024]) yearCols[2024] = { qty: 10, amt: 11 }
+  if (!yearCols[2025]) yearCols[2025] = { qty: 20, amt: 21 }
 
-  const result = {}  // { bid: { 'YYYY-MM': { day: value } } }
+  // ── Step 2: Date conversion helper ───────────────────────────────────
+  function toDate(v) {
+    if (!v && v !== 0) return null
+    if (v instanceof Date) return v
+    // Excel serial number: dates are typically > 40000 and < 55000
+    if (typeof v === 'number' && v > 40000 && v < 55000) {
+      // Excel epoch = Dec 30, 1899 (accounts for Excel's leap year bug)
+      return new Date(Math.round((v - 25569) * 86400000))
+    }
+    // String date: try common formats
+    if (typeof v === 'string') {
+      const m1 = v.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+      if (m1) return new Date(+m1[1], +m1[2]-1, +m1[3])
+      const m2 = v.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{4})/)
+      if (m2) return new Date(+m2[3], +m2[2]-1, +m2[1])
+    }
+    return null
+  }
+
+  // ── Step 3: Parse data rows ───────────────────────────────────────────
+  const result = {}
   let currentBid = null
 
   for (let ri = 4; ri < rows.length; ri++) {
     const row = rows[ri]
     if (!row) continue
 
-    // New branch: col 0 has branch name containing "Cockpit"
     const col0 = String(row[0] || '')
+    const col1 = row[1]
+
+    // Branch header row: col0 contains 'Cockpit'
     if (col0.includes('Cockpit') || col0.includes('cockpit')) {
-      const rawBid = col0.split('-')[0].trim().replace(/^0+/, s=>s)
-      // Normalize: '3' → '003'
+      const rawBid = col0.split('-')[0].trim()
       const bid = DAILY_BID_MAP[rawBid.padStart(3,'0')] || rawBid.padStart(3,'0')
       currentBid = bid
       if (!result[bid]) result[bid] = {}
@@ -1772,25 +1806,14 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     }
 
     if (!currentBid) continue
+    if (!col1) continue
 
-    // Daily data row: col 1 has a date
-    const dateVal = row[1]
-    if (!dateVal) continue
-
-    // Parse date — could be Date object or serial number
-    let dt
-    if (dateVal instanceof Date) {
-      dt = dateVal
-    } else if (typeof dateVal === 'number') {
-      // Excel serial number
-      const epoch = new Date(1899,11,30)
-      dt = new Date(epoch.getTime() + dateVal*86400000)
-    } else {
-      continue
-    }
+    // Parse date from col1
+    const dt = toDate(col1)
+    if (!dt || isNaN(dt.getTime())) continue
 
     const yr = dt.getFullYear()
-    const mo = dt.getMonth()+1
+    const mo = dt.getMonth() + 1
     const day = dt.getDate()
     if (yr < 2020 || yr > 2030) continue
 
@@ -1798,68 +1821,20 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     if (!colMap) continue
 
     const rawVal = row[isAmountCol ? colMap.amt : colMap.qty]
-    const val = typeof rawVal === 'number' ? Math.round(rawVal) : 0
-    if (val <= 0) continue
+    const val = typeof rawVal === 'number'
+      ? rawVal
+      : (typeof rawVal === 'string' ? parseFloat(rawVal.replace(/,/g,'')) : 0)
+    if (!val || val <= 0) continue
 
     const key = `${yr}-${String(mo).padStart(2,'0')}`
     if (!result[currentBid][key]) result[currentBid][key] = {}
-    result[currentBid][key][day] = val
+    result[currentBid][key][day] = Math.round(val)
   }
 
   return result
 }
 
-const FDEFS = [
-  {
-    key:'target',
-    label:'เป้าเดือน (Jun/Jul...)',
-    icon:'🎯',
-    hint:'Sheet: For_BI'
-  },
-  {
-    key:'salesdata',
-    label:'Data_sale_by_Store.xlsx',
-    icon:'📊',
-    hint:'Sheet: 003-xxx, 009-xxx, ... → โหลดยอดขาย+ยาง 2024/2025 รายเดือน'
-  },
-  {
-    key:'hist',
-    label:'ประวัติยอดขาย.xlsx',
-    icon:'📖',
-    hint:'Sheet: Data 009, Data 010... หรือ Sales History23-26 → โหลดยาง 2022-2024 รายเดือน'
-  },
-  {
-    key:'daily',
-    label:'ยอดขายรายวัน.xlsx',
-    icon:'📅',
-    hint:'Sheet: ยอดขายรายวัน → โหลดยอดขาย 2024/2025 รายวัน'
-  },
-  {
-    key:'tiredaily',
-    label:'ยอดขายยางรายวัน.xlsx',
-    icon:'🛞',
-    hint:'Sheet: ยอดขายยางรายวัน → โหลดยาง 2024/2025 รายวัน'
-  },
-]
 
-/* ── Parse Data_sale_by_Store.xlsx ──────────────────────────
-   Sheet names: "003-Cockpit Srinakarin", "009-xxx", ...
-   Rows (1-indexed):
-     4  = Job Order (Car count)
-     25 = Total Tire units
-     40 = Tire Net Sales ฿
-     48 = Lube Net Sales ฿
-     56 = MP Net Sales ฿
-     58 = Battery Net Sales ฿
-     60 = Brake Net Sales ฿
-     62 = Shock Net Sales ฿
-     63 = Service Tire ฿
-     64 = Service Non-Tire ฿
-   Columns (0-indexed):
-     2024: 4-15 (Jan-Dec)
-     2025: 17-28 (Jan-Dec)
-     2026: 30-34 (Jan-May so far)
-─────────────────────────────────────────────────────────── */
 function parseSalesData(wb) {
   const histOut  = {}
   const tireqOut = {}
@@ -2119,10 +2094,7 @@ function Upload({ ctx }) {
 
       const buf = await file.arrayBuffer()
 
-      const wb = XLSX.read(buf, {
-        type: 'array',
-        cellDates: true
-      })
+      const wb = XLSX.read(buf, { type: 'array' })
 
       /* ─────────────────────────────────────────────
          SALES DATA (Data_sale_by_Store.xlsx)

@@ -6,11 +6,7 @@ import {
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from 'recharts'
 
-/* ── Google Fonts ── */
-const _f = document.createElement('link')
-_f.rel = 'stylesheet'
-_f.href = 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600;700&family=Barlow:wght@400;500;600&display=swap'
-document.head.appendChild(_f)
+// Google Fonts loaded via index.html
 
 /* ════════════════════════════════════════════════════════
    SUPABASE HELPERS

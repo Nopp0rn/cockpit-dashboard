@@ -984,9 +984,16 @@ function Products({ctx}) {
 function Daily({ctx}) {
   const {selBr,setSelBr,de,getTS,getAllTS,getT,HIST,FIELDS,histDailySales,histDailyTire,fcst,fcstLoad,genFcst,
          TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,cfg,MONTH_TH,mobile} = ctx
-  const isAll=selBr==='ALL', t=getT(selBr), ts=isAll?getAllTS():getTS(selBr)
 
-  // ── PY monthly totals for same month ──────────────────────────
+  // ── useState FIRST (React rules of hooks) ─────────────────────
+  const [showYrS,setShowYrS] = useState({2024:true,2025:true,2026:true})
+  const [showYrT,setShowYrT] = useState({2024:true,2025:true,2026:true})
+
+  // ── Derived values ─────────────────────────────────────────────
+  const isAll = selBr==='ALL'
+  const t  = getT(selBr)
+  const ts = isAll ? getAllTS() : getTS(selBr)
+
   const histSales = (yr) => isAll
     ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[yr]?.[cfg.month-1]||0)*1000),0)
     : (HIST[selBr]?.[yr]?.[cfg.month-1]||0)*1000
@@ -995,90 +1002,88 @@ function Daily({ctx}) {
     ? BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[yr]?.[cfg.month-1]||0),0)
     : (SEED_TIREQ[selBr]?.[yr]?.[cfg.month-1]||0)
 
-  const py25SalesMo=histSales(2025), py24SalesMo=histSales(2024)
-  const py25TireMo =histTire(2025),  py24TireMo =histTire(2024)
+  const py25SalesMo = histSales(2025)
+  const py24SalesMo = histSales(2024)
+  const py25TireMo  = histTire(2025)
+  const py24TireMo  = histTire(2024)
+  const avgSales    = TODAY_D>0 ? ts/TODAY_D : 0
+  const avg25S      = TOTAL_D>0 ? py25SalesMo/TOTAL_D : 0
+  const avg24S      = TOTAL_D>0 ? py24SalesMo/TOTAL_D : 0
+  const tgtSalesD   = t.sales/TOTAL_D
+  const mtdTire = isAll
+    ? BRANCHES.reduce((s,b)=>s+Object.values(de[b.id]||{}).reduce((a,r)=>a+(Number(r.tire)||0),0),0)
+    : Object.values(de[selBr]||{}).reduce((s,r)=>s+(Number(r.tire)||0),0)
+  const avgTire = TODAY_D>0 ? mtdTire/TODAY_D : 0
+  const avg25T   = TOTAL_D>0 ? py25TireMo/TOTAL_D : 0
+  const avg24T   = TOTAL_D>0 ? py24TireMo/TOTAL_D : 0
+  const tgtTireD = t.tire/TOTAL_D
 
-  const avgSales = TODAY_D>0?ts/TODAY_D:0
-  const avg25S   = TOTAL_D>0?py25SalesMo/TOTAL_D:0
-  const avg24S   = TOTAL_D>0?py24SalesMo/TOTAL_D:0
-  const tgtSalesD= t.sales/TOTAL_D
-
-  // current MTD tire
-  const getMTDTire = () => isAll
-    ? BRANCHES.reduce((s,b)=>{const m=Object.values(de[b.id]||{}).reduce((a,r)=>a+(Number(r.tire)||0),0);return s+m},0)
-    : Object.values(de[selBr]||{}).reduce((a,r)=>a+(Number(r.tire)||0),0)
-  const mtdTire = getMTDTire()
-  const avgTire = TODAY_D>0?mtdTire/TODAY_D:0
-  const avg25T  = TOTAL_D>0?py25TireMo/TOTAL_D:0
-  const avg24T  = TOTAL_D>0?py24TireMo/TOTAL_D:0
-  const tgtTireD= t.tire/TOTAL_D
-
-  // ── Real historical data helpers (must be declared BEFORE any IIFE that uses them) ──
-  const getRealSales=(bid,yr,mo,day)=>{
+  // ── Real historical daily data helpers ────────────────────────
+  function getRealSales(bid,yr,mo,day) {
     const key=`${yr}-${String(mo).padStart(2,'0')}`
-    if(bid==='ALL') return BRANCHES.reduce((s,b)=>{const v=histDailySales[b.id]?.[key]?.[day];return s+(v||0)},0)||null
+    if(bid==='ALL') {
+      let sum=0
+      BRANCHES.forEach(b=>{sum+=(histDailySales[b.id]?.[key]?.[day]||0)})
+      return sum>0?sum:null
+    }
     return histDailySales[bid]?.[key]?.[day]||null
   }
-  const getRealTire=(bid,yr,mo,day)=>{
+  function getRealTire(bid,yr,mo,day) {
     const key=`${yr}-${String(mo).padStart(2,'0')}`
-    if(bid==='ALL') return BRANCHES.reduce((s,b)=>{const v=histDailyTire[b.id]?.[key]?.[day];return s+(v||0)},0)||null
+    if(bid==='ALL') {
+      let sum=0
+      BRANCHES.forEach(b=>{sum+=(histDailyTire[b.id]?.[key]?.[day]||0)})
+      return sum>0?sum:null
+    }
     return histDailyTire[bid]?.[key]?.[day]||null
   }
 
-    // natural variation: realistic day-of-month pattern
-  const wave=(d,phi)=>0.82+Math.sin(d*0.44+phi)*0.2+Math.cos(d*0.9+phi*1.5)*0.09
-
-  // forecast: use weighted run-rate + trend vs target
-  const fArr = (!isAll&&fcst[selBr]?.dailyForecast)||[]
-  // Better forecast: use PY25 ratio of remaining days to actual if available
-  const py25RemainingAvg = (() => {
-    let sum=0, cnt=0
-    for(let d=TODAY_D+1; d<=TOTAL_D; d++){
-      const v=getRealSales(selBr,2025,cfg.month,d)
-      if(v>0){sum+=v;cnt++}
-    }
-    return cnt>0?sum/cnt:0
-  })()
-  const py25RatioToTgt = avg25S>0 ? avgSales/avg25S : 1
-  const runRateAdj = py25RemainingAvg>0
-    ? Math.round(py25RemainingAvg * Math.min(py25RatioToTgt,1.5))
+  // ── Forecast baseline: PY25 daily avg for remaining days ──────
+  // (NO IIFE — regular variables)
+  let py25RemSum=0, py25RemCnt=0
+  for (let _d=TODAY_D+1; _d<=TOTAL_D; _d++) {
+    const _v = getRealSales(selBr,2025,cfg.month,_d)
+    if (_v && _v>0) { py25RemSum+=_v; py25RemCnt++ }
+  }
+  const py25RemAvg      = py25RemCnt>0 ? py25RemSum/py25RemCnt : 0
+  const py25RatioToTgt  = avg25S>0 ? avgSales/avg25S : 1
+  const fArr            = (!isAll&&fcst[selBr]?.dailyForecast)||[]
+  const runRateAdj      = py25RemAvg>0
+    ? Math.round(py25RemAvg * Math.min(py25RatioToTgt,1.5))
     : avgSales>0 ? Math.min(avgSales/tgtSalesD,1.5)*tgtSalesD : tgtSalesD
 
-  // ── Build day-by-day data ──────────────────────────────────────
+  // ── Natural variation helper ──────────────────────────────────
+  function wave(d,phi) {
+    return 0.82+Math.sin(d*0.44+phi)*0.2+Math.cos(d*0.9+phi*1.5)*0.09
+  }
+
+  // ── Day-by-day chart data ─────────────────────────────────────
   const salesData = Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1, row={day:String(d)}
-    // Use real historical data if available, else estimate from monthly total
-    const real24S=getRealSales(selBr,2024,cfg.month,d)
-    const real25S=getRealSales(selBr,2025,cfg.month,d)
-    if(real24S!=null && real24S>0) row[2024]=real24S
-    else if(avg24S>0) row[2024]=Math.round(avg24S*wave(d,2.5))
-    if(real25S!=null && real25S>0) row[2025]=real25S
-    else if(avg25S>0) row[2025]=Math.round(avg25S*wave(d,1.1))
-    // 2026 actual
-    if(!isAll && d<=TODAY_D){
+    const r24=getRealSales(selBr,2024,cfg.month,d)
+    const r25=getRealSales(selBr,2025,cfg.month,d)
+    if(r24!=null&&r24>0) row[2024]=r24; else if(avg24S>0) row[2024]=Math.round(avg24S*wave(d,2.5))
+    if(r25!=null&&r25>0) row[2025]=r25; else if(avg25S>0) row[2025]=Math.round(avg25S*wave(d,1.1))
+    if(!isAll&&d<=TODAY_D){
       const dr=de[selBr]?.[d]
       if(dr){const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]));const v=calcTS(agg);if(v>0)row[2026]=v}
-    } else if(isAll && d<=TODAY_D) {
-      const tot=BRANCHES.reduce((s,b)=>{const dr=de[b.id]?.[d];if(!dr)return s;const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]));return s+calcTS(agg)},0)
+    } else if(isAll&&d<=TODAY_D){
+      const tot=BRANCHES.reduce((s,b)=>{const dr=de[b.id]?.[d];if(!dr)return s;return s+calcTS(Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0])))},0)
       if(tot>0)row[2026]=tot
     }
-    // forecast
     if(d>TODAY_D) row.forecast=fArr[i-TODAY_D]||Math.round(runRateAdj*wave(d,0.8))
     return row
   })
 
   const tireData = Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1, row={day:String(d)}
-    const real24T=getRealTire(selBr,2024,cfg.month,d)
-    const real25T=getRealTire(selBr,2025,cfg.month,d)
-    if(real24T!=null && real24T>0) row[2024]=real24T
-    else if(avg24T>0) row[2024]=Math.round(avg24T*wave(d,2.9))
-    if(real25T!=null && real25T>0) row[2025]=real25T
-    else if(avg25T>0) row[2025]=Math.round(avg25T*wave(d,1.4))
-    if(!isAll && d<=TODAY_D){
-      const dr=de[selBr]?.[d]
-      const v=Number(dr?.tire)||0; if(v>0)row[2026]=v
-    } else if(isAll && d<=TODAY_D){
+    const r24=getRealTire(selBr,2024,cfg.month,d)
+    const r25=getRealTire(selBr,2025,cfg.month,d)
+    if(r24!=null&&r24>0) row[2024]=r24; else if(avg24T>0) row[2024]=Math.round(avg24T*wave(d,2.9))
+    if(r25!=null&&r25>0) row[2025]=r25; else if(avg25T>0) row[2025]=Math.round(avg25T*wave(d,1.4))
+    if(!isAll&&d<=TODAY_D){
+      const dr=de[selBr]?.[d]; const v=Number(dr?.tire)||0; if(v>0)row[2026]=v
+    } else if(isAll&&d<=TODAY_D){
       const tot=BRANCHES.reduce((s,b)=>s+(Number(de[b.id]?.[d]?.tire)||0),0)
       if(tot>0)row[2026]=tot
     }
@@ -1089,38 +1094,45 @@ function Daily({ctx}) {
     return row
   })
 
+  // ── Style helpers ─────────────────────────────────────────────
   const CHART_H = mobile?180:240
-  const ttip = {contentStyle:{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
-  const yrBtnSt = (yr, active) => {
-    const clr = YRCLR[yr] || '#22c55e'
-    return {padding:'3px 9px',borderRadius:4,cursor:'pointer',border:`1px solid ${clr}`,background:active?clr+'33':'transparent',color:active?clr:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:10}
+  const ttip    = {contentStyle:{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
+  function yrBtnSt(yr,active) {
+    const clr = YRCLR[yr]||'#22c55e'
+    return {padding:'3px 9px',borderRadius:4,cursor:'pointer',border:`1px solid ${clr}`,
+            background:active?clr+'33':'transparent',color:active?clr:'#4b5563',
+            fontFamily:'Barlow Condensed',fontWeight:700,fontSize:10}
   }
-  const [showYrS,setShowYrS]=useState({2024:true,2025:true,2026:true})
-  const [showYrT,setShowYrT]=useState({2024:true,2025:true,2026:true})
 
+  // ── JSX ────────────────────────────────────────────────────────
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
-          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b'}}>รายวัน — {isAll?'รวม':BRANCHES.find(x=>x.id===selBr)?.short} ({MONTH_TH} {cfg.year})</div>
-          <button onClick={genFcst} disabled={fcstLoad} style={{padding:'8px 16px',background:fcstLoad?'#1e2538':'#7c3aed',color:'#fff',border:'none',borderRadius:6,cursor:fcstLoad?'wait':'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12}}>{fcstLoad?'⏳':'🤖 AI Forecast'}</button>
+          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b'}}>
+            รายวัน — {isAll?'รวม':BRANCHES.find(x=>x.id===selBr)?.short} ({MONTH_TH} {cfg.year})
+          </div>
+          <button onClick={genFcst} disabled={fcstLoad} style={{padding:'8px 16px',background:fcstLoad?'#1e2538':'#7c3aed',color:'#fff',border:'none',borderRadius:6,cursor:fcstLoad?'wait':'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12}}>
+            {fcstLoad?'⏳':'🤖 AI Forecast'}
+          </button>
         </div>
 
-        {/* KPI */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-          <Card label="เฉลี่ย/วัน (ยอดขาย)" value={fM(Math.round(avgSales))} color="#f59e0b" small/>
-          <Card label="เป้า/วัน (ยอดขาย)"   value={fM(Math.round(tgtSalesD))} color="#a78bfa" small/>
-          <Card label="เฉลี่ย/วัน (ยาง)"     value={N(Math.round(avgTire))+' เส้น'} color="#3b82f6" small/>
-          <Card label="ต้องทำ/วัน (ยอดเหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/DAYS_LEFT))} color="#ef4444" small/>
+          <Card label="เฉลี่ย/วัน (ยอดขาย)"  value={fM(Math.round(avgSales))} color="#f59e0b" small/>
+          <Card label="เป้า/วัน (ยอดขาย)"    value={fM(Math.round(tgtSalesD))} color="#a78bfa" small/>
+          <Card label="เฉลี่ย/วัน (ยาง)"      value={N(Math.round(avgTire))+' เส้น'} color="#3b82f6" small/>
+          <Card label="ต้องทำ/วัน (ยอดเหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/Math.max(1,DAYS_LEFT)))} color="#ef4444" small/>
         </div>
 
-        {/* ══ CHART 1: Total Sales (฿) ══ */}
+        {/* ── Sales chart ── */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,flexWrap:'wrap',gap:4}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b'}}>💰 ยอดขายรายวัน (฿) — วันที่ 1–{TODAY_D}</div>
             <div style={{display:'flex',gap:4}}>
-              {[2024,2025,2026].map(yr=><button key={yr} onClick={()=>setShowYrS(p=>({...p,[yr]:!p[yr]}))} style={yrBtnSt(yr,showYrS[yr])}>{yr}</button>)}
+              {[2024,2025,2026].map(yr=>(
+                <button key={yr} onClick={()=>setShowYrS(p=>({...p,[yr]:!p[yr]}))} style={yrBtnSt(yr,showYrS[yr])}>{yr}</button>
+              ))}
             </div>
           </div>
           <ResponsiveContainer width="100%" height={CHART_H}>
@@ -1128,10 +1140,10 @@ function Daily({ctx}) {
               <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
               <XAxis dataKey="day" tick={{fill:'#6b7280',fontSize:7}}/>
               <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(0)+'k':''}/>
-              <Tooltip {...ttip} formatter={(v,n)=>[v!=null?N(Math.round(v))+'฿':'—',n==='forecast'?'Forecast':n==='2026'?`${cfg.year} จริง`:`PY${String(n).slice(-2)} ประมาณ`]} labelFormatter={l=>`วันที่ ${l}`}/>
+              <Tooltip {...ttip} formatter={(v,n)=>[v!=null?N(Math.round(v))+'฿':'—',n==='forecast'?'Forecast':n===2026?`${cfg.year} จริง`:`PY${String(n).slice(-2)}`]} labelFormatter={l=>`วันที่ ${l}`}/>
               <ReferenceLine y={tgtSalesD} stroke="#a78bfa" strokeDasharray="4 2" strokeWidth={1.5}/>
               {showYrS[2024]&&<Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false}/>}
-              {showYrS[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={false} strokeDasharray="5 2" connectNulls={false}/>}
+              {showYrS[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2}   dot={false} strokeDasharray="5 2" connectNulls={false}/>}
               {showYrS[2026]&&<Line type="monotone" dataKey={2026} stroke="#22c55e" strokeWidth={2.5} dot={{r:3,fill:'#22c55e'}} connectNulls={false}/>}
               <Line type="monotone" dataKey="forecast" stroke="#ef4444" strokeWidth={2} dot={{r:2,fill:'#ef4444'}} strokeDasharray="5 3" connectNulls={false}/>
             </LineChart>
@@ -1145,12 +1157,14 @@ function Daily({ctx}) {
           </div>
         </div>
 
-        {/* ══ CHART 2: Tire Qty ══ */}
+        {/* ── Tire chart ── */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,flexWrap:'wrap',gap:4}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#3b82f6'}}>🏷️ ยางรายวัน (เส้น) — วันที่ 1–{TODAY_D}</div>
             <div style={{display:'flex',gap:4}}>
-              {[2024,2025,2026].map(yr=><button key={yr} onClick={()=>setShowYrT(p=>({...p,[yr]:!p[yr]}))} style={yrBtnSt(yr,showYrT[yr])}>{yr}</button>)}
+              {[2024,2025,2026].map(yr=>(
+                <button key={yr} onClick={()=>setShowYrT(p=>({...p,[yr]:!p[yr]}))} style={yrBtnSt(yr,showYrT[yr])}>{yr}</button>
+              ))}
             </div>
           </div>
           <ResponsiveContainer width="100%" height={mobile?150:200}>
@@ -1158,10 +1172,10 @@ function Daily({ctx}) {
               <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
               <XAxis dataKey="day" tick={{fill:'#6b7280',fontSize:7}}/>
               <YAxis tick={{fill:'#6b7280',fontSize:8}}/>
-              <Tooltip {...ttip} formatter={(v,n)=>[v!=null?N(Math.round(v))+' เส้น':'—',n==='forecast'?'Forecast':n==='2026'?`${cfg.year} จริง`:`PY${String(n).slice(-2)} ประมาณ`]} labelFormatter={l=>`วันที่ ${l}`}/>
+              <Tooltip {...ttip} formatter={(v,n)=>[v!=null?N(Math.round(v))+' เส้น':'—',n==='forecast'?'Forecast':n===2026?`${cfg.year} จริง`:`PY${String(n).slice(-2)}`]} labelFormatter={l=>`วันที่ ${l}`}/>
               <ReferenceLine y={tgtTireD} stroke="#a78bfa" strokeDasharray="4 2" strokeWidth={1.5}/>
               {showYrT[2024]&&<Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false}/>}
-              {showYrT[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={false} strokeDasharray="5 2" connectNulls={false}/>}
+              {showYrT[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2}   dot={false} strokeDasharray="5 2" connectNulls={false}/>}
               {showYrT[2026]&&<Line type="monotone" dataKey={2026} stroke="#22c55e" strokeWidth={2.5} dot={{r:3,fill:'#22c55e'}} connectNulls={false}/>}
               <Line type="monotone" dataKey="forecast" stroke="#ef4444" strokeWidth={2} dot={{r:2}} strokeDasharray="5 3" connectNulls={false}/>
             </LineChart>

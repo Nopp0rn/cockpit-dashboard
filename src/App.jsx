@@ -171,6 +171,20 @@ function Card({label,value,sub,color='#f59e0b',small}) {
   )
 }
 
+/* ── Extra badge components (module-level to avoid TDZ) ── */
+function GrowthBadge({pct, label}) {
+  const clr = pct>=110?'#22c55e':pct>=100?'#84cc16':pct>=90?'#f59e0b':'#ef4444'
+  return <span style={{fontSize:9,color:clr,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>vs{label} {pct.toFixed(0)}%</span>
+}
+function PctBadge({v}) {
+  const c=v>=100?'#22c55e':v>=90?'#f59e0b':v>=80?'#f97316':'#ef4444'
+  return <span style={{background:c+'22',color:c,borderRadius:4,padding:'1px 7px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{v.toFixed(0)}%</span>
+}
+function AchBadge({pct}) {
+  if (pct===null||pct===undefined) return <span style={{fontSize:10,color:'#4b5563'}}>—</span>
+  const c=pct>=100?'#22c55e':pct>=80?'#f59e0b':'#ef4444'
+  return <span style={{background:c+'22',color:c,borderRadius:4,padding:'2px 6px',fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{pct.toFixed(0)}%</span>
+}
 /* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
 function BranchSelect({sel, onSel, showAll=true, mobile}) {
   if (mobile) return (
@@ -571,12 +585,6 @@ function Overview({ctx}) {
   const totTirePY25 = rows.reduce((s,r)=>s+r.py25Tire,0)
   const totTirePY24 = rows.reduce((s,r)=>s+r.py24Tire,0)
 
-  // Summary KPI cards
-  const GrowthBadge = ({pct,label}) => {
-    const clr = pct>=110?'#22c55e':pct>=100?'#84cc16':pct>=90?'#f59e0b':'#ef4444'
-    return <span style={{fontSize:9,color:clr,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>vs{label} {pct.toFixed(0)}%</span>
-  }
-
   return (
     <div>
       {/* Summary cards row */}
@@ -748,9 +756,10 @@ function MTDTab({ctx}) {
   const [showMoYr,setShowMoYr]=useState({2023:false,2024:true,2025:true,2026:true})
   const mData=MONTHS_TH.map((mn,i)=>({month:mn,2023:h[2023]?.[i]??null,2024:h[2024]?.[i]??null,2025:h[2025]?.[i]??null,2026:h[2026]?.[i]??null}))
 
-  const yrBtn=(yr,map)=>({padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${YRCLR[yr]}`,background:map[yr]?YRCLR[yr]+'33':'transparent',color:map[yr]?YRCLR[yr]:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11})
-
-  const PctBadge=({v})=>{const c=v>=100?'#22c55e':v>=90?'#f59e0b':v>=80?'#f97316':'#ef4444';const bg=c+'22';return<span style={{background:bg,color:c,borderRadius:4,padding:'1px 7px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{v.toFixed(0)}%</span>}
+  const yrBtn = (yr, map, clrOvr) => {
+    const clr = clrOvr || YRCLR[yr] || '#6b7280'
+    return {padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${clr}`,background:map[yr]?clr+'33':'transparent',color:map[yr]?clr:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11}
+  }
 
   if (isAll) return (
     /* ══ ALL BRANCHES — Image 3 style ══ */
@@ -1082,7 +1091,10 @@ function Daily({ctx}) {
 
   const CHART_H = mobile?180:240
   const ttip = {contentStyle:{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
-  const yrBtnSt=(yr,active)=>({padding:'3px 9px',borderRadius:4,cursor:'pointer',border:`1px solid ${YRCLR[yr]||'#22c55e'}`,background:active?(YRCLR[yr]||'#22c55e')+'33':'transparent',color:active?(YRCLR[yr]||'#22c55e'):'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:10})
+  const yrBtnSt = (yr, active) => {
+    const clr = YRCLR[yr] || '#22c55e'
+    return {padding:'3px 9px',borderRadius:4,cursor:'pointer',border:`1px solid ${clr}`,background:active?clr+'33':'transparent',color:active?clr:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:10}
+  }
   const [showYrS,setShowYrS]=useState({2024:true,2025:true,2026:true})
   const [showYrT,setShowYrT]=useState({2024:true,2025:true,2026:true})
 
@@ -1175,13 +1187,10 @@ function Monthly({ctx}) {
   const [showTire,  setShowTire]  = useState({2024:true,2025:true,2026:true})
   const toggleS = yr => setShowSales(p=>({...p,[yr]:!p[yr]}))
   const toggleT = yr => setShowTire(p=>({...p,[yr]:!p[yr]}))
-  const yrBtn = (yr,map,clr) => ({
-    padding:'4px 10px',borderRadius:4,cursor:'pointer',
-    border:`1px solid ${clr||YRCLR[yr]}`,
-    background:map[yr]?(clr||YRCLR[yr])+'33':'transparent',
-    color:map[yr]?(clr||YRCLR[yr]):'#4b5563',
-    fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11
-  })
+  const yrBtn = (yr, map, clrOvr) => {
+    const clr = clrOvr || YRCLR[yr] || '#6b7280'
+    return {padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${clr}`,background:map[yr]?clr+'33':'transparent',color:map[yr]?clr:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11}
+  }
 
   // Sales chart data — all 4 years
   const salesData = MONTHS_TH.map((mn,i) => ({
@@ -1351,12 +1360,7 @@ function Tracker({ctx}) {
   const todayTotTgt   = rows.reduce((s,r)=>s+r.salesDayTgt,0)
   const todayTotTireT = rows.reduce((s,r)=>s+r.tireDayTgt,0)
 
-  const AchBadge = ({pct}) => {
-    if (pct===null) return <span style={{fontSize:10,color:'#4b5563'}}>—</span>
-    const bg=pct>=100?'#166534':pct>=80?'#92400e':'#991b1b'
-    const tx=pct>=100?'#bbf7d0':pct>=80?'#fef3c7':'#fecaca'
-    return <span style={{background:bg,color:tx,borderRadius:4,padding:'2px 6px',fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{pct.toFixed(0)}%</span>
-  }
+
 
   return (
     <div>

@@ -710,12 +710,12 @@ function Overview({ctx}) {
                   <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #2d3548'}}>{fM(Math.round(totPY24))}</td>
                   <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(totPY25))}</td>
                   <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#f59e0b'}}>{fM(totS)}</td>
-                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totS,totT)}/></td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totS,totT)} threshold={MTD_R*100}/></td>
                   <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totS,totPY25)}/></td>
                   <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #2d3548'}}>{Math.round(totTirePY24)}</td>
                   <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{Math.round(totTirePY25)}</td>
                   <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#3b82f6'}}>{N(totTire)}</td>
-                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totTire,totTirePY25)}/></td>
+                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totTire,totTireT)} threshold={MTD_R*100}/></td>
                 </tr>
               </tbody>
             </table>

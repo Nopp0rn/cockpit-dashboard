@@ -1754,27 +1754,26 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
       if (!cell) return ''
       return String(cell.v !== undefined ? cell.v : (cell.w || ''))
     }
-    // cellDate: returns the date value from cell (tries v first, then w as string)
+    // cellDate: prefer cell.w (formatted string) over cell.v (has timezone offset issues)
+    // e.g., May 1 stored as Date shows "Apr 30 23:59:56 GMT+0700" due to UTC conversion
     function cellDate(r, c) {
       const cell = ws[XLSX.utils.encode_cell({r, c})]
       if (!cell) return null
+      // Step 1: cell.w (formatted string like "01/05/2024") - ALWAYS correct
+      const w = String(cell.w || '')
+      if (w.length >= 8) {
+        const m1 = w.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+        if (m1) { const d=new Date(+m1[3],+m1[2]-1,+m1[1]); if (!isNaN(d.getTime())) return d }
+        const m2 = w.match(/^(\d{4})-(\d{2})-(\d{2})/)
+        if (m2) { const d=new Date(+m2[1],+m2[2]-1,+m2[3]); if (!isNaN(d.getTime())) return d }
+      }
+      // Step 2: Date object - use UTC to avoid timezone shift
       const v = cell.v
-      if (r >= 5 && r <= 7 && c === 1) console.log(`[cellDate] r=${r} c=${c} t=${cell.t} v=${v} typeof_v=${typeof v} w=${cell.w}`)
-      // Case 1: JS Date object (cellDates:true or some XLSX.js versions)
-      if (v instanceof Date) return v
-      // Case 2: Excel serial number (numeric date)
+      if (v instanceof Date) return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate())
+      // Step 3: Excel serial → convert then use UTC date part
       if (typeof v === 'number' && v > 40000 && v < 60000) {
-        return new Date(Math.round((v - 25569) * 86400000))
-      }
-      // Case 3: cell.v is undefined but cell.w has the formatted date string
-      const w = cell.w || ''
-      if (w.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{4}/)) {
-        const m = w.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/)
-        if (m) return new Date(+m[3], +m[2]-1, +m[1])
-      }
-      if (w.match(/\d{4}-\d{2}-\d{2}/)) {
-        const m = w.match(/^(\d{4})-(\d{2})-(\d{2})/)
-        if (m) return new Date(+m[1], +m[2]-1, +m[3])
+        const d = new Date(Math.round((v - 25569) * 86400000))
+        return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
       }
       return null
     }
@@ -1810,11 +1809,6 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     // ── Parse data rows ───────────────────────────────────────────
     const result = {}
     let currentBid = null
-
-    // Debug: log first date cell
-    const _debugCell = ws[XLSX.utils.encode_cell({r:5, c:1})]
-    console.log('[parseDailyFile] Cell B6:', _debugCell ? {t:_debugCell.t, v:_debugCell.v, w:_debugCell.w, type:typeof _debugCell.v} : 'null')
-    console.log('[parseDailyFile] yearCols:', JSON.stringify(yearCols), 'nRows:', nRows, 'sheet:', sn)
 
     for (let r = 4; r < nRows; r++) {
       const s0 = cellStr(r, 0)  // col A

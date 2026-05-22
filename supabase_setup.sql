@@ -23,4 +23,7 @@ ALTER TABLE public.app_data REPLICA IDENTITY FULL;
 CREATE INDEX IF NOT EXISTS idx_app_data_key ON public.app_data (key);
 
 -- 5. ตรวจสอบ
+-- 6. เพิ่ม app_data เข้า Realtime publication (สำคัญ!)
+ALTER PUBLICATION supabase_realtime ADD TABLE public.app_data;
+
 SELECT 'Setup complete! Table app_data ready.' AS status;

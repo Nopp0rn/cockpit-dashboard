@@ -1759,6 +1759,7 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
       const cell = ws[XLSX.utils.encode_cell({r, c})]
       if (!cell) return null
       const v = cell.v
+      if (r >= 5 && r <= 7 && c === 1) console.log(`[cellDate] r=${r} c=${c} t=${cell.t} v=${v} typeof_v=${typeof v} w=${cell.w}`)
       // Case 1: JS Date object (cellDates:true or some XLSX.js versions)
       if (v instanceof Date) return v
       // Case 2: Excel serial number (numeric date)
@@ -1809,6 +1810,11 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     // ── Parse data rows ───────────────────────────────────────────
     const result = {}
     let currentBid = null
+
+    // Debug: log first date cell
+    const _debugCell = ws[XLSX.utils.encode_cell({r:5, c:1})]
+    console.log('[parseDailyFile] Cell B6:', _debugCell ? {t:_debugCell.t, v:_debugCell.v, w:_debugCell.w, type:typeof _debugCell.v} : 'null')
+    console.log('[parseDailyFile] yearCols:', JSON.stringify(yearCols), 'nRows:', nRows, 'sheet:', sn)
 
     for (let r = 4; r < nRows; r++) {
       const s0 = cellStr(r, 0)  // col A
@@ -2145,7 +2151,7 @@ function Upload({ ctx }) {
 
       const buf = await file.arrayBuffer()
 
-      const wb = XLSX.read(buf, { type: 'array' })
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true })
 
       /* ─────────────────────────────────────────────
          SALES DATA (Data_sale_by_Store.xlsx)

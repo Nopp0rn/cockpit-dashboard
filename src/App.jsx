@@ -1729,16 +1729,15 @@ const DAILY_BID_MAP = {
 }
 
 function parseDailyFile(wb, sheetHint, isAmountCol) {
-  /* ── Structure confirmed for ยอดขายรายวัน / ยอดขายยางรายวัน:
-     Row 1: 'DocDate-Year', _, 2024(C), _, _, _, _, _, _, _, _, _, 2025(M), ...
-     Row 3: 'CustGroupName', _, 'Car Dealer', _, 'Cash', _, 'Fleet', _, 'SME', _, 'Total', ...
-     Row 4: 'Branch', 'DocDate', 'Qty', 'Amt', 'Qty', 'Amt', 'Qty', 'Amt', 'Qty', 'Amt', 'Qty'(K/col10), 'Amt'(L/col11)
-     2024: Qty=col10, Amt=col11 | 2025: Qty=col20, Amt=col21
-     Each branch: header row (col0=BranchName, col1='Total') + daily rows (col0=null, col1=date)
-  ─────────────────────────────────────────────────────────────────── */
+  /* ── Key structure (confirmed from Python analysis):
+     Row 1(r=0): 'DocDate-Year',_,2024(c=2),_,_,_,_,_,_,_,_,_,2025(c=12),...
+     Row 3(r=2): 'CustGroupName',_,'Car Dealer',_,'Cash',_,'Fleet',_,'SME',_,'Total'(c=10),...
+     Row 5(r=4): Branch name in col A, 'Total' in col B
+     Row 6(r=5): null col A, date col B, ..., Qty2024(c=10), Amt2024(c=11), ..., Qty2025(c=20), Amt2025(c=21)
+  ────────────────────────────────────────────────────────────────────── */
   try {
     const sn = wb.SheetNames.find(s => s.includes(sheetHint))
-              || wb.SheetNames.find(s => s.includes('ยอดขาย'))
+              || wb.SheetNames.find(s => s.includes('\u0e22\u0e2d\u0e14\u0e02\u0e32\u0e22'))
               || wb.SheetNames[0]
     if (!sn || !wb.Sheets[sn]) return {}
 
@@ -1747,78 +1746,85 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     if (!ref) return {}
     const range = XLSX.utils.decode_range(ref)
     const nRows = range.e.r + 1
-    const nCols = range.e.c + 1
 
-    // ── Helper: get cell value ──────────────────────────────────────
-    function cellVal(r, c) {
-      const addr = XLSX.utils.encode_cell({r, c})
-      const cell = ws[addr]
+    // ── cell helpers ──────────────────────────────────────────────
+    // cellStr: returns best string representation of a cell (for branch/header detection)
+    function cellStr(r, c) {
+      const cell = ws[XLSX.utils.encode_cell({r, c})]
+      if (!cell) return ''
+      return String(cell.v !== undefined ? cell.v : (cell.w || ''))
+    }
+    // cellDate: returns the date value from cell (tries v first, then w as string)
+    function cellDate(r, c) {
+      const cell = ws[XLSX.utils.encode_cell({r, c})]
       if (!cell) return null
-      return cell.v !== undefined ? cell.v : null
+      const v = cell.v
+      // Case 1: JS Date object (cellDates:true or some XLSX.js versions)
+      if (v instanceof Date) return v
+      // Case 2: Excel serial number (numeric date)
+      if (typeof v === 'number' && v > 40000 && v < 60000) {
+        return new Date(Math.round((v - 25569) * 86400000))
+      }
+      // Case 3: cell.v is undefined but cell.w has the formatted date string
+      const w = cell.w || ''
+      if (w.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{4}/)) {
+        const m = w.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/)
+        if (m) return new Date(+m[3], +m[2]-1, +m[1])
+      }
+      if (w.match(/\d{4}-\d{2}-\d{2}/)) {
+        const m = w.match(/^(\d{4})-(\d{2})-(\d{2})/)
+        if (m) return new Date(+m[1], +m[2]-1, +m[3])
+      }
+      return null
+    }
+    // cellNum: returns numeric value of a cell
+    function cellNum(r, c) {
+      const cell = ws[XLSX.utils.encode_cell({r, c})]
+      if (!cell) return null
+      if (typeof cell.v === 'number') return cell.v
+      // Try parsing from formatted string
+      if (cell.w) {
+        const n = parseFloat(String(cell.w).replace(/,/g,''))
+        if (!isNaN(n)) return n
+      }
+      return null
     }
 
-    // ── Detect year→column positions from row 1 + row 3 ──────────
+    // ── Detect year→column positions ─────────────────────────────
     const yearCols = {}
-    // Row 1 (0-indexed row 0)
-    for (let c = 0; c < nCols; c++) {
-      const yr = cellVal(0, c)
-      if (yr === 2024 || yr === 2025 || yr === 2026) {
-        // Find 'Total' in row 3 (0-indexed row 2) starting from c
-        for (let cc = c; cc < Math.min(c + 20, nCols); cc++) {
-          if (cellVal(2, cc) === 'Total') {
-            yearCols[yr] = { qty: cc, amt: cc + 1 }
+    for (let c = 0; c <= range.e.c; c++) {
+      const v = cellNum(0, c)  // Row 1
+      if (v === 2024 || v === 2025 || v === 2026) {
+        for (let cc = c; cc < Math.min(c+20, range.e.c+1); cc++) {
+          if (cellStr(2, cc) === 'Total') {  // Row 3
+            yearCols[v] = { qty: cc, amt: cc+1 }
             break
           }
         }
       }
     }
-    if (!yearCols[2024]) yearCols[2024] = { qty: 10, amt: 11 }  // confirmed fallback
+    if (!yearCols[2024]) yearCols[2024] = { qty: 10, amt: 11 }
     if (!yearCols[2025]) yearCols[2025] = { qty: 20, amt: 21 }
 
-    // ── Date conversion (handles: number serial, Date object, string) ──
-    function toDate(v) {
-      if (!v && v !== 0) return null
-      // Already a JS Date object (when cellDates:true was used in XLSX.read)
-      if (v instanceof Date) return v
-      // Excel serial number (5-digit number in date range)
-      if (typeof v === 'number' && v > 40000 && v < 60000) {
-        // Convert Excel serial to JS Date
-        // 25569 = days from Excel epoch (Dec 30, 1899) to Unix epoch (Jan 1, 1970)
-        return new Date(Math.round((v - 25569) * 86400 * 1000))
-      }
-      // String date formats: YYYY-MM-DD or DD/MM/YYYY or MM/DD/YYYY
-      if (typeof v === 'string' && v.length >= 8) {
-        const m1 = v.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
-        if (m1) return new Date(+m1[1], +m1[2]-1, +m1[3])
-        const m2 = v.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
-        if (m2) return new Date(+m2[3], +m2[2]-1, +m2[1])
-      }
-      return null
-    }
-
-    // ── Parse branch + daily rows ─────────────────────────────────
+    // ── Parse data rows ───────────────────────────────────────────
     const result = {}
     let currentBid = null
-    const COL_AMT  = isAmountCol ? 'amt' : 'qty'
 
-    for (let r = 4; r < nRows; r++) {  // r=4 = row 5 (1-indexed) = first branch row
-      const col0 = cellVal(r, 0)
-      const col1 = cellVal(r, 1)
-      const col0str = String(col0 || '')
+    for (let r = 4; r < nRows; r++) {
+      const s0 = cellStr(r, 0)  // col A
 
-      // Branch header row (col0 has branch name)
-      if (col0str.includes('Cockpit') || col0str.includes('cockpit')) {
-        const rawBid = col0str.split('-')[0].trim()
+      // Branch header row
+      if (s0.includes('Cockpit') || s0.includes('cockpit')) {
+        const rawBid = s0.split('-')[0].trim()
         const bid = DAILY_BID_MAP[rawBid.padStart(3,'0')] || rawBid.padStart(3,'0')
         currentBid = bid
         if (!result[bid]) result[bid] = {}
         continue
       }
+      if (!currentBid) continue
 
-      if (!currentBid || !col1) continue
-
-      // Detect date
-      const dt = toDate(col1)
+      // Date column (col B = index 1)
+      const dt = cellDate(r, 1)
       if (!dt || isNaN(dt.getTime())) continue
 
       const yr = dt.getFullYear()
@@ -1829,8 +1835,8 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
       const colMap = yearCols[yr]
       if (!colMap) continue
 
-      const rawVal = cellVal(r, colMap[COL_AMT])
-      if (typeof rawVal !== 'number' || rawVal <= 0) continue
+      const rawVal = cellNum(r, isAmountCol ? colMap.amt : colMap.qty)
+      if (rawVal === null || rawVal <= 0) continue
 
       const key = `${yr}-${String(mo).padStart(2,'0')}`
       if (!result[currentBid][key]) result[currentBid][key] = {}
@@ -1843,6 +1849,7 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     return {}
   }
 }
+
 
 
 /* ── Upload file type definitions ──────────────────────────────────── */

@@ -588,11 +588,12 @@ function Overview({ctx}) {
     const py24Tire  = (MAY_TIRE[b.id]?.[2024]||0)*MTD_R
     return {
       ...b, t, m, ts, idx:i,
-      tgtSales:t.sales*MTD_R, tgtTire:t.tire*MTD_R,
+      tgtSales: t.sales,       // Full monthly target (not prorated)
+      tgtTire:  t.tire,        // Full monthly tire target
       py25Sales, py24Sales, py25Tire, py24Tire,
       vsPY25: P(ts,py25Sales), vsPY24: P(ts,py24Sales),
       tirePY25: P(m.tire,py25Tire), tirePY24: P(m.tire,py24Tire),
-      tireAch: P(m.tire, t.tire*MTD_R),
+      tireAch: P(m.tire, t.tire),   // vs full monthly tire target
     }
   })
 

@@ -1761,9 +1761,22 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
         Rows 1-4: year/month/group headers, Row 5+: branch header then data rows
   ──────────────────────────────────────────────────────────────────── */
   try {
-    const sn = wb.SheetNames.find(s => s.includes(sheetHint))
-              || wb.SheetNames.find(s => s.includes('\u0e22\u0e2d\u0e14\u0e02\u0e32\u0e22'))
-              || wb.SheetNames[0]
+    // Find the sheet that actually contains branch data (has 'Cockpit' in col A)
+    // Some files have the hint-named sheet as empty headers; 'Export' has the real data
+    let sn = wb.SheetNames.find(s => {
+      const ws2 = wb.Sheets[s]
+      if (!ws2) return false
+      // Quick scan: check first 20 rows of col A for branch names
+      const rng2 = XLSX.utils.decode_range(ws2['!ref'] || 'A1')
+      for (let rr = 0; rr <= Math.min(20, rng2.e.r); rr++) {
+        const cell = ws2[XLSX.utils.encode_cell({r:rr, c:0})]
+        const v = cell?.v != null ? String(cell.v) : (cell?.w || '')
+        if (v.includes('Cockpit') || v.includes('cockpit')) return true
+      }
+      return false
+    })
+    // Fallback: sheet matching hint name, then first sheet
+    if (!sn) sn = wb.SheetNames.find(s => s.includes(sheetHint)) || wb.SheetNames[0]
     if (!sn || !wb.Sheets[sn]) return {}
 
     const ws  = wb.Sheets[sn]

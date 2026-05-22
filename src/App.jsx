@@ -18,9 +18,13 @@ const DB = {
     return data?.value ?? null
   },
   set: async (key, val) => {
-    await supabase.from('app_data').upsert({ key, value: val, updated_at: new Date().toISOString() })
+    const { error } = await supabase.from('app_data').upsert(
+      { key, value: val, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    )
+    if (error) console.error('[DB.set] save failed:', key, error.message)
+    return !error
   },
-  // subscribe to all changes in app_data table
   listen: (onRow) => {
     return supabase.channel('cockpit_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_data' }, onRow)
@@ -299,17 +303,17 @@ export default function App() {
     /* Realtime subscription */
     const ch = DB.listen(payload => {
       const r = payload.new
-      if (!r) return
-      if (r.key==='cp_de')   setDe(r.value)
-      if (r.key==='cp_tgt')  setTARGET(r.value)
-      if (r.key==='cp_hist') setHIST(r.value)
-      if (r.key==='cp_cfg')  setCfg(r.value)
-      if (r.key==='cp_ai')   setAiAna(r.value)
-      if (r.key==='cp_fcst') setFcst(r.value)
-      if (r.key==='cp_up')   setUpStat(r.value)
-      if (r.key==='cp_hdsl') setHistDailySales(r.value)
-      if (r.key==='cp_hdtr') setHistDailyTire(r.value)
-      if (r.key==='cp_tireq') setHistTireQ(r.value)
+      if (!r?.key) return                                        // null guard
+      if (r.key==='cp_de'   && r.value!=null) setDe(r.value)
+      if (r.key==='cp_tgt'  && r.value!=null) setTARGET(r.value)
+      if (r.key==='cp_hist' && r.value!=null) setHIST(r.value)
+      if (r.key==='cp_cfg'  && r.value!=null) setCfg(r.value)
+      if (r.key==='cp_ai'   && r.value!=null) setAiAna(r.value)
+      if (r.key==='cp_fcst' && r.value!=null) setFcst(r.value)
+      if (r.key==='cp_up'   && r.value!=null) setUpStat(r.value)
+      if (r.key==='cp_hdsl' && r.value!=null) setHistDailySales(r.value)
+      if (r.key==='cp_hdtr' && r.value!=null) setHistDailyTire(r.value)
+      if (r.key==='cp_tireq'&& r.value!=null) setHistTireQ(r.value)
     })
 
     // Timeout 10s — แสดง app แต่ไม่โชว์ banner (ช้าไม่ใช่ error)
@@ -318,21 +322,26 @@ export default function App() {
   }, [])
 
   /* ── Write helpers ── */
+  // deRef holds the latest de state for DB.set outside state updater
+  const deRef = useRef({})
   const saveDay = useCallback((bid, day, field, val) => {
     setDe(prev => {
       const next = {...prev, [bid]:{...prev[bid], [day]:{...(prev[bid]?.[day]||EMPTY_ROW()), [field]:val}}}
-      DB.set('cp_de', next)
+      deRef.current = next
       return next
     })
+    // Save AFTER state update using a micro-task to avoid calling inside updater
+    setTimeout(() => DB.set('cp_de', deRef.current), 0)
   }, [])
 
   const delDay = useCallback((bid, day) => {
     setDe(prev => {
       const b = {...prev[bid]}; delete b[day]
       const next = {...prev, [bid]:b}
-      DB.set('cp_de', next)
+      deRef.current = next
       return next
     })
+    setTimeout(() => DB.set('cp_de', deRef.current), 0)
   }, [])
 
   const saveCfg = (next) => { setCfg(next); DB.set('cp_cfg', next) }
@@ -1729,120 +1738,81 @@ const DAILY_BID_MAP = {
 }
 
 function parseDailyFile(wb, sheetHint, isAmountCol) {
-  /* ── Key structure (confirmed from Python analysis):
-     Row 1(r=0): 'DocDate-Year',_,2024(c=2),_,_,_,_,_,_,_,_,_,2025(c=12),...
-     Row 3(r=2): 'CustGroupName',_,'Car Dealer',_,'Cash',_,'Fleet',_,'SME',_,'Total'(c=10),...
-     Row 5(r=4): Branch name in col A, 'Total' in col B
-     Row 6(r=5): null col A, date col B, ..., Qty2024(c=10), Amt2024(c=11), ..., Qty2025(c=20), Amt2025(c=21)
-  ────────────────────────────────────────────────────────────────────── */
+  /* ── File structure (confirmed):
+     Col A (idx 0): Branch name (first row of each branch block), empty for daily rows
+     Col B (idx 1): Date (01/05/2024, 02/05/2024, ... then 01/05/2025, ...)
+     Col W (idx range.e.c - 1): Grand Total Quantity (tire units for tire file, units for sales)
+     Col X (idx range.e.c):     Grand Total Amount ExVAT (฿)
+     → Use Col X for sales amounts, Col W for tire quantities
+     → Year is determined from the DATE in col B
+  ─────────────────────────────────────────────────────────────────── */
   try {
     const sn = wb.SheetNames.find(s => s.includes(sheetHint))
               || wb.SheetNames.find(s => s.includes('\u0e22\u0e2d\u0e14\u0e02\u0e32\u0e22'))
               || wb.SheetNames[0]
     if (!sn || !wb.Sheets[sn]) return {}
 
-    const ws = wb.Sheets[sn]
+    const ws  = wb.Sheets[sn]
     const ref = ws['!ref']
     if (!ref) return {}
     const range = XLSX.utils.decode_range(ref)
     const nRows = range.e.r + 1
 
-    // ── cell helpers ──────────────────────────────────────────────
-    // cellStr: returns best string representation of a cell (for branch/header detection)
-    // FIX: use != null (catches BOTH null and undefined) so cell.w is used as fallback for null values
-    function cellStr(r, c) {
-      const cell = ws[XLSX.utils.encode_cell({r, c})]
-      if (!cell) return ''
-      return String(cell.v != null ? cell.v : (cell.w || ''))
-    }
-    // cellDate: prefer cell.w (formatted string) over cell.v (has timezone offset issues)
-    // e.g., May 1 stored as Date shows "Apr 30 23:59:56 GMT+0700" due to UTC conversion
-    function cellDate(r, c) {
+    // Grand Total columns (confirmed: last 2 columns = W and X)
+    const amtCol = range.e.c        // Column X = Total Amount (ExVAT)
+    const qtyCol = range.e.c - 1   // Column W = Total Quantity
+    const useCol = isAmountCol ? amtCol : qtyCol
+
+    // ── Cell helpers ──────────────────────────────────────────────
+    function cv(r, c) {
       const cell = ws[XLSX.utils.encode_cell({r, c})]
       if (!cell) return null
-      // Step 1: cell.w (formatted string like "01/05/2024") - ALWAYS correct
+      // Use != null (catches BOTH null and undefined) to fall back to cell.w
+      return cell.v != null ? cell.v : (cell.w != null ? cell.w : null)
+    }
+
+    // Date: prefer cell.w formatted string (avoids XLSX.js UTC timezone shift)
+    function cellDate(r) {
+      const cell = ws[XLSX.utils.encode_cell({r, c:1})]  // Col B always
+      if (!cell) return null
+
+      // Step 1: cell.w = formatted date string like "01/05/2024" — MOST RELIABLE
       const w = String(cell.w || '')
       if (w.length >= 8) {
         const m1 = w.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
-        if (m1) { const d=new Date(+m1[3],+m1[2]-1,+m1[1]); if (!isNaN(d.getTime())) return d }
+        if (m1) { const d=new Date(+m1[3],+m1[2]-1,+m1[1]); if(!isNaN(d.getTime())) return d }
         const m2 = w.match(/^(\d{4})-(\d{2})-(\d{2})/)
-        if (m2) { const d=new Date(+m2[1],+m2[2]-1,+m2[3]); if (!isNaN(d.getTime())) return d }
+        if (m2) { const d=new Date(+m2[1],+m2[2]-1,+m2[3]); if(!isNaN(d.getTime())) return d }
       }
-      // Step 2: Date object - use UTC to avoid timezone shift
+      // Step 2: Date object (cellDates:true) — use UTC to avoid timezone shift
       const v = cell.v
       if (v instanceof Date) return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate())
-      // Step 3: Excel serial → convert then use UTC date part
+      // Step 3: Excel serial number
       if (typeof v === 'number' && v > 40000 && v < 60000) {
         const d = new Date(Math.round((v - 25569) * 86400000))
         return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
       }
       return null
     }
-    // cellNum: returns numeric value of a cell
+
     function cellNum(r, c) {
-      const cell = ws[XLSX.utils.encode_cell({r, c})]
-      if (!cell) return null
-      if (typeof cell.v === 'number' && cell.v != null) return cell.v
-      // Fallback to formatted string (handles null/undefined cell.v)
-      const w = cell.w || cell.t === 'n' ? (cell.w || '') : ''
-      if (w) {
-        const n = parseFloat(String(w).replace(/,/g,''))
+      const v = cv(r, c)
+      if (typeof v === 'number') return v
+      if (v != null) {
+        const n = parseFloat(String(v).replace(/,/g,''))
         if (!isNaN(n)) return n
       }
       return null
     }
 
-    // ── Detect year→column positions ─────────────────────────────
-    const yearCols = {}
-    for (let c = 0; c <= range.e.c; c++) {
-      const v = cellNum(0, c)  // Row 1
-      if (v === 2024 || v === 2025 || v === 2026) {
-        for (let cc = c; cc < Math.min(c+20, range.e.c+1); cc++) {
-          if (cellStr(2, cc) === 'Total') {  // Row 3
-            yearCols[v] = { qty: cc, amt: cc+1 }
-            break
-          }
-        }
-      }
-    }
-    if (!yearCols[2024]) yearCols[2024] = { qty: 10, amt: 11 }
-    if (!yearCols[2025]) yearCols[2025] = { qty: 20, amt: 21 }
-
-    // Self-validate: check first data row to confirm column positions
-    // If detected column gives no data, try column -1 (handles off-by-1 detection errors)
-    for (const yr of [2024, 2025]) {
-      const cols = yearCols[yr]
-      if (!cols) continue
-      let validated = false
-      for (let testR = 4; testR < Math.min(50, nRows); testR++) {
-        const testDate = cellDate(testR, 1)
-        if (!testDate || isNaN(testDate.getTime())) continue
-        if (testDate.getFullYear() !== yr) continue
-        // This row has a date for the right year
-        const valDetected = cellNum(testR, cols.amt)
-        if (valDetected && valDetected > 100) { validated = true; break }
-        const valMinus1 = cellNum(testR, cols.amt - 1)
-        if (valMinus1 && valMinus1 > 100) {
-          yearCols[yr] = { qty: cols.qty - 1, amt: cols.amt - 1 }
-          validated = true; break
-        }
-        const valPlus1 = cellNum(testR, cols.amt + 1)
-        if (valPlus1 && valPlus1 > 100) {
-          yearCols[yr] = { qty: cols.qty + 1, amt: cols.amt + 1 }
-          validated = true; break
-        }
-        break  // Only check first matching row
-      }
-    }
-
-    // ── Parse data rows ───────────────────────────────────────────
+    // ── Parse rows ────────────────────────────────────────────────
     const result = {}
     let currentBid = null
 
     for (let r = 4; r < nRows; r++) {
-      const s0 = cellStr(r, 0)  // col A
+      const s0 = String(cv(r, 0) || '')
 
-      // Branch header row
+      // Branch header row: col A has branch name
       if (s0.includes('Cockpit') || s0.includes('cockpit')) {
         const rawBid = s0.split('-')[0].trim()
         const bid = DAILY_BID_MAP[rawBid.padStart(3,'0')] || rawBid.padStart(3,'0')
@@ -1852,24 +1822,22 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
       }
       if (!currentBid) continue
 
-      // Date column (col B = index 1)
-      const dt = cellDate(r, 1)
+      // Daily data row: col B has date
+      const dt = cellDate(r)
       if (!dt || isNaN(dt.getTime())) continue
 
-      const yr = dt.getFullYear()
-      const mo = dt.getMonth() + 1
+      const yr  = dt.getFullYear()
+      const mo  = dt.getMonth() + 1
       const day = dt.getDate()
       if (yr < 2020 || yr > 2030 || day < 1 || day > 31) continue
 
-      const colMap = yearCols[yr]
-      if (!colMap) continue
-
-      const rawVal = cellNum(r, isAmountCol ? colMap.amt : colMap.qty)
-      if (rawVal === null || rawVal <= 0) continue
+      // Read from Grand Total column (W or X)
+      const val = cellNum(r, useCol)
+      if (val == null || val <= 0) continue
 
       const key = `${yr}-${String(mo).padStart(2,'0')}`
       if (!result[currentBid][key]) result[currentBid][key] = {}
-      result[currentBid][key][day] = Math.round(rawVal)
+      result[currentBid][key][day] = Math.round(val)
     }
 
     return result

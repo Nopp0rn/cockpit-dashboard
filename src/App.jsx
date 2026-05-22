@@ -1845,6 +1845,40 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
 }
 
 
+/* ── Upload file type definitions ──────────────────────────────────── */
+const FDEFS = [
+  {
+    key:   'target',
+    label: 'เป้าเดือน (Jun/Jul...)',
+    icon:  '🎯',
+    hint:  'Sheet: For_BI'
+  },
+  {
+    key:   'salesdata',
+    label: 'Data_sale_by_Store.xlsx',
+    icon:  '📊',
+    hint:  'Sheet: 003-xxx, 009-xxx, ... → โหลดยอดขาย+ยาง 2024/2025 รายเดือน'
+  },
+  {
+    key:   'hist',
+    label: 'ประวัติยอดขาย.xlsx',
+    icon:  '📖',
+    hint:  'Sheet: Data 009, Data 010... หรือ Sales History23-26 → โหลดยาง 2022-2024 รายเดือน'
+  },
+  {
+    key:   'daily',
+    label: 'ยอดขายรายวัน.xlsx',
+    icon:  '📅',
+    hint:  'Sheet: ยอดขายรายวัน → โหลดยอดขาย 2024/2025 รายวัน'
+  },
+  {
+    key:   'tiredaily',
+    label: 'ยอดขายยางรายวัน.xlsx',
+    icon:  '🛞',
+    hint:  'Sheet: ยอดขายยางรายวัน → โหลดยาง 2024/2025 รายวัน'
+  },
+]
+
 function parseSalesData(wb) {
   const histOut  = {}
   const tireqOut = {}

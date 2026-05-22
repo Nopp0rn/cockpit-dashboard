@@ -158,10 +158,11 @@ function calcTS(agg) {
 }
 
 /* ── UI atoms ── */
-function PBadge({value}) {
+function PBadge({value, threshold}) {
   const v = parseFloat(value)||0
-  const bg = v>=100?'#166534':v>=90?'#92400e':'#991b1b'
-  const tx = v>=100?'#bbf7d0':v>=90?'#fef3c7':'#fecaca'
+  const t = threshold ?? 100
+  const bg = v>=t?'#166534':v>=t*0.95?'#92400e':'#991b1b'
+  const tx = v>=t?'#bbf7d0':v>=t*0.95?'#fef3c7':'#fecaca'
   return <span style={{background:bg,color:tx,borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",whiteSpace:'nowrap'}}>{v.toFixed(1)}%</span>
 }
 
@@ -176,8 +177,10 @@ function Card({label,value,sub,color='#f59e0b',small}) {
 }
 
 /* ── Extra badge components (module-level to avoid TDZ) ── */
-function GrowthBadge({pct, label}) {
-  const clr = pct>=110?'#22c55e':pct>=100?'#84cc16':pct>=90?'#f59e0b':'#ef4444'
+function GrowthBadge({pct, label, threshold}) {
+  // threshold: dynamic expected-progress %, default 100 (fixed benchmarks)
+  const t = threshold ?? 100
+  const clr = pct >= t ? '#22c55e' : pct >= t * 0.95 ? '#f59e0b' : '#ef4444'
   return <span style={{fontSize:9,color:clr,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>vs{label} {pct.toFixed(0)}%</span>
 }
 function PctBadge({v}) {
@@ -615,7 +618,7 @@ function Overview({ctx}) {
           <div style={{fontSize:22,fontWeight:700,color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace"}}>{fM(totS)}</div>
           <div style={{fontSize:9,color:'#6b7280'}}>เป้า {fM(Math.round(totT))}</div>
           <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
-            <GrowthBadge pct={P(totS,totT)} label="เป้า"/>
+            <GrowthBadge pct={P(totS,totT)} label="เป้า" threshold={MTD_R*100}/>
             <GrowthBadge pct={P(totS,totPY25)} label="PY25"/>
             <GrowthBadge pct={P(totS,totPY24)} label="PY24"/>
           </div>
@@ -625,7 +628,7 @@ function Overview({ctx}) {
           <div style={{fontSize:22,fontWeight:700,color:'#3b82f6',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
           <div style={{fontSize:9,color:'#6b7280'}}>เป้า {N(Math.round(totTireT))}</div>
           <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
-            <GrowthBadge pct={P(totTire,totTireT)} label="เป้า"/>
+            <GrowthBadge pct={P(totTire,totTireT)} label="เป้า" threshold={MTD_R*100}/>
             <GrowthBadge pct={P(totTire,totTirePY25)} label="PY25"/>
             <GrowthBadge pct={P(totTire,totTirePY24)} label="PY24"/>
           </div>
@@ -649,7 +652,7 @@ function Overview({ctx}) {
             <div key={r.id} style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,padding:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
                 <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:BCLR[i]}}>{r.id} {r.short}</div>
-                <PBadge value={P(r.ts,r.tgtSales)}/>
+                <PBadge value={P(r.ts,r.tgtSales)} threshold={MTD_R*100}/>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,fontSize:11,marginBottom:6}}>
                 <div><div style={{color:'#6b7280',fontSize:8}}>ยอด MTD</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(r.ts)}</div></div>
@@ -691,13 +694,13 @@ function Overview({ctx}) {
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{fM(Math.round(r.py24Sales))}</td>
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(r.py25Sales))}</td>
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(r.ts)}</td>
-                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(r.ts,r.tgtSales)}/></td>
+                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(r.ts,r.tgtSales)} threshold={MTD_R*100}/></td>
                     <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.vsPY25}/></td>
                     {/* Tire */}
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{Math.round(r.py24Tire)}</td>
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{Math.round(r.py25Tire)}</td>
                     <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{r.m.tire}</td>
-                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.tireAch}/></td>
+                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.tireAch} threshold={MTD_R*100}/></td>
                     <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.tirePY25}/></td>
                   </tr>
                 ))}

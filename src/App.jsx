@@ -1749,10 +1749,11 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
 
     // ── cell helpers ──────────────────────────────────────────────
     // cellStr: returns best string representation of a cell (for branch/header detection)
+    // FIX: use != null (catches BOTH null and undefined) so cell.w is used as fallback for null values
     function cellStr(r, c) {
       const cell = ws[XLSX.utils.encode_cell({r, c})]
       if (!cell) return ''
-      return String(cell.v !== undefined ? cell.v : (cell.w || ''))
+      return String(cell.v != null ? cell.v : (cell.w || ''))
     }
     // cellDate: prefer cell.w (formatted string) over cell.v (has timezone offset issues)
     // e.g., May 1 stored as Date shows "Apr 30 23:59:56 GMT+0700" due to UTC conversion
@@ -1781,10 +1782,11 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     function cellNum(r, c) {
       const cell = ws[XLSX.utils.encode_cell({r, c})]
       if (!cell) return null
-      if (typeof cell.v === 'number') return cell.v
-      // Try parsing from formatted string
-      if (cell.w) {
-        const n = parseFloat(String(cell.w).replace(/,/g,''))
+      if (typeof cell.v === 'number' && cell.v != null) return cell.v
+      // Fallback to formatted string (handles null/undefined cell.v)
+      const w = cell.w || cell.t === 'n' ? (cell.w || '') : ''
+      if (w) {
+        const n = parseFloat(String(w).replace(/,/g,''))
         if (!isNaN(n)) return n
       }
       return null
@@ -1805,6 +1807,33 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     }
     if (!yearCols[2024]) yearCols[2024] = { qty: 10, amt: 11 }
     if (!yearCols[2025]) yearCols[2025] = { qty: 20, amt: 21 }
+
+    // Self-validate: check first data row to confirm column positions
+    // If detected column gives no data, try column -1 (handles off-by-1 detection errors)
+    for (const yr of [2024, 2025]) {
+      const cols = yearCols[yr]
+      if (!cols) continue
+      let validated = false
+      for (let testR = 4; testR < Math.min(50, nRows); testR++) {
+        const testDate = cellDate(testR, 1)
+        if (!testDate || isNaN(testDate.getTime())) continue
+        if (testDate.getFullYear() !== yr) continue
+        // This row has a date for the right year
+        const valDetected = cellNum(testR, cols.amt)
+        if (valDetected && valDetected > 100) { validated = true; break }
+        const valMinus1 = cellNum(testR, cols.amt - 1)
+        if (valMinus1 && valMinus1 > 100) {
+          yearCols[yr] = { qty: cols.qty - 1, amt: cols.amt - 1 }
+          validated = true; break
+        }
+        const valPlus1 = cellNum(testR, cols.amt + 1)
+        if (valPlus1 && valPlus1 > 100) {
+          yearCols[yr] = { qty: cols.qty + 1, amt: cols.amt + 1 }
+          validated = true; break
+        }
+        break  // Only check first matching row
+      }
+    }
 
     // ── Parse data rows ───────────────────────────────────────────
     const result = {}

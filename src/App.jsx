@@ -1752,14 +1752,14 @@ const DAILY_BID_MAP = {
 }
 
 function parseDailyFile(wb, sheetHint, isAmountCol) {
-  /* ── File structure (confirmed):
-     Col A (idx 0): Branch name (first row of each branch block), empty for daily rows
-     Col B (idx 1): Date (01/05/2024, 02/05/2024, ... then 01/05/2025, ...)
-     Col W (idx range.e.c - 1): Grand Total Quantity (tire units for tire file, units for sales)
-     Col X (idx range.e.c):     Grand Total Amount ExVAT (฿)
-     → Use Col X for sales amounts, Col W for tire quantities
-     → Year is determined from the DATE in col B
-  ─────────────────────────────────────────────────────────────────── */
+  /* ── Handles TWO file formats:
+     A) Simple 3-col format (ยอดขายรายวันBackup):
+        Col A: Branch name or empty | Col B: Date | Col C: Amount/Qty
+        Row 1: header ('Branch','DocDate','Amount'), Row 2+: branch header then data rows
+     B) Full 24-col format:
+        Col A: Branch, Col B: Date, Col W: Grand Total Qty, Col X: Grand Total Amount
+        Rows 1-4: year/month/group headers, Row 5+: branch header then data rows
+  ──────────────────────────────────────────────────────────────────── */
   try {
     const sn = wb.SheetNames.find(s => s.includes(sheetHint))
               || wb.SheetNames.find(s => s.includes('\u0e22\u0e2d\u0e14\u0e02\u0e32\u0e22'))
@@ -1771,26 +1771,27 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     if (!ref) return {}
     const range = XLSX.utils.decode_range(ref)
     const nRows = range.e.r + 1
+    const nCols = range.e.c + 1
 
-    // Grand Total columns (confirmed: last 2 columns = W and X)
-    const amtCol = range.e.c        // Column X = Total Amount (ExVAT)
-    const qtyCol = range.e.c - 1   // Column W = Total Quantity
-    const useCol = isAmountCol ? amtCol : qtyCol
+    // ── Detect format ─────────────────────────────────────────────
+    // Simple format: 3 cols. Full format: 24 cols.
+    const isSimple = nCols <= 5
+    // Data column to read from:
+    // Simple: always the last col (col C = idx 2 = amount for sales, qty for tire)
+    // Full: last col = Amount (X), second-to-last = Qty (W)
+    const useCol = isSimple ? range.e.c : (isAmountCol ? range.e.c : range.e.c - 1)
 
     // ── Cell helpers ──────────────────────────────────────────────
     function cv(r, c) {
       const cell = ws[XLSX.utils.encode_cell({r, c})]
       if (!cell) return null
-      // Use != null (catches BOTH null and undefined) to fall back to cell.w
       return cell.v != null ? cell.v : (cell.w != null ? cell.w : null)
     }
 
-    // Date: prefer cell.w formatted string (avoids XLSX.js UTC timezone shift)
+    // Date from col B (idx 1) — prefer cell.w to avoid XLSX.js timezone shift
     function cellDate(r) {
-      const cell = ws[XLSX.utils.encode_cell({r, c:1})]  // Col B always
+      const cell = ws[XLSX.utils.encode_cell({r, c:1})]
       if (!cell) return null
-
-      // Step 1: cell.w = formatted date string like "01/05/2024" — MOST RELIABLE
       const w = String(cell.w || '')
       if (w.length >= 8) {
         const m1 = w.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
@@ -1798,10 +1799,8 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
         const m2 = w.match(/^(\d{4})-(\d{2})-(\d{2})/)
         if (m2) { const d=new Date(+m2[1],+m2[2]-1,+m2[3]); if(!isNaN(d.getTime())) return d }
       }
-      // Step 2: Date object (cellDates:true) — use UTC to avoid timezone shift
       const v = cell.v
       if (v instanceof Date) return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate())
-      // Step 3: Excel serial number
       if (typeof v === 'number' && v > 40000 && v < 60000) {
         const d = new Date(Math.round((v - 25569) * 86400000))
         return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
@@ -1812,21 +1811,38 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
     function cellNum(r, c) {
       const v = cv(r, c)
       if (typeof v === 'number') return v
-      if (v != null) {
-        const n = parseFloat(String(v).replace(/,/g,''))
-        if (!isNaN(n)) return n
-      }
+      if (v != null) { const n=parseFloat(String(v).replace(/,/g,'')); if(!isNaN(n)) return n }
       return null
     }
 
-    // ── Parse rows ────────────────────────────────────────────────
+    // ── Parse rows (start from 0 to catch early branch headers) ──
     const result = {}
     let currentBid = null
 
-    for (let r = 4; r < nRows; r++) {
+    for (let r = 0; r < nRows; r++) {
       const s0 = String(cv(r, 0) || '')
 
-      // Branch header row: col A has branch name
+      // Skip header row and grand-total rows
+      if (s0 === 'Branch' || s0 === 'Total' || s0 === '') {
+        // Check if it's actually an empty-A data row (daily row)
+        if (s0 === '' && currentBid) {
+          const dt = cellDate(r)
+          if (dt && !isNaN(dt.getTime())) {
+            const yr=dt.getFullYear(), mo=dt.getMonth()+1, day=dt.getDate()
+            if (yr>=2020 && yr<=2030 && day>=1 && day<=31) {
+              const val = cellNum(r, useCol)
+              if (val != null && val > 0) {
+                const key = `${yr}-${String(mo).padStart(2,'0')}`
+                if (!result[currentBid][key]) result[currentBid][key] = {}
+                result[currentBid][key][day] = Math.round(val)
+              }
+            }
+          }
+        }
+        continue
+      }
+
+      // Branch header row (col A has branch name with ID prefix)
       if (s0.includes('Cockpit') || s0.includes('cockpit')) {
         const rawBid = s0.split('-')[0].trim()
         const bid = DAILY_BID_MAP[rawBid.padStart(3,'0')] || rawBid.padStart(3,'0')
@@ -1834,24 +1850,22 @@ function parseDailyFile(wb, sheetHint, isAmountCol) {
         if (!result[bid]) result[bid] = {}
         continue
       }
-      if (!currentBid) continue
 
-      // Daily data row: col B has date
-      const dt = cellDate(r)
-      if (!dt || isNaN(dt.getTime())) continue
-
-      const yr  = dt.getFullYear()
-      const mo  = dt.getMonth() + 1
-      const day = dt.getDate()
-      if (yr < 2020 || yr > 2030 || day < 1 || day > 31) continue
-
-      // Read from Grand Total column (W or X)
-      const val = cellNum(r, useCol)
-      if (val == null || val <= 0) continue
-
-      const key = `${yr}-${String(mo).padStart(2,'0')}`
-      if (!result[currentBid][key]) result[currentBid][key] = {}
-      result[currentBid][key][day] = Math.round(val)
+      // Data row with branch name in col A (shouldn't normally happen but handle)
+      if (currentBid) {
+        const dt = cellDate(r)
+        if (dt && !isNaN(dt.getTime())) {
+          const yr=dt.getFullYear(), mo=dt.getMonth()+1, day=dt.getDate()
+          if (yr>=2020 && yr<=2030 && day>=1 && day<=31) {
+            const val = cellNum(r, useCol)
+            if (val != null && val > 0) {
+              const key = `${yr}-${String(mo).padStart(2,'0')}`
+              if (!result[currentBid][key]) result[currentBid][key] = {}
+              result[currentBid][key][day] = Math.round(val)
+            }
+          }
+        }
+      }
     }
 
     return result

@@ -318,7 +318,17 @@ export default function App() {
 
     // Timeout 10s — แสดง app แต่ไม่โชว์ banner (ช้าไม่ใช่ error)
     const t = setTimeout(() => finish(false), 10000)
-    return () => { clearTimeout(t); supabase.removeChannel(ch) }
+
+    // Poll every 3 seconds to ensure all branches see the latest manual entries
+    // (fallback in case Realtime subscription misses updates)
+    const poll = setInterval(async () => {
+      try {
+        const fresh = await DB.get('cp_de')
+        if (fresh != null) setDe(fresh)
+      } catch(e) { /* silent */ }
+    }, 3000)
+
+    return () => { clearTimeout(t); clearInterval(poll); supabase.removeChannel(ch) }
   }, [])
 
   /* ── Write helpers ── */

@@ -266,6 +266,8 @@ export default function App() {
   const [histDailySales, setHistDailySales] = useState({})  // { bid: {'YYYY-MM':{day:฿}} }
   const [histTireQ, setHistTireQ] = useState({})            // { bid: { 2024:[12], 2025:[12], 2026:[12] } }
   const [histDailyTire,  setHistDailyTire]  = useState({})  // { bid: {'YYYY-MM':{day:qty}} }
+  const [uploadedHistSales, setUploadedHistSales] = useState({}) // {bid:{yr:[12 sales ฿000]}} จาก Data_sale_by_Store upload
+  const [uploadedMtAll,     setUploadedMtAll]     = useState({}) // {yr_str:{mo_str:tireQty}} จาก Total sheet
 
   /* ── Load all data & subscribe to realtime changes ── */
   useEffect(() => {
@@ -319,6 +321,8 @@ export default function App() {
       if (r.key==='cp_up'   && r.value!=null) setUpStat(r.value)
       if (r.key==='cp_hdsl' && r.value!=null) setHistDailySales(r.value)
       if (r.key==='cp_hdtr' && r.value!=null) setHistDailyTire(r.value)
+      if (r.key==='cp_uhsal'&& r.value!=null) setUploadedHistSales(r.value)
+      if (r.key==='cp_umtal'&& r.value!=null) setUploadedMtAll(r.value)
       if (r.key==='cp_tireq'&& r.value!=null) setHistTireQ(r.value)
     })
 
@@ -395,41 +399,36 @@ export default function App() {
     return base
   }
   const getH = (bid) => {
-    // EXCEL_MS overrides HIST for 2024/2025
+    // Priority: uploadedHistSales (upload ล่าสุด) > HIST (Supabase) > EXCEL_MS (hardcode)
+    const getMonthSales = (b, yr, monthIdx) => {
+      const sy = String(yr), sm = String(monthIdx+1)
+      // 1. uploadedHistSales จาก Data_sale_by_Store upload ล่าสุด (฿000 array)
+      const upl = uploadedHistSales[b]?.[yr]?.[monthIdx]
+      if (upl != null && upl > 0) return upl
+      // 2. HIST จาก Supabase (฿000)
+      const hist = HIST[b]?.[yr]?.[monthIdx]
+      if (hist != null && hist > 0) return hist
+      // 3. EXCEL_MS hardcode (฿) → แปลงเป็น ฿000
+      const ex = EXCEL_MS[b]?.[sy]?.[sm]
+      if (ex > 0) return Math.round(ex/1000)
+      return 0
+    }
     if (bid==='ALL') {
       const h={}
       ;[2023,2024,2025,2026].forEach(yr=>{
-        const sy=String(yr)
-        h[yr]=Array(12).fill(0).map((_,i)=>{
-          const sm=String(i+1)
-          const exSum=BRANCHES.reduce((s,b)=>{const ex=EXCEL_MS[b.id]?.[sy]?.[sm];return s+(ex>0?ex:0)},0)
-          if(exSum>0) return Math.round(exSum/1000)
-          return BRANCHES.reduce((s,b)=>s+(HIST[b.id]?.[yr]?.[i]||0),0)
-        })
+        h[yr]=Array(12).fill(0).map((_,i)=>
+          BRANCHES.reduce((s,b)=>s+getMonthSales(b.id,yr,i),0) || null
+        )
       })
       h[2026]=getH26('ALL')
-      // Override 2026 months that have EXCEL data
-      Array(12).fill(0).forEach((_,i)=>{
-        const sm=String(i+1),sy='2026'
-        const exSum=BRANCHES.reduce((s,b)=>{const ex=EXCEL_MS[b.id]?.[sy]?.[sm];return s+(ex>0?ex:0)},0)
-        if(exSum>0) h[2026][i]=Math.round(exSum/1000)
-      })
       return h
     }
     // Single branch
-    const h={...(HIST[bid]||{})}
-    ;[2024,2025,2026].forEach(yr=>{
-      const sy=String(yr)
-      const exArr=Array(12).fill(0).map((_,i)=>{
-        const ex=EXCEL_MS[bid]?.[sy]?.[String(i+1)]; return ex>0?Math.round(ex/1000):(HIST[bid]?.[yr]?.[i]||0)
-      })
-      if(exArr.some(v=>v>0)) h[yr]=exArr
+    const h={}
+    ;[2023,2024,2025,2026].forEach(yr=>{
+      h[yr]=Array(12).fill(0).map((_,i)=>getMonthSales(bid,yr,i)||null)
     })
     h[2026]=getH26(bid)
-    // Override 2026 with EXCEL
-    Array(12).fill(0).forEach((_,i)=>{
-      const ex=EXCEL_MS[bid]?.['2026']?.[String(i+1)]; if(ex>0) h[2026][i]=Math.round(ex/1000)
-    })
     return h
   }
 
@@ -437,7 +436,7 @@ export default function App() {
 
 
 
-  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ}
+  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedHistSales,setUploadedHistSales,uploadedMtAll,setUploadedMtAll}
 
   /* ── Loading screen ── */
   if (!ready) return (
@@ -1250,7 +1249,7 @@ function Daily({ctx}) {
 
 /* ════ MONTHLY ════ */
 function Monthly({ctx}) {
-  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS,histTireQ,histDailySales} = ctx
+  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS,histTireQ,histDailySales,uploadedMtAll} = ctx
   const isAll=selBr==='ALL', h=getH(selBr)
   const [showSales, setShowSales] = useState({2023:false,2024:true,2025:true,2026:true})
   const [showTire,  setShowTire]  = useState({2024:true,2025:true,2026:true})
@@ -1281,6 +1280,9 @@ function Monthly({ctx}) {
   const getTireQByMonth = (bid, yr, monthIdx) => {
     // ALL: EXCEL_MT_ALL (Total sheet) > branch sum > fallback
     if(bid==='ALL'){
+      // uploadedMtAll (Total sheet from upload) > EXCEL_MT_ALL (hardcode) > histTireQ > SEED_TIREQ
+      const uplAll=uploadedMtAll[String(yr)]?.[String(monthIdx+1)]
+      if(uplAll>0) return uplAll
       const exAll=EXCEL_MT_ALL[String(yr)]?.[String(monthIdx+1)]
       if(exAll>0) return exAll
       const brSum=BRANCHES.reduce((s,b)=>{const ex=EXCEL_MT[b.id]?.[String(yr)]?.[String(monthIdx+1)];return s+(ex>0?ex:0)},0)
@@ -1297,19 +1299,27 @@ function Monthly({ctx}) {
 
   const tireData = MONTHS_TH.map((mn,i) => {
     const row = {month: mn}
-    row[2024] = isAll
-      ? BRANCHES.reduce((s,b)=>s+(getTireQByMonth(b.id,2024,i)||0),0) || null
-      : getTireQByMonth(selBr,2024,i)
-    row[2025] = isAll
-      ? BRANCHES.reduce((s,b)=>s+(getTireQByMonth(b.id,2025,i)||0),0) || null
-      : getTireQByMonth(selBr,2025,i)
-    // 2026: from upload if available, else current month MTD
+    const bid = isAll ? 'ALL' : selBr
+    // EXCEL_MT_ALL (Total sheet) เป็น source of truth สำหรับทุกปี
+    row[2024] = getTireQByMonth(bid, 2024, i)
+    row[2025] = getTireQByMonth(bid, 2025, i)
+    // 2026: EXCEL_MT_ALL → EXCEL_MT per branch → histTireQ → MTD de
     if (isAll) {
-      const fromUpload = BRANCHES.reduce((s,b)=>s+(histTireQ[b.id]?.[2026]?.[i]||0),0)
-      row[2026] = fromUpload > 0 ? fromUpload : tire2026[i]
+      const uplAll = uploadedMtAll?.['2026']?.[String(i+1)]
+      const exAll  = EXCEL_MT_ALL['2026']?.[String(i+1)]
+      if (uplAll > 0) row[2026] = uplAll
+      else if (exAll > 0) row[2026] = exAll
+      else {
+        const fromUpload = BRANCHES.reduce((s,b)=>s+(histTireQ[b.id]?.[2026]?.[i]||0),0)
+        row[2026] = fromUpload > 0 ? fromUpload : tire2026[i]
+      }
     } else {
-      const fromUpload = histTireQ[selBr]?.[2026]?.[i]
-      row[2026] = fromUpload > 0 ? fromUpload : tire2026[i]
+      const exBr = EXCEL_MT[selBr]?.['2026']?.[String(i+1)]
+      if (exBr > 0) row[2026] = exBr
+      else {
+        const fromUpload = histTireQ[selBr]?.[2026]?.[i]
+        row[2026] = fromUpload > 0 ? fromUpload : tire2026[i]
+      }
     }
     return row
   })
@@ -2060,7 +2070,41 @@ function parseSalesData(wb) {
     })
   })
 
-  return { histOut, tireqOut, parsed }
+  // ── Parse Total sheet → monthly tire qty (source of truth) ──────────────
+  const totalMtAll = {}
+  const totalSn = wb.SheetNames.find(s => s === 'Total' || s.toLowerCase() === 'total')
+  if (totalSn) {
+    const tRows = XLSX.utils.sheet_to_json(wb.Sheets[totalSn], {header:1})
+    const MONTH_MAP = {January:1,February:2,March:3,April:4,May:5,June:6,
+                       July:7,August:8,September:9,October:10,November:11,December:12}
+    let tireTotalRow = null
+    for (let r = 0; r < tRows.length; r++) {
+      if (String(tRows[r]?.[0]||'').includes('Tire') &&
+          String(tRows[r]?.[1]||'').includes('Unit') &&
+          String(tRows[r]?.[2]||'').toLowerCase() === 'total') {
+        tireTotalRow = r; break
+      }
+    }
+    if (tireTotalRow !== null) {
+      const hdrYear  = tRows[0] || []
+      const hdrMonth = tRows[1] || []
+      for (let c = 4; c < hdrYear.length; c++) {
+        const yr  = hdrYear[c], mo = hdrMonth[c]
+        const val = tRows[tireTotalRow]?.[c]
+        if (!yr || !mo || mo === 'Total' || val == null || isNaN(Number(val))) continue
+        const sy = String(Math.round(yr)), sm = String(MONTH_MAP[mo]||0)
+        if (!sm || sm === '0') continue
+        if (!totalMtAll[sy]) totalMtAll[sy] = {}
+        totalMtAll[sy][sm] = Math.round(Number(val))
+      }
+    }
+  }
+  const uploadedHistSales = {}
+  Object.entries(histOut).forEach(([bid, years]) => {
+    uploadedHistSales[bid] = {}
+    Object.entries(years).forEach(([yr, arr]) => { uploadedHistSales[bid][yr] = arr })
+  })
+  return { histOut, tireqOut, parsed, totalMtAll, uploadedHistSales }
 }
 
 /* ── Parse ประวัติยอดขาย.xlsx → tire qty per branch per year ──────────
@@ -2253,7 +2297,7 @@ function Upload({ ctx }) {
 
       if (key === 'salesdata') {
 
-        const { histOut, tireqOut, parsed } = parseSalesData(wb)
+        const { histOut, tireqOut, parsed, totalMtAll, uploadedHistSales: uploadedHistSales_data } = parseSalesData(wb)
 
         // Update monthly sales history
         setHIST(prev => {
@@ -2277,10 +2321,36 @@ function Upload({ ctx }) {
           })
         }
 
+        // อัพเดท uploadedHistSales (monthly sales ฿000 per branch)
+        if (Object.keys(uploadedHistSales_data).length > 0) {
+          setUploadedHistSales(prev => {
+            const n = {...prev}
+            Object.entries(uploadedHistSales_data).forEach(([bid, years]) => {
+              n[bid] = {...(n[bid]||{}), ...years}
+            })
+            DB.set('cp_uhsal', n)
+            return n
+          })
+        }
+
+        // อัพเดท uploadedMtAll (Total sheet monthly tire qty)
+        if (Object.keys(totalMtAll).length > 0) {
+          setUploadedMtAll(prev => {
+            const n = {...prev}
+            Object.entries(totalMtAll).forEach(([yr, months]) => {
+              n[yr] = {...(n[yr]||{}), ...months}
+            })
+            DB.set('cp_umtal', n)
+            return n
+          })
+        }
+
         const summary = parsed.map(p =>
           `${p.bid}: ฿${p.sales}K | ยาง ${p.tire} เส้น`
         ).join('\n')
         console.log('Sales data parsed:\n' + summary)
+        const tireYrs = Object.keys(totalMtAll)
+        console.log('Total sheet tire:', tireYrs.length > 0 ? tireYrs.join(',') : 'not found')
       }
 
       /* ─────────────────────────────────────────────

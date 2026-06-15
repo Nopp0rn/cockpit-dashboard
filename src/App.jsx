@@ -1234,7 +1234,10 @@ function Monthly({ctx}) {
   }))
   const hasTireSalesData = tireSalesData.some(r => r[2024] || r[2025] || r[2026])
 
-        /* monthly content start */
+  return (
+    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
+      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+      <div style={{flex:1,minWidth:0}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:12}}>
           รายเดือน — {isAll?'รวมทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}
         </div>
@@ -1514,6 +1517,7 @@ function Tracker({ctx}) {
             </ResponsiveContainer>
           </div>
         )}
+      </div>
     </div>
   )
 }

@@ -232,7 +232,6 @@ const TABS = [
   {id:'monthly',  label:'📈 รายเดือน',  mLabel:'📈', mText:'รายเดือน'},
   {id:'tracker',  label:'🎯 Tracker',    mLabel:'🎯', mText:'Tracker'},
   {id:'asp',      label:'💰 ASP & SPD',  mLabel:'💰', mText:'ASP'},
-  {id:'plan',     label:'🤖 AI แผน',     mLabel:'🤖', mText:'AI'},
   {id:'entry',    label:'✏️ กรอกยอด',   mLabel:'✏️', mText:'กรอก'},
   {id:'upload',   label:'📁 Excel',      mLabel:'📁', mText:'Excel'},
   {id:'settings', label:'⚙️ ตั้งค่า',   mLabel:'⚙️', mText:'ตั้งค่า'},
@@ -253,11 +252,8 @@ export default function App() {
   const [TARGET, setTARGET] = useState(SEED_T)
   const [HIST, setHIST]     = useState(SEED_H)
   const [cfg, setCfg]       = useState(DEFAULT_CFG)
-  const [aiAna, setAiAna]   = useState({})
   const [fcst, setFcst]     = useState({})
   const [upStat, setUpStat] = useState({})
-  const [aiLoad, setAiLoad] = useState({})
-  const [fcstLoad, setFcstLoad] = useState(false)
   const [histDailySales, setHistDailySales] = useState({})  // { bid: {'YYYY-MM':{day:฿}} }
   const [histTireQ, setHistTireQ] = useState({})            // { bid: { 2024:[12], 2025:[12], 2026:[12] } }
   const [histDailyTire,  setHistDailyTire]  = useState({})  // { bid: {'YYYY-MM':{day:qty}} }
@@ -275,7 +271,7 @@ export default function App() {
 
     ;(async () => {
       try {
-        const keys = ['cp_de','cp_tgt','cp_hist','cp_cfg','cp_ai','cp_fcst','cp_up','cp_hdsl','cp_hdtr','cp_tireq']
+        const keys = ['cp_de','cp_tgt','cp_hist','cp_cfg','cp_fcst','cp_up','cp_hdsl','cp_hdtr','cp_tireq']
         const { data: rows, error } = await supabase
           .from('app_data').select('key,value').in('key', keys)
 
@@ -287,7 +283,6 @@ export default function App() {
             if (r.key==='cp_tgt')   setTARGET(r.value)
             if (r.key==='cp_hist')  setHIST(r.value)
             if (r.key==='cp_cfg')   setCfg(r.value)
-            if (r.key==='cp_ai')    setAiAna(r.value)
             if (r.key==='cp_fcst')  setFcst(r.value)
             if (r.key==='cp_up')    setUpStat(r.value)
             if (r.key==='cp_hdsl') setHistDailySales(r.value)
@@ -311,7 +306,6 @@ export default function App() {
       if (r.key==='cp_tgt'  && r.value!=null) setTARGET(r.value)
       if (r.key==='cp_hist' && r.value!=null) setHIST(r.value)
       if (r.key==='cp_cfg'  && r.value!=null) setCfg(r.value)
-      if (r.key==='cp_ai'   && r.value!=null) setAiAna(r.value)
       if (r.key==='cp_fcst' && r.value!=null) setFcst(r.value)
       if (r.key==='cp_up'   && r.value!=null) setUpStat(r.value)
       if (r.key==='cp_hdsl' && r.value!=null) setHistDailySales(r.value)
@@ -401,80 +395,10 @@ export default function App() {
   }
 
   /* ── AI helpers ── */
-  // ── AI helper: เรียกผ่าน /api/claude (Vercel proxy) แทน direct call (CORS blocked)
-  const callAI = async (body) => {
-    const res = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) throw new Error(`API error ${res.status}`)
-    return res.json()
-  }
 
-  const genPlan = async (bid) => {
-    setAiLoad(p=>({...p,[bid]:true}))
-    const br = bid==='ALL'?{name:'รวมทุกสาขา'}:BRANCHES.find(x=>x.id===bid)
-    const t=getT(bid), m=bid==='ALL'?getAllMTD():getMTD(bid), ts=bid==='ALL'?getAllTS():getTS(bid), h=getH(bid)
-    // m.battery, m.brake etc. are cumulative MTD totals from sumDays
-    try {
-      const d = await callAI({
-        model:'claude-sonnet-4-20250514', max_tokens:900,
-        messages:[{role:'user', content:
-          `คุณเป็นที่ปรึกษาการขาย Cockpit ร้านยางรถยนต์ ตอบเป็นภาษาไทยเท่านั้น ห้ามใช้ภาษาอื่นใด
-สาขา: ${br.name} | MTD ${TODAY_D} ${MONTH_TH} ${cfg.year} (${TODAY_D}/${TOTAL_D} วัน = ${(MTD_R*100).toFixed(0)}%)
 
-=== เป้าหมายรายสินค้า vs ยอดจริง ===
-ยอดขายรวม: เป้า ${N(Math.round(t.sales*MTD_R))}฿ | จริง ${N(ts)}฿ | ${P(ts,t.sales*MTD_R).toFixed(1)}%
-ยาง (เส้น): เป้า ${Math.round(t.tire*MTD_R)} | จริง ${m.tire} | ${P(m.tire,t.tire*MTD_R).toFixed(1)}%
-ยอดขายยาง (฿): เป้า ${N(Math.round(t.tireSalesTgt*MTD_R))} | จริง ${N(m.tireSales||0)} | ${P(m.tireSales||0,t.tireSalesTgt*MTD_R).toFixed(1)}%
-Battery (ลูก): เป้า ${Math.round(t.battery*MTD_R)} | จริง ${m.battery||0} | ${P(m.battery||0,t.battery*MTD_R).toFixed(1)}%
-Brake (ชิ้น): เป้า ${Math.round(t.brake*MTD_R)} | จริง ${m.brake||0} | ${P(m.brake||0,t.brake*MTD_R).toFixed(1)}%
-Shock Up (ชิ้น): เป้า ${Math.round(t.shock*MTD_R)} | จริง ${m.shockUp||0} | ${P(m.shockUp||0,t.shock*MTD_R).toFixed(1)}%
-MP (ชุด): เป้า ${Math.round(t.mp*MTD_R)} | จริง ${m.mp||0} | ${P(m.mp||0,t.mp*MTD_R).toFixed(1)}%
-Lubricant (ลิตร): เป้า ${Math.round(t.lube*MTD_R)} | จริง ${m.lubricant||0} | ${P(m.lubricant||0,t.lube*MTD_R).toFixed(1)}%
-Job Order (จำนวนลูกค้า/งาน ไม่ใช่สินค้า): เป้า ${Math.round(t.ccFormula*MTD_R)} ราย | จริง ${m.jobOrder||0} ราย | ${P(m.jobOrder||0,t.ccFormula*MTD_R).toFixed(1)}%
 
-=== ประวัติยอดขายรายเดือน (฿000) ===
-2025: ${(h[2025]||[]).join(',')}
-2026 YTD: ${(h[2026]||[]).slice(0,cfg.month).join(',')}
-
-วิเคราะห์เป็นภาษาไทยเท่านั้น:
-1. หมวดสินค้าที่ขาดเป้าหนักที่สุด (เรียงลำดับจากมากไปน้อย)
-2. สินค้าที่ควร push เพิ่มเพื่อชดเชยยอดที่ขาด พร้อมเหตุผล (Job Order = จำนวนลูกค้าเข้าร้าน)
-3. แนวทางปฏิบัติที่ทำได้ทันที 3-5 ข้อ (เป็นภาษาไทยเท่านั้น)`
-        }]
-      })
-      const n = {...aiAna, [bid]:d.content[0].text}
-      setAiAna(n); DB.set('cp_ai', n)
-    } catch(e) { console.error('genPlan error:', e) }
-    setAiLoad(p=>({...p,[bid]:false}))
-  }
-
-  const genFcst = async () => {
-    setFcstLoad(true)
-    const s = BRANCHES.map(b=>`${b.short}: PY25=${fM((MAY_SALES[b.id]?.[2025]||0)*MTD_R)} เป้า=${fM(getT(b.id).sales)}`).join('\n')
-    try {
-      const d = await callAI({
-        model:'claude-sonnet-4-20250514', max_tokens:1200,
-        messages:[{role:'user', content:
-          `คำนวณ Forecast ยอดขายรายวัน (฿) สำหรับวันที่ ${TODAY_D+1}-${TOTAL_D} (${DAYS_LEFT}วัน)
-ใช้ข้อมูล: run rate ปัจจุบัน, เป้าหมาย, ปีก่อน (PY25)
-ต้องมีความผันผวนตามธรรมชาติ (ไม่ใช่เส้นตรง) สูงต้นสัปดาห์/ปลายเดือน ต่ำกลางสัปดาห์
-
-${s}
-
-ตอบ JSON เท่านั้น (ไม่มี markdown):
-{"003":{"dailyForecast":[${DAYS_LEFT} ตัวเลข ฿],"comment":"สรุปสั้น"},"009":{...},...} ครบ 10 สาขา`
-        }]
-      })
-      const p = JSON.parse(d.content[0].text.replace(/```json|```/g,'').trim())
-      setFcst(p); DB.set('cp_fcst', p)
-    } catch(e) { console.error('genFcst error:', e) }
-    setFcstLoad(false)
-  }
-
-  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,aiAna,aiLoad,genPlan,fcst,fcstLoad,genFcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ}
+  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ}
 
   /* ── Loading screen ── */
   if (!ready) return (
@@ -551,7 +475,6 @@ ${s}
         {tab==='monthly'  && <Monthly ctx={ctx}/>}
         {tab==='tracker'  && <Tracker ctx={ctx}/>}
         {tab==='asp'      && <ASP ctx={ctx}/>}
-        {tab==='plan'     && <Plan ctx={ctx}/>}
         {tab==='entry'    && <Entry ctx={ctx}/>}
         {tab==='upload'   && <Upload ctx={ctx}/>}
         {tab==='settings' && <Settings ctx={ctx}/>}
@@ -1007,7 +930,7 @@ function Products({ctx}) {
 
 /* ════ DAILY ════ */
 function Daily({ctx}) {
-  const {selBr,setSelBr,de,getTS,getAllTS,getT,HIST,FIELDS,histDailySales,histDailyTire,fcst,fcstLoad,genFcst,
+  const {selBr,setSelBr,de,getTS,getAllTS,getT,HIST,FIELDS,histDailySales,histDailyTire,histTireQ,fcst,
          TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,cfg,MONTH_TH,mobile} = ctx
 
   // ── useState FIRST (React rules of hooks) ─────────────────────
@@ -1023,9 +946,16 @@ function Daily({ctx}) {
     ? BRANCHES.reduce((s,b)=>s+((HIST[b.id]?.[yr]?.[cfg.month-1]||0)*1000),0)
     : (HIST[selBr]?.[yr]?.[cfg.month-1]||0)*1000
 
+  // histTireQ from upload > SEED_TIREQ fallback
   const histTire = (yr) => isAll
-    ? BRANCHES.reduce((s,b)=>s+(SEED_TIREQ[b.id]?.[yr]?.[cfg.month-1]||0),0)
-    : (SEED_TIREQ[selBr]?.[yr]?.[cfg.month-1]||0)
+    ? BRANCHES.reduce((s,b)=>{
+        const v = histTireQ[b.id]?.[yr]?.[cfg.month-1]
+        return s + (v != null && v > 0 ? v : (SEED_TIREQ[b.id]?.[yr]?.[cfg.month-1]||0))
+      }, 0)
+    : (() => {
+        const v = histTireQ[selBr]?.[yr]?.[cfg.month-1]
+        return v != null && v > 0 ? v : (SEED_TIREQ[selBr]?.[yr]?.[cfg.month-1]||0)
+      })()
 
   const py25SalesMo = histSales(2025)
   const py24SalesMo = histSales(2024)
@@ -1092,9 +1022,12 @@ function Daily({ctx}) {
     if(!isAll&&d<=TODAY_D){
       const dr=de[selBr]?.[d]
       if(dr){const agg=Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]));const v=calcTS(agg);if(v>0)row[2026]=v}
+      // fallback: use histDailySales 2026 if available (uploaded data)
+      if(!row[2026]){const hv=getRealSales(selBr,cfg.year,cfg.month,d);if(hv&&hv>0)row[2026]=hv}
     } else if(isAll&&d<=TODAY_D){
       const tot=BRANCHES.reduce((s,b)=>{const dr=de[b.id]?.[d];if(!dr)return s;return s+calcTS(Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0])))},0)
       if(tot>0)row[2026]=tot
+      if(!row[2026]){const hv=getRealSales('ALL',cfg.year,cfg.month,d);if(hv&&hv>0)row[2026]=hv}
     }
     if(d>TODAY_D) row.forecast=fArr[i-TODAY_D]||Math.round(runRateAdj*wave(d,0.8))
     return row
@@ -1108,9 +1041,11 @@ function Daily({ctx}) {
     if(r25!=null&&r25>0) row[2025]=r25; else if(avg25T>0) row[2025]=Math.round(avg25T*wave(d,1.4))
     if(!isAll&&d<=TODAY_D){
       const dr=de[selBr]?.[d]; const v=Number(dr?.tire)||0; if(v>0)row[2026]=v
+      if(!row[2026]){const hv=getRealTire(selBr,cfg.year,cfg.month,d);if(hv&&hv>0)row[2026]=hv}
     } else if(isAll&&d<=TODAY_D){
       const tot=BRANCHES.reduce((s,b)=>s+(Number(de[b.id]?.[d]?.tire)||0),0)
       if(tot>0)row[2026]=tot
+      if(!row[2026]){const hv=getRealTire('ALL',cfg.year,cfg.month,d);if(hv&&hv>0)row[2026]=hv}
     }
     if(d>TODAY_D){
       const fr=fArr[i-TODAY_D]
@@ -1138,9 +1073,7 @@ function Daily({ctx}) {
           <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b'}}>
             รายวัน — {isAll?'รวม':BRANCHES.find(x=>x.id===selBr)?.short} ({MONTH_TH} {cfg.year})
           </div>
-          <button onClick={genFcst} disabled={fcstLoad} style={{padding:'8px 16px',background:fcstLoad?'#1e2538':'#7c3aed',color:'#fff',border:'none',borderRadius:6,cursor:fcstLoad?'wait':'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12}}>
-            {fcstLoad?'⏳':'🤖 AI Forecast'}
-          </button>
+
         </div>
 
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
@@ -1220,8 +1153,26 @@ function Daily({ctx}) {
 
 /* ════ MONTHLY ════ */
 function Monthly({ctx}) {
-  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS,histTireQ} = ctx
+  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS,histTireQ,histDailySales} = ctx
   const isAll=selBr==='ALL', h=getH(selBr)
+
+  // Monthly tire sales (฿000) from histDailySales if available
+  // Sum all days in each month from histDailySales → monthly total
+  const getMonthlyTireSales = (bid, yr, monthIdx) => {
+    const moKey = `${yr}-${String(monthIdx+1).padStart(2,'0')}`
+    if (bid === 'ALL') {
+      let sum = 0
+      BRANCHES.forEach(b => {
+        const days = histDailySales[b.id]?.[moKey] || {}
+        Object.values(days).forEach(v => { sum += (v || 0) })
+      })
+      return sum > 0 ? Math.round(sum / 1000) : null
+    }
+    const days = histDailySales[bid]?.[moKey] || {}
+    const sum = Object.values(days).reduce((s, v) => s + (v || 0), 0)
+    return sum > 0 ? Math.round(sum / 1000) : null
+  }
+
   const [showSales, setShowSales] = useState({2023:false,2024:true,2025:true,2026:true})
   const [showTire,  setShowTire]  = useState({2024:true,2025:true,2026:true})
   const toggleS = yr => setShowSales(p=>({...p,[yr]:!p[yr]}))
@@ -1274,10 +1225,16 @@ function Monthly({ctx}) {
     return row
   })
 
-  return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
-      <div style={{flex:1,minWidth:0}}>
+  // Tire sales (฿000) per month — from histDailySales upload
+  const tireSalesData = MONTHS_TH.map((mn,i) => ({
+    month: mn,
+    2024: getMonthlyTireSales(isAll?'ALL':selBr, 2024, i),
+    2025: getMonthlyTireSales(isAll?'ALL':selBr, 2025, i),
+    2026: getMonthlyTireSales(isAll?'ALL':selBr, 2026, i),
+  }))
+  const hasTireSalesData = tireSalesData.some(r => r[2024] || r[2025] || r[2026])
+
+        /* monthly content start */
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:12}}>
           รายเดือน — {isAll?'รวมทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}
         </div>
@@ -1532,6 +1489,31 @@ function Tracker({ctx}) {
           </table>
         </div>
       )}
+
+        {/* ══ TIRE SALES MONTHLY (฿000) — from histDailySales upload ══ */}
+        {hasTireSalesData && (
+          <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
+              <div>
+                <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#f59e0b'}}>💰 ยอดขายยาง รายเดือน (฿000)</div>
+                <div style={{fontSize:9,color:'#6b7280'}}>จาก ยอดขายยางรายวัน.xlsx ที่อัพโหลด (sum ทุกวัน)</div>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={mobile?170:200}>
+              <LineChart data={tireSalesData} margin={{top:4,right:4,left:0,bottom:0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+                <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
+                <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(1)+'M':''}/>
+                <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
+                  formatter={v=>[v!=null?N(v*1000)+'฿':'—','']}/>
+                <Legend wrapperStyle={{fontSize:9}}/>
+                {tireSalesData.some(r=>r[2024]) && <Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} connectNulls={false}/>}
+                {tireSalesData.some(r=>r[2025]) && <Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={{r:2}} connectNulls={false}/>}
+                {tireSalesData.some(r=>r[2026]) && <Line type="monotone" dataKey={2026} stroke={YRCLR[2026]} strokeWidth={3} dot={{r:4,fill:YRCLR[2026]}} strokeDasharray="6 3" connectNulls={false}/>}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
     </div>
   )
 }
@@ -1593,30 +1575,6 @@ function ASP({ctx}) {
             </table>
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-/* ════ PLAN ════ */
-function Plan({ctx}) {
-  const {selBr,setSelBr,getMTD,getAllMTD,getTS,getAllTS,getT,aiAna,aiLoad,genPlan,MTD_R,mobile} = ctx
-  const isAll=selBr==='ALL',t=getT(selBr),m=isAll?getAllMTD():getMTD(selBr),ts=isAll?getAllTS():getTS(selBr)
-  return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
-      <div style={{flex:1}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
-          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b'}}>🤖 AI แผนการขาย — {isAll?'รวม':BRANCHES.find(x=>x.id===selBr)?.short}</div>
-          <button onClick={()=>genPlan(selBr)} disabled={aiLoad[selBr]} style={{padding:'9px 18px',background:aiLoad[selBr]?'#1e2538':'#7c3aed',color:'#fff',border:'none',borderRadius:6,cursor:aiLoad[selBr]?'wait':'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,width:mobile?'100%':'auto'}}>{aiLoad[selBr]?'⏳ AI กำลังวิเคราะห์...':'🔍 วิเคราะห์จุดอ่อน'}</button>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-          <Card label="ยอด MTD" value={fM(ts)} sub={`เป้า ${fM(Math.round(t.sales*MTD_R))}`}/>
-          <Card label="% เป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={P(ts,t.sales*MTD_R)>=100?'#22c55e':P(ts,t.sales*MTD_R)>=90?'#f59e0b':'#ef4444'}/>
-        </div>
-        {aiAna[selBr]
-          ? <div style={{background:'#0d1928',border:'1px solid #7c3aed',borderRadius:10,padding:mobile?14:20}}><div style={{fontFamily:'Barlow Condensed',fontSize:11,color:'#a78bfa',marginBottom:10}}>🤖 AI ANALYSIS</div><div style={{fontSize:mobile?12:13,lineHeight:1.8,color:'#d1d5db',whiteSpace:'pre-wrap'}}>{aiAna[selBr]}</div></div>
-          : <div style={{background:'#161b25',border:'2px dashed #2d3548',borderRadius:10,padding:40,textAlign:'center'}}><div style={{fontSize:40,marginBottom:8}}>🤖</div><div style={{color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:14}}>กดปุ่มด้านบนเพื่อให้ AI วิเคราะห์</div></div>}
       </div>
     </div>
   )

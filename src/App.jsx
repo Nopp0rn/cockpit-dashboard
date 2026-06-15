@@ -1010,7 +1010,17 @@ function Daily({ctx}) {
   const mtdTire = isAll
     ? BRANCHES.reduce((s,b)=>s+Object.values(de[b.id]||{}).reduce((a,r)=>a+(Number(r.tire)||0),0),0)
     : Object.values(de[selBr]||{}).reduce((s,r)=>s+(Number(r.tire)||0),0)
-  const avgTire = TODAY_D>0 ? mtdTire/TODAY_D : 0
+  // avgTire: EXCEL_DT 2026 real data > de entry fallback
+  const _mtdTireExcel = (()=>{
+    const key=`${cfg.year}-${String(cfg.month).padStart(2,'0')}`
+    if(isAll) return BRANCHES.reduce((s,b)=>{
+      const days=EXCEL_DT[b.id]?.[key]||{}
+      return s+Object.entries(days).filter(([d])=>Number(d)<=TODAY_D).reduce((a,[,v])=>a+v,0)
+    },0)
+    const days=EXCEL_DT[selBr]?.[key]||{}
+    return Object.entries(days).filter(([d])=>Number(d)<=TODAY_D).reduce((a,[,v])=>a+v,0)
+  })()
+  const avgTire = TODAY_D>0 ? (_mtdTireExcel>0?_mtdTireExcel:mtdTire)/TODAY_D : 0
   const avg25T   = TOTAL_D>0 ? py25TireMo/TOTAL_D : 0
   const avg24T   = TOTAL_D>0 ? py24TireMo/TOTAL_D : 0
   const tgtTireD = t.tire/TOTAL_D

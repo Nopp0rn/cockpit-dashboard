@@ -1155,24 +1155,6 @@ function Daily({ctx}) {
 function Monthly({ctx}) {
   const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS,histTireQ,histDailySales} = ctx
   const isAll=selBr==='ALL', h=getH(selBr)
-
-  // Monthly tire sales (฿000) from histDailySales if available
-  // Sum all days in each month from histDailySales → monthly total
-  const getMonthlyTireSales = (bid, yr, monthIdx) => {
-    const moKey = `${yr}-${String(monthIdx+1).padStart(2,'0')}`
-    if (bid === 'ALL') {
-      let sum = 0
-      BRANCHES.forEach(b => {
-        const days = histDailySales[b.id]?.[moKey] || {}
-        Object.values(days).forEach(v => { sum += (v || 0) })
-      })
-      return sum > 0 ? Math.round(sum / 1000) : null
-    }
-    const days = histDailySales[bid]?.[moKey] || {}
-    const sum = Object.values(days).reduce((s, v) => s + (v || 0), 0)
-    return sum > 0 ? Math.round(sum / 1000) : null
-  }
-
   const [showSales, setShowSales] = useState({2023:false,2024:true,2025:true,2026:true})
   const [showTire,  setShowTire]  = useState({2024:true,2025:true,2026:true})
   const toggleS = yr => setShowSales(p=>({...p,[yr]:!p[yr]}))
@@ -1225,7 +1207,22 @@ function Monthly({ctx}) {
     return row
   })
 
-  // Tire sales (฿000) per month — from histDailySales upload
+
+  // Monthly tire sales (฿) from histDailySales upload
+  const getMonthlyTireSales = (bid, yr, monthIdx) => {
+    const moKey = `${yr}-${String(monthIdx+1).padStart(2,'0')}`
+    if (bid === 'ALL') {
+      let sum = 0
+      BRANCHES.forEach(b => {
+        const days = histDailySales[b.id]?.[moKey] || {}
+        Object.values(days).forEach(v => { sum += (v || 0) })
+      })
+      return sum > 0 ? Math.round(sum / 1000) : null
+    }
+    const days = histDailySales[bid]?.[moKey] || {}
+    const sum = Object.values(days).reduce((s, v) => s + (v || 0), 0)
+    return sum > 0 ? Math.round(sum / 1000) : null
+  }
   const tireSalesData = MONTHS_TH.map((mn,i) => ({
     month: mn,
     2024: getMonthlyTireSales(isAll?'ALL':selBr, 2024, i),
@@ -1298,12 +1295,33 @@ function Monthly({ctx}) {
             </LineChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Tire Sales Monthly chart - only when upload data available */}
+        {hasTireSalesData && (
+          <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#f59e0b',marginBottom:4}}>
+              💰 ยอดขายยาง รายเดือน (฿000)
+            </div>
+            <div style={{fontSize:9,color:'#6b7280',marginBottom:8}}>จาก ยอดขายยางรายวัน.xlsx ที่อัพโหลด (sum ทุกวัน)</div>
+            <ResponsiveContainer width="100%" height={mobile?170:200}>
+              <LineChart data={tireSalesData} margin={{top:4,right:4,left:0,bottom:0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
+                <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
+                <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(1)+'M':'0'}/>
+                <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}/>
+                <Legend wrapperStyle={{fontSize:9}}/>
+                {tireSalesData.some(r=>r[2024]) && <Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} connectNulls={false}/>}
+                {tireSalesData.some(r=>r[2025]) && <Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={{r:2}} connectNulls={false}/>}
+                {tireSalesData.some(r=>r[2026]) && <Line type="monotone" dataKey={2026} stroke={YRCLR[2026]} strokeWidth={3} dot={{r:4,fill:YRCLR[2026]}} strokeDasharray={'6 3'} connectNulls={false}/>}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-/* ════ TRACKER ════ */
 function Tracker({ctx}) {
   const {getMTD,getTS,getT,fcst,de,MTD_R,TODAY_D,TOTAL_D,DAYS_LEFT,MONTH_TH,cfg,mobile,FIELDS} = ctx
 
@@ -1492,32 +1510,6 @@ function Tracker({ctx}) {
           </table>
         </div>
       )}
-
-        {/* ══ TIRE SALES MONTHLY (฿000) — from histDailySales upload ══ */}
-        {hasTireSalesData && (
-          <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
-              <div>
-                <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#f59e0b'}}>💰 ยอดขายยาง รายเดือน (฿000)</div>
-                <div style={{fontSize:9,color:'#6b7280'}}>จาก ยอดขายยางรายวัน.xlsx ที่อัพโหลด (sum ทุกวัน)</div>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={mobile?170:200}>
-              <LineChart data={tireSalesData} margin={{top:4,right:4,left:0,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
-                <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
-                <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(1)+'M':''}/>
-                <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}
-                  formatter={v=>[v!=null?N(v*1000)+'฿':'—','']}/>
-                <Legend wrapperStyle={{fontSize:9}}/>
-                {tireSalesData.some(r=>r[2024]) && <Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} connectNulls={false}/>}
-                {tireSalesData.some(r=>r[2025]) && <Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={{r:2}} connectNulls={false}/>}
-                {tireSalesData.some(r=>r[2026]) && <Line type="monotone" dataKey={2026} stroke={YRCLR[2026]} strokeWidth={3} dot={{r:4,fill:YRCLR[2026]}} strokeDasharray="6 3" connectNulls={false}/>}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
     </div>
   )
 }

@@ -1034,22 +1034,25 @@ function Daily({ctx}) {
   const modelAvgS=Object.values(dowAvgS).length?Object.values(dowAvgS).reduce((a,v)=>a+v,0)/Object.values(dowAvgS).length:tgtSalesD
   const modelAvgT=Object.values(dowAvgT).length?Object.values(dowAvgT).reduce((a,v)=>a+v,0)/Object.values(dowAvgT).length:tgtTireD
 
-  // known actual arrays (day 1..TODAY_D) — จาก de entry หรือ EXCEL_DS/DT
-  const knownS=Array.from({length:TODAY_D},(_,i)=>{
+  // known actual arrays (day 1..TOTAL_D) — วันที่ <= TODAY_D มีข้อมูลจริง, วันที่เกิน = null
+  // ต้องขนาด TOTAL_D เพื่อให้ MA7 window rolling ถูกต้องตลอดเดือน
+  const knownS=Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1
+    if(d>TODAY_D) return null
     if(!isAll){const dr=de[selBr]?.[d];if(dr){const v=calcTS(Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0])));if(v>0)return v}}
     else{const tot=BRANCHES.reduce((s,b)=>{const dr=de[b.id]?.[d];return s+(dr?calcTS(Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]))):0)},0);if(tot>0)return tot}
     const hv=getRealSales(isAll?'ALL':selBr,cfg.year,cfg.month,d);return hv&&hv>0?hv:null
   })
-  const knownT=Array.from({length:TODAY_D},(_,i)=>{
+  const knownT=Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1
+    if(d>TODAY_D) return null
     if(!isAll){const dr=de[selBr]?.[d];const v=Number(dr?.tire)||0;if(v>0)return v}
     else{const tot=BRANCHES.reduce((s,b)=>s+(Number(de[b.id]?.[d]?.tire)||0),0);if(tot>0)return tot}
     const hv=getRealTire(isAll?'ALL':selBr,cfg.year,cfg.month,d);return hv&&hv>0?hv:null
   })
 
-  // MA7: mean of last 7 known values before day d
-  function ma7(arr,d){const w=arr.slice(Math.max(0,d-8),d-1).filter(v=>v!=null);return w.length>0?w.reduce((a,v)=>a+v,0)/w.length:null}
+  // MA7: mean ของ 7 ค่าล่าสุดที่ไม่ null จากทุกวันก่อน d → rolling ถูกต้องตลอดเดือน
+  function ma7(arr,d){const all=arr.slice(0,d-1).filter(v=>v!=null);const w=all.slice(-7);return w.length>0?w.reduce((a,v)=>a+v,0)/w.length:null}
   // DOW ratio
   function dowRatioS(d){const b=dowAvgS[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgS;return modelAvgS>0?b/modelAvgS:1}
   function dowRatioT(d){const b=dowAvgT[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgT;return modelAvgT>0?b/modelAvgT:1}

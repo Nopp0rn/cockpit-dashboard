@@ -391,11 +391,22 @@ export default function App() {
   }
 
   const getH26 = (bid) => {
-    const base = [...((bid==='ALL'
-      ? Array(12).fill(null).map((_,i)=>BRANCHES.reduce((s,b)=>{const v=HIST[b.id]?.[2026]?.[i]; return s+(v!=null?v:0)},0))
-      : HIST[bid]?.[2026])||Array(12).fill(null))]
+    // EXCEL_MS (ประวัติยอดขาย.xlsx) ก่อน HIST (Supabase) สำหรับทุกเดือนของปี 2026
+    const getMonthSales26 = (b, i) => {
+      const ex = EXCEL_MS[b]?.['2026']?.[String(i+1)]
+      if (ex > 0) return Math.round(ex/1000)
+      const v = HIST[b]?.[2026]?.[i]
+      return (v != null && v > 0) ? v : null
+    }
+    const base = bid==='ALL'
+      ? Array(12).fill(0).map((_,i)=>{
+          const vals=BRANCHES.map(b=>getMonthSales26(b.id,i)).filter(v=>v!=null)
+          return vals.length>0 ? vals.reduce((a,v)=>a+v,0) : null
+        })
+      : Array(12).fill(0).map((_,i)=>getMonthSales26(bid,i))
     const mv = bid==='ALL'?getAllTS():getTS(bid)
-    if (mv>0) base[cfg.month-1] = Math.round(mv/1000)
+    // ใช้ MTD (de entry) override เฉพาะเดือนปัจจุบันเมื่อมียอดกรอกมือมากกว่า Excel
+    if (mv>0 && base[cfg.month-1]==null) base[cfg.month-1] = Math.round(mv/1000)
     return base
   }
   const getH = (bid) => {

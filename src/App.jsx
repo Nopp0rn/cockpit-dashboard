@@ -410,13 +410,14 @@ export default function App() {
     return base
   }
   const getH = (bid) => {
-    // ยอดขาย ฿ รายเดือน: HIST (จาก upload ประวัติยอดขาย.xlsx) > EXCEL_MS (hardcode fallback)
+    // ยอดขาย ฿ รายเดือน: EXCEL_MS (ประวัติยอดขาย.xlsx ฝัง) > HIST (Supabase, อาจเป็นค่าเก่า)
     // Data_sale_by_Store.xlsx ให้เฉพาะยาง (เส้น) เท่านั้น
     const getSales = (b, yr, i) => {
-      const v = HIST[b]?.[yr]?.[i]
-      if (v != null && v > 0) return v
+      // EXCEL_MS (จาก ประวัติยอดขาย.xlsx ล่าสุด) มาก่อน HIST (Supabase ค่าเก่า/อาจผิดจากการอัพโหลดครั้งก่อน)
       const ex = EXCEL_MS[b]?.[String(yr)]?.[String(i+1)]
       if (ex > 0) return Math.round(ex/1000)
+      const v = HIST[b]?.[yr]?.[i]
+      if (v != null && v > 0) return v
       return null  // ไม่มีข้อมูลเดือนนี้ — แสดงเป็นช่องว่างใน chart แทน 0
     }
     if (bid==='ALL') {

@@ -5,6 +5,7 @@ import {
   BarChart, Bar, ComposedChart, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from 'recharts'
+import MorningBrief from './MorningBrief.jsx'
 
 // Google Fonts loaded via index.html
 
@@ -237,6 +238,7 @@ function BranchSelect({sel, onSel, showAll=true, mobile}) {
 ════════════════════════════════════════════════════════ */
 const TABS = [
   {id:'overview', label:'🏠 ภาพรวม',   mLabel:'🏠', mText:'หน้าหลัก'},
+  {id:'morning',  label:'☀️ Morning',   mLabel:'☀️', mText:'Morning'},
   {id:'mtd',      label:'📊 MTD',        mLabel:'📊', mText:'MTD'},
   {id:'products', label:'🛍 สินค้า',    mLabel:'🛍', mText:'สินค้า'},
   {id:'daily',    label:'📅 รายวัน',    mLabel:'📅', mText:'รายวัน'},
@@ -443,7 +445,7 @@ export default function App() {
 
 
 
-  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll}
+  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR}
 
   /* ── Loading screen ── */
   if (!ready) return (
@@ -457,6 +459,11 @@ export default function App() {
       <div style={{fontSize:11,color:'#4b5563'}}>กำลังเชื่อมต่อ Supabase...</div>
     </div>
   )
+
+  /* ── Morning Brief — full-screen takeover (its own back button) ── */
+  if (tab === 'morning') {
+    return <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr} onClose={() => setTab('overview')}/>
+  }
 
   /* ── Connection error banner (shown inside app) ── */
   const ConnBanner = connErr ? (

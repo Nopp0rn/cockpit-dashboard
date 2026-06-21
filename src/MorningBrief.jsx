@@ -229,6 +229,8 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
   const { BRANCHES, mobile } = ctx
   const bid = selBr || '143'
   const onPick = (id) => { if (setSelBr) setSelBr(id) }
+  const [page, setPage] = useState(0)
+  const PAGES = ['สรุป', 'สินค้า', 'วิเคราะห์']
 
   const b = useMemo(() => buildBriefData(bid, ctx), [bid, ctx])
 
@@ -281,9 +283,29 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
           </select>
         </div>
 
+        {/* page switcher — แบ่ง 3 หน้าย่อยให้แต่ละหน้าสั้นพอไม่ต้องเลื่อน */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#0D1117', padding: '6px 8px' }}>
+          <button onClick={() => setPage(p => (p + 2) % 3)} aria-label="ก่อนหน้า" style={{
+            background: 'transparent', color: CI.yellow, border: 'none', fontSize: 18, fontWeight: 900,
+            padding: '2px 8px', cursor: 'pointer', lineHeight: 1 }}>‹</button>
+          <div style={{ display: 'flex', flex: 1, gap: 4 }}>
+            {PAGES.map((label, i) => (
+              <button key={i} onClick={() => setPage(i)} style={{
+                flex: 1, padding: '6px 4px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                fontFamily: F_DISP, fontWeight: 700, fontSize: 12,
+                background: page === i ? CI.yellow : '#1e2230', color: page === i ? CI.black : '#9aa',
+              }}>{i + 1}. {label}</button>
+            ))}
+          </div>
+          <button onClick={() => setPage(p => (p + 1) % 3)} aria-label="หน้าถัดไป" style={{
+            background: 'transparent', color: CI.yellow, border: 'none', fontSize: 18, fontWeight: 900,
+            padding: '2px 8px', cursor: 'pointer', lineHeight: 1 }}>›</button>
+        </div>
+
         <div style={{ padding: mobile ? 8 : 12 }}>
-          {/* TOP 3 CARDS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
+          {/* PAGE 1 — สรุป: วันนี้ / MTD / เป้ารวมเดือน */}
+          {page === 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 8 }}>
             <div style={cardBox}>
               <CardTitle bg={CI.red}>📅 วันนี้ ({b.monthDay})</CardTitle>
               <Metric label="ยอดขายวันนี้" big={kFmt(b.today.sales)} sub={`เป้าวัน ${kFmt(b.today.salesTarget)}`} p={todaySP} color={CI.red}/>
@@ -305,8 +327,10 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
               <RingMetric label="ยางเป้ารวม" big={`${num(b.month.tiresTarget)} เส้น`} sub={`(MTD ${num(b.mtd.tires)} เส้น)`} p={monTP} ringFg={CI.yellow}/>
             </div>
           </div>
+          )}
 
-          {/* PRODUCTS MTD */}
+          {/* PAGE 2 — สินค้า MTD */}
+          {page === 1 && (
           <div style={{ background: CI.black, borderRadius: 12, padding: 10, marginTop: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
               <span style={{ color: CI.white, fontFamily: F_DISP, fontWeight: 700, fontSize: 15 }}>
@@ -360,9 +384,11 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
               </div>
             </div>
           </div>
+          )}
 
-          {/* BOTTOM 4 PANELS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 7, marginTop: 10 }}>
+          {/* PAGE 3 — วิเคราะห์: จุดอ่อน/จุดแข็ง/แนวทาง/KPI */}
+          {page === 2 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 7 }}>
             <Panel title="จุดอ่อนที่ต้องเร่ง" accent={CI.red}>
               {weak.length === 0 && <li style={{ ...liS, color: '#888' }}>ไม่มีจุดอ่อน 🎉</li>}
               {weak.map(w => (
@@ -392,6 +418,7 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
               <KpiRow label="SPD (บาท/Job)" val={b.kpi.spd > 0 ? '฿' + num(b.kpi.spd) : '—'} target={b.kpi.spdTarget} ok={b.kpi.spd >= b.kpi.spdTarget}/>
             </Panel>
           </div>
+          )}
         </div>
 
         {/* FOOTER + mascots */}

@@ -255,54 +255,54 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
 
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'stretch', background: CI.yellow, flexWrap: 'wrap' }}>
-          <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, lineHeight: .9, letterSpacing: -1 }}>COCKPIT</div>
-            <div style={{ fontSize: 8.5, fontWeight: 600, opacity: .75 }}>ศูนย์บริการรถยนต์ครบวงจร</div>
+          <div style={{ padding: '6px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 21, lineHeight: .9, letterSpacing: -1 }}>COCKPIT</div>
+            <div style={{ fontSize: 8, fontWeight: 600, opacity: .75 }}>ศูนย์บริการรถยนต์ครบวงจร</div>
           </div>
-          <div style={{ flex: 1, minWidth: 160, position: 'relative', background: CI.black,
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px 4px' }}>
-            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 20, color: CI.white, letterSpacing: 1 }}>MORNING BRIEF ☀</div>
-            <div style={{ background: CI.white, color: CI.black, fontWeight: 700, fontSize: 11,
-                          padding: '1px 12px', borderRadius: 4, marginTop: 2 }}>{b.dateLabel}</div>
+          <div style={{ flex: 1, minWidth: 150, position: 'relative', background: CI.black,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '6px 4px' }}>
+            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 17, color: CI.white, letterSpacing: 1 }}>MORNING BRIEF ☀</div>
+            <div style={{ background: CI.white, color: CI.black, fontWeight: 700, fontSize: 10,
+                          padding: '1px 10px', borderRadius: 4, marginTop: 2 }}>{b.dateLabel}</div>
           </div>
-          <div style={{ background: CI.yellow, padding: '8px 14px', textAlign: 'right',
+          <div style={{ background: CI.yellow, padding: '6px 12px', textAlign: 'right',
                         display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 26, lineHeight: .85 }}>{b.branch.id}</div>
-            <div style={{ fontWeight: 700, fontSize: 11 }}>{b.branch.name}</div>
+            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 22, lineHeight: .85 }}>{b.branch.id}</div>
+            <div style={{ fontWeight: 700, fontSize: 10 }}>{b.branch.name}</div>
           </div>
         </div>
 
         {/* branch selector — รวม "🌐 รวมทุกสาขา" เหมือนแท็บอื่นในแอป */}
-        <div style={{ background: CI.black, padding: '6px 10px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ color: CI.yellow, fontSize: 11, fontWeight: 700 }}>เลือกสาขา</span>
+        <div style={{ background: CI.black, padding: '5px 10px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ color: CI.yellow, fontSize: 10.5, fontWeight: 700 }}>เลือกสาขา</span>
           <select value={bid} onChange={e => onPick(e.target.value)}
                   style={{ background: '#0D1117', color: CI.white, border: `1px solid ${CI.yellow}`,
-                           borderRadius: 6, padding: '3px 8px', fontWeight: 700, fontSize: 13, maxWidth: '100%' }}>
+                           borderRadius: 6, padding: '2px 8px', fontWeight: 700, fontSize: 12, maxWidth: '100%' }}>
             <option value="ALL">🌐 รวมทุกสาขา</option>
             {BRANCHES.map(br => <option key={br.id} value={br.id}>{br.id} — {br.short}</option>)}
           </select>
         </div>
 
         {/* page switcher — แบ่ง 3 หน้าย่อยให้แต่ละหน้าสั้นพอไม่ต้องเลื่อน */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#0D1117', padding: '6px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#0D1117', padding: '5px 8px' }}>
           <button onClick={() => setPage(p => (p + 2) % 3)} aria-label="ก่อนหน้า" style={{
-            background: 'transparent', color: CI.yellow, border: 'none', fontSize: 18, fontWeight: 900,
-            padding: '2px 8px', cursor: 'pointer', lineHeight: 1 }}>‹</button>
+            background: 'transparent', color: CI.yellow, border: 'none', fontSize: 16, fontWeight: 900,
+            padding: '2px 7px', cursor: 'pointer', lineHeight: 1 }}>‹</button>
           <div style={{ display: 'flex', flex: 1, gap: 4 }}>
             {PAGES.map((label, i) => (
               <button key={i} onClick={() => setPage(i)} style={{
-                flex: 1, padding: '6px 4px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                fontFamily: F_DISP, fontWeight: 700, fontSize: 12,
+                flex: 1, padding: '5px 4px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                fontFamily: F_DISP, fontWeight: 700, fontSize: 11,
                 background: page === i ? CI.yellow : '#1e2230', color: page === i ? CI.black : '#9aa',
               }}>{i + 1}. {label}</button>
             ))}
           </div>
           <button onClick={() => setPage(p => (p + 1) % 3)} aria-label="หน้าถัดไป" style={{
-            background: 'transparent', color: CI.yellow, border: 'none', fontSize: 18, fontWeight: 900,
-            padding: '2px 8px', cursor: 'pointer', lineHeight: 1 }}>›</button>
+            background: 'transparent', color: CI.yellow, border: 'none', fontSize: 16, fontWeight: 900,
+            padding: '2px 7px', cursor: 'pointer', lineHeight: 1 }}>›</button>
         </div>
 
-        <div style={{ padding: mobile ? 8 : 12 }}>
+        <div style={{ padding: mobile ? 6 : 12 }}>
           {/* PAGE 1 — สรุป: วันนี้ / MTD / เป้ารวมเดือน */}
           {page === 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 8 }}>
@@ -331,57 +331,61 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
 
           {/* PAGE 2 — สินค้า MTD */}
           {page === 1 && (
-          <div style={{ background: CI.black, borderRadius: 12, padding: 10, marginTop: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
-              <span style={{ color: CI.white, fontFamily: F_DISP, fontWeight: 700, fontSize: 15 }}>
+          <div style={{ background: CI.black, borderRadius: 12, padding: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 4 }}>
+              <span style={{ color: CI.white, fontFamily: F_DISP, fontWeight: 700, fontSize: 13 }}>
                 สินค้า MTD (1–{b.mtd.day})
               </span>
-              <span style={{ display: 'flex', gap: 9, fontSize: 10, color: '#cfd2d6' }}>
+              <span style={{ display: 'flex', gap: 7, fontSize: 9, color: '#cfd2d6' }}>
                 <Legend c={ST.over}>เกินเป้า</Legend><Legend c={ST.near}>ใกล้เป้า</Legend><Legend c={ST.push}>ต้องเร่ง</Legend>
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 6 }}>
-              {b.products.map(p => {
+            <div style={{ background: CI.paper, borderRadius: 8, overflow: 'hidden' }}>
+              {b.products.map((p, i) => {
                 const has = p.target != null && p.target > 0
                 const pp = has ? pct(p.actual, p.target) : null
                 return (
-                  <div key={p.key} style={{ background: CI.paper, borderRadius: 8, padding: '7px 8px' }}>
-                    <div style={{ fontWeight: 700, fontSize: 11.5 }}>{p.name}</div>
-                    <div style={{ fontFamily: F_NUM, fontSize: 12.5, marginTop: 1 }}>
-                      {p.key === 'service' ? kFmt(p.actual) : num(p.actual)}{has ? ` / ${num(p.target)}` : ''} {p.unit}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: has ? dotColor(pp) : '#bbb' }}/>
-                      <span style={{ fontWeight: 700, fontSize: 11, color: has ? dotColor(pp) : '#888' }}>
+                  <div key={p.key} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+                    padding: '4px 8px', borderBottom: i < b.products.length - 1 ? `1px solid ${CI.line}` : 'none',
+                  }}>
+                    <span style={{ fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{p.name}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <span style={{ fontFamily: F_NUM, fontSize: 11 }}>
+                        {p.key === 'service' ? kFmt(p.actual) : num(p.actual)}{has ? ` / ${num(p.target)}` : ''} {p.unit}
+                      </span>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: has ? dotColor(pp) : '#bbb', flexShrink: 0 }}/>
+                      <span style={{ fontWeight: 700, fontSize: 10.5, color: has ? dotColor(pp) : '#888', minWidth: 36, textAlign: 'right' }}>
                         {has ? pp.toFixed(1) + '%' : '—'}
                       </span>
-                    </div>
+                    </span>
                   </div>
                 )
               })}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 7, marginTop: 7 }}>
-              <div style={{ background: CI.paper, borderRadius: 8, padding: '8px 10px' }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: '#555' }}>ยอดขายยาง MTD</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 18 }}>
-                    {kFmt(b.tireRev.actual)} / {kFmt(b.tireRev.target)} ฿
-                  </span>
-                  <span style={{ fontWeight: 800, color: dotColor(tireRevP) }}>{tireRevP.toFixed(1)}%</span>
-                </div>
-              </div>
-              <div style={{ background: '#FFF7D6', border: `1px solid ${CI.yellow}`, borderRadius: 8, padding: '8px 10px' }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: '#555' }}>ลูกค้าเข้าใช้บริการ (Job Order)</div>
-                <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 15 }}>
+            <div style={{ background: CI.paper, borderRadius: 8, padding: '6px 9px', marginTop: 6,
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: '#555' }}>ยอดขายยาง MTD</span>
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 14 }}>
+                  {kFmt(b.tireRev.actual)} / {kFmt(b.tireRev.target)} ฿
+                </span>
+                <span style={{ fontWeight: 800, fontSize: 12, color: dotColor(tireRevP) }}>{tireRevP.toFixed(1)}%</span>
+              </span>
+            </div>
+            <div style={{ background: '#FFF7D6', border: `1px solid ${CI.yellow}`, borderRadius: 8, padding: '6px 9px', marginTop: 5 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#555' }}>ลูกค้าเข้าใช้บริการ (Job Order)</span>
+                <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 13 }}>
                   {num(b.jobOrder.actual)} / {num(b.jobOrder.target)} ราย
-                  <span style={{ marginLeft: 7, color: dotColor(jobP), fontSize: 14 }}>{jobP.toFixed(1)}%</span>
-                </div>
-                {b.jobOrder.target - b.jobOrder.actual > 0 &&
-                  <div style={{ color: CI.red, fontWeight: 700, fontSize: 10.5 }}>
-                    ขาดลูกค้าอีก {Math.round(b.jobOrder.target - b.jobOrder.actual)} ราย เร่งเพิ่ม Traffic!
-                  </div>}
+                  <span style={{ marginLeft: 6, color: dotColor(jobP), fontSize: 12 }}>{jobP.toFixed(1)}%</span>
+                </span>
               </div>
+              {b.jobOrder.target - b.jobOrder.actual > 0 &&
+                <div style={{ color: CI.red, fontWeight: 700, fontSize: 10 }}>
+                  ขาดลูกค้าอีก {Math.round(b.jobOrder.target - b.jobOrder.actual)} ราย เร่งเพิ่ม Traffic!
+                </div>}
             </div>
           </div>
           )}

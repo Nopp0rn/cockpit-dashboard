@@ -1,13 +1,14 @@
 // ════════════════════════════════════════════════════════════════════
 //  MorningBrief.jsx — สรุปรายสาขาสไตล์ "MORNING BRIEF" (Cockpit CI)
-//  ดึงข้อมูลจริงจาก ctx เดียวกับ Tracker/Products/ASP tab — ไม่มี demo data
-//  ใช้: <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr}/>
+//  เรนเดอร์เป็น tab ปกติ (เลื่อนได้เหมือนแท็บอื่นๆ) — ไม่ใช้ JS scale-to-fit
+//  เพราะวิธีนั้นพังบนเครื่องจริง (จับขนาดผิดจังหวะตอนฟอนต์/รูปโหลด)
+//  รองรับ "🌐 รวมทุกสาขา" โดยใช้ getAllMTD/getAllTS/getT('ALL') ตัวเดียวกับ
+//  Overview/Tracker tab
 // ════════════════════════════════════════════════════════════════════
-import { useEffect, useMemo, useState, useRef, useLayoutEffect } from 'react'
+import { useMemo, useState } from 'react'
 
-// ── CI tokens (จาก logo: เหลือง #FFEB00 / ดำ / แดง) ──
 const CI = {
-  yellow: '#FFEB00', black: '#15181C', ink: '#0D1117', red: '#E2231A',
+  yellow: '#FFEB00', black: '#15181C', red: '#E2231A',
   white: '#FFFFFF', paper: '#F4F4F2', line: '#E3E3DE',
 }
 const ST = { over: '#1A7F3E', near: '#F2B100', push: '#E2231A' }
@@ -29,31 +30,43 @@ const kFmt = n => {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  buildBriefData() — ดึงข้อมูลจริงจาก ctx (เหมือน Tracker/Products tab เป๊ะ)
-//  ไม่มีค่า demo ใดๆ — ทุกตัวเลขมาจาก de (กรอกมือ) + TARGET (SEED_T/Supabase)
+//  buildBriefData() — ดึงข้อมูลจริงจาก ctx (เหมือน Tracker/Products/ASP tab)
+//  bid === 'ALL' → รวมทุกสาขา (ใช้ getAllMTD/getAllTS/getT('ALL') ที่มีอยู่แล้ว)
 // ════════════════════════════════════════════════════════════════════
 function buildBriefData(bid, ctx) {
-  const { getMTD, getTS, getT, de, FIELDS, sumDaysUpTo, calcTS,
+  const { getMTD, getAllMTD, getTS, getAllTS, getT, de, FIELDS, sumDaysUpTo, calcTS,
           TODAY_D, TOTAL_D, MTD_R, MONTH_TH, cfg, BRANCHES, BCLR } = ctx
 
-  const branchIdx = BRANCHES.findIndex(b => b.id === bid)
-  const branch = BRANCHES[branchIdx] || { id: bid, name: bid, short: bid }
-  const color = BCLR[branchIdx] || CI.red
+  const isAll = bid === 'ALL'
+  const branchIdx = isAll ? -1 : BRANCHES.findIndex(x => x.id === bid)
+  const branch = isAll
+    ? { id: 'ALL', short: 'รวมทุกสาขา' }
+    : (BRANCHES[branchIdx] || { id: bid, short: bid })
+  const color = isAll ? CI.black : (BCLR[branchIdx] || CI.red)
 
-  const t  = getT(bid)     // {sales, tire, lube, battery, brake, shock, mp, cc, tireSalesTgt, ccFormula}
-  const m  = getMTD(bid)   // MTD actual aggregate (ทุกฟิลด์ที่กรอกมือ)
-  const ts = getTS(bid)    // MTD total sales (฿) คำนวณจาก calcTS
+  const t  = getT(bid)
+  const m  = isAll ? getAllMTD() : getMTD(bid)
+  const ts = isAll ? getAllTS() : getTS(bid)
 
   // ── วันนี้ vs เป้าวัน (dynamic) — สูตรเดียวกับ Tracker tab ──
-  const beforeToday    = sumDaysUpTo(de, bid, TODAY_D - 1)
-  const tsBeforeToday  = calcTS(beforeToday)
+  // สำหรับ ALL: รวม before-today และ today ของทุกสาขาเอง (de ไม่มี key 'ALL')
+  const ids = isAll ? BRANCHES.map(b => b.id) : [bid]
+  const beforeToday = Object.fromEntries(FIELDS.map(f => [f.key, 0]))
+  ids.forEach(id => {
+    const s = sumDaysUpTo(de, id, TODAY_D - 1)
+    FIELDS.forEach(f => { beforeToday[f.key] += s[f.key] || 0 })
+  })
+  const tsBeforeToday   = calcTS(beforeToday)
   const tireBeforeToday = beforeToday.tire || 0
-  const daysInclToday  = TOTAL_D - TODAY_D + 1
+  const daysInclToday   = TOTAL_D - TODAY_D + 1
   const salesDayTgt = Math.max(0, Math.round((t.sales - tsBeforeToday) / daysInclToday))
   const tireDayTgt  = Math.max(0, Math.round((t.tire  - tireBeforeToday) / daysInclToday))
 
-  const todayRow = de[bid]?.[TODAY_D] || {}
-  const todayAgg = Object.fromEntries(FIELDS.map(f => [f.key, Number(todayRow[f.key]) || 0]))
+  const todayAgg = Object.fromEntries(FIELDS.map(f => [f.key, 0]))
+  ids.forEach(id => {
+    const row = de[id]?.[TODAY_D] || {}
+    FIELDS.forEach(f => { todayAgg[f.key] += Number(row[f.key]) || 0 })
+  })
   const todaySales = calcTS(todayAgg)
   const todayTire  = todayAgg.tire || 0
 
@@ -73,7 +86,6 @@ function buildBriefData(bid, ctx) {
     { key: 'jobOrder',  name: 'Job Order',   unit: 'ราย',  actual: m.jobOrder,  target: Math.round(t.ccFormula * MTD_R) },
   ]
 
-  // ── ASP / SPD — สูตรเดียวกับ ASP tab ──
   const asp = (m.tire > 0 && m.tireSales > 0) ? m.tireSales / m.tire : 0
   const spd = (m.jobOrder > 0) ? ts / m.jobOrder : 0
 
@@ -95,47 +107,7 @@ function buildBriefData(bid, ctx) {
   }
 }
 
-// ── FitScreen: ย่อทั้งโปสเตอร์ให้พอดีจอ ไม่มีเลื่อน (iOS/Android + safe-area) ──
-function FitScreen({ children }) {
-  const wrapRef = useRef(null)
-  const contentRef = useRef(null)
-  const [design, setDesign] = useState(1180)
-  const [scale, setScale]   = useState(1)
-  useLayoutEffect(() => {
-    const fit = () => {
-      const wrap = wrapRef.current, content = contentRef.current
-      if (!wrap || !content) return
-      const aw = wrap.clientWidth, ah = wrap.clientHeight
-      const d  = aw < ah ? 720 : 1180
-      const cw = content.offsetWidth, ch = content.offsetHeight
-      const s  = Math.min(aw / cw, ah / ch)
-      setDesign(d); setScale(s)
-    }
-    fit()
-    const ro = new ResizeObserver(fit)
-    if (contentRef.current) ro.observe(contentRef.current)
-    window.addEventListener('resize', fit)
-    window.addEventListener('orientationchange', fit)
-    return () => { ro.disconnect(); window.removeEventListener('resize', fit); window.removeEventListener('orientationchange', fit) }
-  }, [])
-  return (
-    <div ref={wrapRef} style={{
-      position: 'fixed', inset: 0, width: '100vw', height: '100dvh',
-      background: CI.ink, overflow: 'hidden',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
-      paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)',
-    }}>
-      <div ref={contentRef} style={{
-        width: design, flex: '0 0 auto',
-        transform: `scale(${scale})`, transformOrigin: 'center center',
-        transition: 'transform .15s ease',
-      }}>{children}</div>
-    </div>
-  )
-}
-
-function Mascot({ src, flip = false, size = 120 }) {
+function Mascot({ src, flip = false, size = 90 }) {
   const [err, setErr] = useState(false)
   if (src && !err) {
     return <img src={src} alt="" onError={() => setErr(true)}
@@ -154,7 +126,7 @@ function Mascot({ src, flip = false, size = 120 }) {
     </svg>
   )
 }
-function Ring({ value, size = 60, stroke = 8, color }) {
+function Ring({ value, size = 56, stroke = 8, color }) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r, v = Math.max(0, Math.min(value, 100))
   return (
     <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
@@ -166,18 +138,18 @@ function Ring({ value, size = 60, stroke = 8, color }) {
 }
 function Bar({ value, color }) {
   const v = Math.max(0, Math.min(value, 100))
-  return <div style={{ height: 9, borderRadius: 6, background: CI.line, overflow: 'hidden', flex: 1 }}>
+  return <div style={{ height: 8, borderRadius: 6, background: CI.line, overflow: 'hidden', flex: 1 }}>
     <div style={{ height: '100%', width: `${v}%`, background: color, borderRadius: 6, transition: 'width .6s ease' }}/>
   </div>
 }
 const CardTitle = ({ children, bg, fg = CI.white }) => (
   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: bg, color: fg,
-                fontFamily: F_DISP, fontWeight: 700, fontSize: 16, letterSpacing: .3,
-                padding: '4px 12px', borderRadius: 6 }}>{children}</div>
+                fontFamily: F_DISP, fontWeight: 700, fontSize: 14, letterSpacing: .3,
+                padding: '4px 10px', borderRadius: 6 }}>{children}</div>
 )
-const cardBox = { background: CI.white, border: `1px solid ${CI.line}`, borderRadius: 12, padding: 12 }
-const liS = { fontSize: 12, marginBottom: 5, listStyle: 'none', lineHeight: 1.3 }
-const Divider = () => <div style={{ height: 1, background: CI.line, margin: '8px 0' }}/>
+const cardBox = { background: CI.white, border: `1px solid ${CI.line}`, borderRadius: 12, padding: 11 }
+const liS = { fontSize: 11.5, marginBottom: 5, listStyle: 'none', lineHeight: 1.3 }
+const Divider = () => <div style={{ height: 1, background: CI.line, margin: '7px 0' }}/>
 const Legend = ({ c, children }) => (
   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
     <span style={{ width: 8, height: 8, borderRadius: '50%', background: c }}/>{children}
@@ -185,41 +157,41 @@ const Legend = ({ c, children }) => (
 )
 function Metric({ label, big, sub, p, color }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 7 }}>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#555' }}>{label}</div>
-        <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 28, color, lineHeight: 1 }}>{big}</div>
-        <div style={{ fontSize: 11, color: '#888' }}>{sub}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>{label}</div>
+        <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color, lineHeight: 1 }}>{big}</div>
+        <div style={{ fontSize: 10, color: '#888' }}>{sub}</div>
       </div>
-      <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 20, color: dotColor(p) }}>{p.toFixed(0)}%</div>
+      <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 18, color: dotColor(p) }}>{p.toFixed(0)}%</div>
     </div>
   )
 }
 function MetricBar({ label, big, sub, p }) {
   return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#555' }}>{label}</div>
-      <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 28, color: ST.over, lineHeight: 1 }}>{big}</div>
-      <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>{sub}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ marginTop: 7 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>{label}</div>
+      <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color: ST.over, lineHeight: 1 }}>{big}</div>
+      <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>{sub}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
         <Bar value={p} color={dotColor(p)}/>
-        <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 15, color: dotColor(p) }}>{p.toFixed(1)}%</span>
+        <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 13, color: dotColor(p) }}>{p.toFixed(1)}%</span>
       </div>
     </div>
   )
 }
 function RingMetric({ label, big, sub, p, ringFg }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 7 }}>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#555' }}>{label}</div>
-        <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, lineHeight: 1 }}>{big}</div>
-        <div style={{ fontSize: 11, color: '#888' }}>{sub}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>{label}</div>
+        <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 21, lineHeight: 1 }}>{big}</div>
+        <div style={{ fontSize: 10, color: '#888' }}>{sub}</div>
       </div>
       <div style={{ position: 'relative' }}>
         <Ring value={p} color={ringFg}/>
         <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-                       justifyContent: 'center', fontFamily: F_DISP, fontWeight: 900, fontSize: 13,
+                       justifyContent: 'center', fontFamily: F_DISP, fontWeight: 900, fontSize: 12,
                        color: dotColor(p) }}>{p.toFixed(0)}%</span>
       </div>
     </div>
@@ -229,35 +201,34 @@ function Panel({ title, accent, children, dark }) {
   return (
     <div style={{ background: dark ? CI.black : CI.white, border: `1px solid ${CI.line}`, borderRadius: 12, overflow: 'hidden' }}>
       <div style={{ background: accent, color: dark ? CI.black : (accent === CI.yellow ? CI.black : CI.white),
-                    fontFamily: F_DISP, fontWeight: 700, fontSize: 14, padding: '4px 10px', textAlign: 'center' }}>
+                    fontFamily: F_DISP, fontWeight: 700, fontSize: 13, padding: '4px 10px', textAlign: 'center' }}>
         {title}
       </div>
-      <ul style={{ padding: '8px 10px', margin: 0, color: dark ? CI.white : CI.black, minHeight: 60 }}>{children}</ul>
+      <ul style={{ padding: '8px 10px', margin: 0, color: dark ? CI.white : CI.black, minHeight: 50 }}>{children}</ul>
     </div>
   )
 }
 function KpiRow({ label, val, target, ok }) {
   return (
-    <li style={{ listStyle: 'none', marginBottom: 8 }}>
-      <div style={{ fontSize: 11, color: '#bbb' }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 20, color: ok ? ST.over : CI.red }}>{val}</span>
-        <span style={{ fontSize: 11, color: '#bbb' }}>เป้า {num(target)}</span>
-        <span style={{ fontSize: 12, color: ok ? ST.over : CI.red, fontWeight: 700 }}>{ok ? '✔ เกินเป้า' : '✘ ไม่ถึงเป้า'}</span>
+    <li style={{ listStyle: 'none', marginBottom: 7 }}>
+      <div style={{ fontSize: 10.5, color: '#bbb' }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 18, color: ok ? ST.over : CI.red }}>{val}</span>
+        <span style={{ fontSize: 10.5, color: '#bbb' }}>เป้า {num(target)}</span>
+        <span style={{ fontSize: 11, color: ok ? ST.over : CI.red, fontWeight: 700 }}>{ok ? '✔ เกินเป้า' : '✘ ไม่ถึงเป้า'}</span>
       </div>
     </li>
   )
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  MAIN
+//  MAIN — เรนเดอร์เป็นเนื้อหาใน content area ปกติ (เลื่อนได้เหมือนแท็บอื่น)
 // ════════════════════════════════════════════════════════════════════
-export default function MorningBrief({ ctx, selBr, setSelBr, onClose,
+export default function MorningBrief({ ctx, selBr, setSelBr,
                                         mascotSrc = '/icons/cockpit-boy.png', mascotSrc2 = '/icons/cockpit-girl.png' }) {
   const { BRANCHES, mobile } = ctx
-  const [localBr, setLocalBr] = useState(selBr && selBr !== 'ALL' ? selBr : BRANCHES[0].id)
-  const bid = (selBr && selBr !== 'ALL') ? selBr : localBr
-  const onPick = (id) => { setLocalBr(id); if (setSelBr) setSelBr(id) }
+  const bid = selBr || '143'
+  const onPick = (id) => { if (setSelBr) setSelBr(id) }
 
   const b = useMemo(() => buildBriefData(bid, ctx), [bid, ctx])
 
@@ -276,53 +247,43 @@ export default function MorningBrief({ ctx, selBr, setSelBr, onClose,
   const strong = scored.filter(x => x.p >= 100).sort((a, c) => c.p - a.p).slice(0, 5)
 
   return (
-    <>
-    {onClose && (
-      <button onClick={onClose} aria-label="กลับ" style={{
-        position: 'fixed', top: 'calc(10px + env(safe-area-inset-top))', left: 'calc(10px + env(safe-area-inset-left))',
-        zIndex: 50, background: CI.black, color: CI.yellow, border: `1px solid ${CI.yellow}`,
-        borderRadius: 8, padding: '6px 12px', fontFamily: F_DISP, fontWeight: 700, fontSize: 13,
-        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-      }}>← กลับ</button>
-    )}
-    <FitScreen>
-    <div style={{ fontFamily: F_BODY, width: '100%', color: CI.black }}>
-      <div style={{ width: '100%', background: CI.paper, borderRadius: 14, overflow: 'hidden',
-                    boxShadow: '0 10px 40px rgba(0,0,0,.5)' }}>
+    <div style={{ fontFamily: F_BODY, color: CI.black, maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ background: CI.paper, borderRadius: 14, overflow: 'hidden',
+                    boxShadow: '0 6px 24px rgba(0,0,0,.35)' }}>
 
         {/* HEADER */}
-        <div style={{ display: 'flex', alignItems: 'stretch', background: CI.yellow }}>
-          <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 28, lineHeight: .9, letterSpacing: -1 }}>COCKPIT</div>
-            <div style={{ fontSize: 9, fontWeight: 600, opacity: .75 }}>ศูนย์บริการรถยนต์ครบวงจร</div>
+        <div style={{ display: 'flex', alignItems: 'stretch', background: CI.yellow, flexWrap: 'wrap' }}>
+          <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, lineHeight: .9, letterSpacing: -1 }}>COCKPIT</div>
+            <div style={{ fontSize: 8.5, fontWeight: 600, opacity: .75 }}>ศูนย์บริการรถยนต์ครบวงจร</div>
           </div>
-          <div style={{ flex: 1, position: 'relative', background: CI.black,
-                        clipPath: 'polygon(8% 0, 100% 0, 100% 100%, 0 100%)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px 0' }}>
-            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color: CI.white, letterSpacing: 1 }}>MORNING BRIEF ☀</div>
-            <div style={{ background: CI.white, color: CI.black, fontWeight: 700, fontSize: 12,
-                          padding: '1px 14px', borderRadius: 4, marginTop: 2 }}>{b.dateLabel}</div>
+          <div style={{ flex: 1, minWidth: 160, position: 'relative', background: CI.black,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px 4px' }}>
+            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 20, color: CI.white, letterSpacing: 1 }}>MORNING BRIEF ☀</div>
+            <div style={{ background: CI.white, color: CI.black, fontWeight: 700, fontSize: 11,
+                          padding: '1px 12px', borderRadius: 4, marginTop: 2 }}>{b.dateLabel}</div>
           </div>
-          <div style={{ background: CI.yellow, padding: '8px 18px', textAlign: 'right',
+          <div style={{ background: CI.yellow, padding: '8px 14px', textAlign: 'right',
                         display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 34, lineHeight: .85 }}>{b.branch.id}</div>
-            <div style={{ fontWeight: 700, fontSize: 12 }}>{b.branch.name}</div>
+            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 26, lineHeight: .85 }}>{b.branch.id}</div>
+            <div style={{ fontWeight: 700, fontSize: 11 }}>{b.branch.name}</div>
           </div>
         </div>
 
-        {/* branch selector */}
-        <div style={{ background: CI.black, padding: '6px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ color: CI.yellow, fontSize: 12, fontWeight: 700 }}>เลือกสาขา</span>
+        {/* branch selector — รวม "🌐 รวมทุกสาขา" เหมือนแท็บอื่นในแอป */}
+        <div style={{ background: CI.black, padding: '6px 10px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ color: CI.yellow, fontSize: 11, fontWeight: 700 }}>เลือกสาขา</span>
           <select value={bid} onChange={e => onPick(e.target.value)}
-                  style={{ background: CI.ink, color: CI.white, border: `1px solid ${CI.yellow}`,
-                           borderRadius: 6, padding: '3px 8px', fontWeight: 700 }}>
+                  style={{ background: '#0D1117', color: CI.white, border: `1px solid ${CI.yellow}`,
+                           borderRadius: 6, padding: '3px 8px', fontWeight: 700, fontSize: 13, maxWidth: '100%' }}>
+            <option value="ALL">🌐 รวมทุกสาขา</option>
             {BRANCHES.map(br => <option key={br.id} value={br.id}>{br.id} — {br.short}</option>)}
           </select>
         </div>
 
-        <div style={{ padding: 12 }}>
+        <div style={{ padding: mobile ? 8 : 12 }}>
           {/* TOP 3 CARDS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
             <div style={cardBox}>
               <CardTitle bg={CI.red}>📅 วันนี้ ({b.monthDay})</CardTitle>
               <Metric label="ยอดขายวันนี้" big={kFmt(b.today.sales)} sub={`เป้าวัน ${kFmt(b.today.salesTarget)}`} p={todaySP} color={CI.red}/>
@@ -346,28 +307,28 @@ export default function MorningBrief({ ctx, selBr, setSelBr, onClose,
           </div>
 
           {/* PRODUCTS MTD */}
-          <div style={{ background: CI.black, borderRadius: 12, padding: 12, marginTop: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
-              <span style={{ color: CI.white, fontFamily: F_DISP, fontWeight: 700, fontSize: 17 }}>
+          <div style={{ background: CI.black, borderRadius: 12, padding: 10, marginTop: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+              <span style={{ color: CI.white, fontFamily: F_DISP, fontWeight: 700, fontSize: 15 }}>
                 สินค้า MTD (1–{b.mtd.day})
               </span>
-              <span style={{ display: 'flex', gap: 10, fontSize: 11, color: '#cfd2d6' }}>
+              <span style={{ display: 'flex', gap: 9, fontSize: 10, color: '#cfd2d6' }}>
                 <Legend c={ST.over}>เกินเป้า</Legend><Legend c={ST.near}>ใกล้เป้า</Legend><Legend c={ST.push}>ต้องเร่ง</Legend>
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(175px,1fr))', gap: 7 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 6 }}>
               {b.products.map(p => {
                 const has = p.target != null && p.target > 0
                 const pp = has ? pct(p.actual, p.target) : null
                 return (
-                  <div key={p.key} style={{ background: CI.paper, borderRadius: 8, padding: '7px 9px' }}>
-                    <div style={{ fontWeight: 700, fontSize: 12 }}>{p.name}</div>
-                    <div style={{ fontFamily: F_NUM, fontSize: 13, marginTop: 1 }}>
+                  <div key={p.key} style={{ background: CI.paper, borderRadius: 8, padding: '7px 8px' }}>
+                    <div style={{ fontWeight: 700, fontSize: 11.5 }}>{p.name}</div>
+                    <div style={{ fontFamily: F_NUM, fontSize: 12.5, marginTop: 1 }}>
                       {p.key === 'service' ? kFmt(p.actual) : num(p.actual)}{has ? ` / ${num(p.target)}` : ''} {p.unit}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: has ? dotColor(pp) : '#bbb' }}/>
-                      <span style={{ fontWeight: 700, fontSize: 12, color: has ? dotColor(pp) : '#888' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: has ? dotColor(pp) : '#bbb' }}/>
+                      <span style={{ fontWeight: 700, fontSize: 11, color: has ? dotColor(pp) : '#888' }}>
                         {has ? pp.toFixed(1) + '%' : '—'}
                       </span>
                     </div>
@@ -376,24 +337,24 @@ export default function MorningBrief({ ctx, selBr, setSelBr, onClose,
               })}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 8, marginTop: 8 }}>
-              <div style={{ background: CI.paper, borderRadius: 8, padding: '9px 11px' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>ยอดขายยาง MTD</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 21 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 7, marginTop: 7 }}>
+              <div style={{ background: CI.paper, borderRadius: 8, padding: '8px 10px' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: '#555' }}>ยอดขายยาง MTD</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 18 }}>
                     {kFmt(b.tireRev.actual)} / {kFmt(b.tireRev.target)} ฿
                   </span>
                   <span style={{ fontWeight: 800, color: dotColor(tireRevP) }}>{tireRevP.toFixed(1)}%</span>
                 </div>
               </div>
-              <div style={{ background: '#FFF7D6', border: `1px solid ${CI.yellow}`, borderRadius: 8, padding: '9px 11px' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>ลูกค้าเข้าใช้บริการ (Job Order)</div>
-                <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 18 }}>
+              <div style={{ background: '#FFF7D6', border: `1px solid ${CI.yellow}`, borderRadius: 8, padding: '8px 10px' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: '#555' }}>ลูกค้าเข้าใช้บริการ (Job Order)</div>
+                <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 15 }}>
                   {num(b.jobOrder.actual)} / {num(b.jobOrder.target)} ราย
-                  <span style={{ marginLeft: 8, color: dotColor(jobP), fontSize: 16 }}>{jobP.toFixed(1)}%</span>
+                  <span style={{ marginLeft: 7, color: dotColor(jobP), fontSize: 14 }}>{jobP.toFixed(1)}%</span>
                 </div>
                 {b.jobOrder.target - b.jobOrder.actual > 0 &&
-                  <div style={{ color: CI.red, fontWeight: 700, fontSize: 11 }}>
+                  <div style={{ color: CI.red, fontWeight: 700, fontSize: 10.5 }}>
                     ขาดลูกค้าอีก {Math.round(b.jobOrder.target - b.jobOrder.actual)} ราย เร่งเพิ่ม Traffic!
                   </div>}
               </div>
@@ -401,7 +362,7 @@ export default function MorningBrief({ ctx, selBr, setSelBr, onClose,
           </div>
 
           {/* BOTTOM 4 PANELS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 8, marginTop: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 7, marginTop: 10 }}>
             <Panel title="จุดอ่อนที่ต้องเร่ง" accent={CI.red}>
               {weak.length === 0 && <li style={{ ...liS, color: '#888' }}>ไม่มีจุดอ่อน 🎉</li>}
               {weak.map(w => (
@@ -434,21 +395,19 @@ export default function MorningBrief({ ctx, selBr, setSelBr, onClose,
         </div>
 
         {/* FOOTER + mascots */}
-        <div style={{ background: CI.yellow, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 14px' }}>
-          <Mascot src={mascotSrc} size={100}/>
-          <div style={{ textAlign: 'center', paddingBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 12, color: CI.red, fontStyle: 'italic' }}>
+        <div style={{ background: CI.yellow, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 10px', flexWrap: 'wrap' }}>
+          <Mascot src={mascotSrc} size={80}/>
+          <div style={{ textAlign: 'center', paddingBottom: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 11, color: CI.red, fontStyle: 'italic' }}>
               รักษามาตรฐานที่ดีต่อเนื่อง! ปิดจุดอ่อน เพิ่มจุดแข็ง
             </div>
-            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 26, letterSpacing: -.5 }}>
+            <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 22, letterSpacing: -.5 }}>
               COCKPIT <span style={{ color: CI.red }}>100%</span>
             </div>
           </div>
-          <Mascot src={mascotSrc2} flip size={100}/>
+          <Mascot src={mascotSrc2} flip size={80}/>
         </div>
       </div>
     </div>
-    </FitScreen>
-    </>
   )
 }

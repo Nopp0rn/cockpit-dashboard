@@ -460,11 +460,6 @@ export default function App() {
     </div>
   )
 
-  /* ── Morning Brief — full-screen takeover (its own back button) ── */
-  if (tab === 'morning') {
-    return <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr} onClose={() => setTab('overview')}/>
-  }
-
   /* ── Connection error banner (shown inside app) ── */
   const ConnBanner = connErr ? (
     <div style={{background:'#7c2d12',borderBottom:'1px solid #ea580c',padding:'8px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
@@ -521,6 +516,7 @@ export default function App() {
       {/* CONTENT — scrollable */}
       <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:mobile?'10px 10px':'18px 20px',paddingBottom:mobile?`calc(80px + env(safe-area-inset-bottom,0px))`:'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
         {tab==='overview' && <Overview ctx={ctx}/>}
+        {tab==='morning'  && <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr}/>}
         {tab==='mtd'      && <MTDTab ctx={ctx}/>}
         {tab==='products' && <Products ctx={ctx}/>}
         {tab==='daily'    && <Daily ctx={ctx}/>}

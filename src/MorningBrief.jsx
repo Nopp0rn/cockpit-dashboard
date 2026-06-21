@@ -59,7 +59,7 @@ function dailyStatsFor(day, ids, de, FIELDS, sumDaysUpTo, calcTS, t, TOTAL_D) {
 //  ⏪ ข้อมูลทั้งหมด "ย้อนหลัง 1 วัน" จาก cfg.todayD เสมอ (REPORT_D = TODAY_D-1)
 //     เพื่อให้ตอนเช้าของวันถัดไป (เช่นตั้งค่าเป็นวันที่ 22) ยังเห็นผลงาน "เมื่อวาน" (21)
 //     ที่ข้อมูลครบแล้ว ไว้ใช้ประชุมเช้า — ไม่กระทบ TODAY_D ของแท็บอื่นในแอป
-//  🚀 เพิ่มการ์ด "พรุ่งนี้" = TODAY_D+1 (1 วันถัดจากวันนี้จริง) สำหรับวางแผนล่วงหน้า
+//  🚀 เพิ่มการ์ด "วันนี้" = TODAY_D ของแอปจริง — เป้าที่ยังต้องทำให้ครบวันนี้
 // ════════════════════════════════════════════════════════════════════
 function buildBriefData(bid, ctx) {
   const { getT, de, FIELDS, sumDaysUpTo, calcTS,
@@ -76,7 +76,7 @@ function buildBriefData(bid, ctx) {
   const ids = isAll ? BRANCHES.map(b => b.id) : [bid]
 
   const REPORT_D = Math.max(1, TODAY_D - 1)        // "เมื่อวาน" — ข้อมูลรีพอร์ตหลักทั้งหมดอ้างอิงวันนี้
-  const PLAN_D   = Math.min(TOTAL_D, TODAY_D + 1)  // "พรุ่งนี้" — เป้าล่วงหน้า 1 วัน
+  const PLAN_D   = TODAY_D                         // "วันนี้" — เป้าวันนี้ที่ยังต้องทำให้ครบ (TODAY_D ของแอปจริง)
   const REPORT_R = REPORT_D / TOTAL_D              // อัตราโปรเรทเป้า MTD ของ Morning Brief เอง (ไม่ใช้ ctx.MTD_R ที่อิง TODAY_D)
 
   const yesterday = dailyStatsFor(REPORT_D, ids, de, FIELDS, sumDaysUpTo, calcTS, t, TOTAL_D)
@@ -350,7 +350,7 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
             </div>
 
             <div style={cardBox}>
-              <CardTitle bg="#1d4ed8">🚀 พรุ่งนี้ ({b.planDateLabel}) ต้องทำ</CardTitle>
+              <CardTitle bg="#1d4ed8">🚀 วันนี้ ({b.planDateLabel}) ต้องทำ</CardTitle>
               <div style={{ marginTop: 7 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>ยอดขายที่ต้องทำ</div>
                 <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color: '#1d4ed8', lineHeight: 1 }}>

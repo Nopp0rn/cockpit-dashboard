@@ -2,8 +2,8 @@
 //  MorningBrief.jsx — สรุปรายสาขาสไตล์ "MORNING BRIEF" (Cockpit CI)
 //  เรนเดอร์เป็น tab ปกติ (เลื่อนได้เหมือนแท็บอื่นๆ) — ไม่ใช้ JS scale-to-fit
 //  เพราะวิธีนั้นพังบนเครื่องจริง (จับขนาดผิดจังหวะตอนฟอนต์/รูปโหลด)
-//  รองรับ "🌐 รวมทุกสาขา" โดยใช้ getAllMTD/getAllTS/getT('ALL') ตัวเดียวกับ
-//  Overview/Tracker tab
+//  รองรับ "🌐 รวมทุกสาขา" โดยรวมยอดจาก de/getT('ALL') เอง (ไม่พึ่ง getAllMTD/getAllTS
+//  เพราะต้องตัดยอด MTD ที่ REPORT_D เอง ไม่ใช่ TODAY_D ของแอป — ดู buildBriefData ด้านล่าง)
 // ════════════════════════════════════════════════════════════════════
 import { useMemo, useState } from 'react'
 
@@ -29,13 +29,41 @@ const kFmt = n => {
   return Math.round(n).toLocaleString('en-US')
 }
 
+// ── คำนวณ ยอดจริง + เป้าวันแบบ dynamic ของ "วันที่ day" — สูตรเดียวกับ Tracker tab ──
+function dailyStatsFor(day, ids, de, FIELDS, sumDaysUpTo, calcTS, t, TOTAL_D) {
+  const before = Object.fromEntries(FIELDS.map(f => [f.key, 0]))
+  if (day > 1) {
+    ids.forEach(id => {
+      const s = sumDaysUpTo(de, id, day - 1)
+      FIELDS.forEach(f => { before[f.key] += s[f.key] || 0 })
+    })
+  }
+  const tsBefore = calcTS(before)
+  const tireBefore = before.tire || 0
+  const daysIncl = Math.max(1, TOTAL_D - day + 1)
+  const salesTgt = Math.max(0, Math.round((t.sales - tsBefore) / daysIncl))
+  const tireTgt  = Math.max(0, Math.round((t.tire  - tireBefore) / daysIncl))
+
+  const agg = Object.fromEntries(FIELDS.map(f => [f.key, 0]))
+  ids.forEach(id => {
+    const row = de[id]?.[day] || {}
+    FIELDS.forEach(f => { agg[f.key] += Number(row[f.key]) || 0 })
+  })
+  return { sales: calcTS(agg), salesTgt, tire: agg.tire || 0, tireTgt }
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  buildBriefData() — ดึงข้อมูลจริงจาก ctx (เหมือน Tracker/Products/ASP tab)
-//  bid === 'ALL' → รวมทุกสาขา (ใช้ getAllMTD/getAllTS/getT('ALL') ที่มีอยู่แล้ว)
+//  bid === 'ALL' → รวมทุกสาขา
+//
+//  ⏪ ข้อมูลทั้งหมด "ย้อนหลัง 1 วัน" จาก cfg.todayD เสมอ (REPORT_D = TODAY_D-1)
+//     เพื่อให้ตอนเช้าของวันถัดไป (เช่นตั้งค่าเป็นวันที่ 22) ยังเห็นผลงาน "เมื่อวาน" (21)
+//     ที่ข้อมูลครบแล้ว ไว้ใช้ประชุมเช้า — ไม่กระทบ TODAY_D ของแท็บอื่นในแอป
+//  🚀 เพิ่มการ์ด "พรุ่งนี้" = TODAY_D+1 (1 วันถัดจากวันนี้จริง) สำหรับวางแผนล่วงหน้า
 // ════════════════════════════════════════════════════════════════════
 function buildBriefData(bid, ctx) {
-  const { getMTD, getAllMTD, getTS, getAllTS, getT, de, FIELDS, sumDaysUpTo, calcTS,
-          TODAY_D, TOTAL_D, MTD_R, MONTH_TH, cfg, BRANCHES, BCLR } = ctx
+  const { getT, de, FIELDS, sumDaysUpTo, calcTS,
+          TODAY_D, TOTAL_D, MONTH_TH, cfg, BRANCHES, BCLR } = ctx
 
   const isAll = bid === 'ALL'
   const branchIdx = isAll ? -1 : BRANCHES.findIndex(x => x.id === bid)
@@ -44,46 +72,38 @@ function buildBriefData(bid, ctx) {
     : (BRANCHES[branchIdx] || { id: bid, short: bid })
   const color = isAll ? CI.black : (BCLR[branchIdx] || CI.red)
 
-  const t  = getT(bid)
-  const m  = isAll ? getAllMTD() : getMTD(bid)
-  const ts = isAll ? getAllTS() : getTS(bid)
-
-  // ── วันนี้ vs เป้าวัน (dynamic) — สูตรเดียวกับ Tracker tab ──
-  // สำหรับ ALL: รวม before-today และ today ของทุกสาขาเอง (de ไม่มี key 'ALL')
+  const t   = getT(bid)
   const ids = isAll ? BRANCHES.map(b => b.id) : [bid]
-  const beforeToday = Object.fromEntries(FIELDS.map(f => [f.key, 0]))
-  ids.forEach(id => {
-    const s = sumDaysUpTo(de, id, TODAY_D - 1)
-    FIELDS.forEach(f => { beforeToday[f.key] += s[f.key] || 0 })
-  })
-  const tsBeforeToday   = calcTS(beforeToday)
-  const tireBeforeToday = beforeToday.tire || 0
-  const daysInclToday   = TOTAL_D - TODAY_D + 1
-  const salesDayTgt = Math.max(0, Math.round((t.sales - tsBeforeToday) / daysInclToday))
-  const tireDayTgt  = Math.max(0, Math.round((t.tire  - tireBeforeToday) / daysInclToday))
 
-  const todayAgg = Object.fromEntries(FIELDS.map(f => [f.key, 0]))
-  ids.forEach(id => {
-    const row = de[id]?.[TODAY_D] || {}
-    FIELDS.forEach(f => { todayAgg[f.key] += Number(row[f.key]) || 0 })
-  })
-  const todaySales = calcTS(todayAgg)
-  const todayTire  = todayAgg.tire || 0
+  const REPORT_D = Math.max(1, TODAY_D - 1)        // "เมื่อวาน" — ข้อมูลรีพอร์ตหลักทั้งหมดอ้างอิงวันนี้
+  const PLAN_D   = Math.min(TOTAL_D, TODAY_D + 1)  // "พรุ่งนี้" — เป้าล่วงหน้า 1 วัน
+  const REPORT_R = REPORT_D / TOTAL_D              // อัตราโปรเรทเป้า MTD ของ Morning Brief เอง (ไม่ใช้ ctx.MTD_R ที่อิง TODAY_D)
 
-  // ── สินค้า MTD — สูตรเป้า MTD เดียวกับ Products tab (prorate ด้วย MTD_R) ──
+  const yesterday = dailyStatsFor(REPORT_D, ids, de, FIELDS, sumDaysUpTo, calcTS, t, TOTAL_D)
+  const tomorrow  = dailyStatsFor(PLAN_D,   ids, de, FIELDS, sumDaysUpTo, calcTS, t, TOTAL_D)
+
+  // ── MTD ที่ตัดยอดถึง REPORT_D เท่านั้น (ไม่รวมวันนี้/วันที่ยังไม่ครบข้อมูล) ──
+  const m = Object.fromEntries(FIELDS.map(f => [f.key, 0]))
+  ids.forEach(id => {
+    const s = sumDaysUpTo(de, id, REPORT_D)
+    FIELDS.forEach(f => { m[f.key] += s[f.key] || 0 })
+  })
+  const ts = calcTS(m)
+
+  // ── สินค้า MTD — สูตรเป้า MTD เดียวกับ Products tab แต่ prorate ด้วย REPORT_R ──
   const products = [
-    { key: 'tire',      name: 'ยาง',         unit: 'เส้น', actual: m.tire,      target: Math.round(t.tire * MTD_R) },
-    { key: 'bsTire',    name: 'Bridgestone', unit: 'เส้น', actual: m.bsTire,    target: Math.round(t.tire * 0.35 * MTD_R) },
+    { key: 'tire',      name: 'ยาง',         unit: 'เส้น', actual: m.tire,      target: Math.round(t.tire * REPORT_R) },
+    { key: 'bsTire',    name: 'Bridgestone', unit: 'เส้น', actual: m.bsTire,    target: Math.round(t.tire * 0.35 * REPORT_R) },
     { key: 'alloyWheel',name: 'Alloy Wheel', unit: 'วง',   actual: m.alloyWheel,target: null },
-    { key: 'battery',   name: 'Battery',     unit: 'ลูก',  actual: m.battery,   target: Math.round(t.battery * MTD_R) },
-    { key: 'brake',     name: 'Brake',       unit: 'ชิ้น', actual: m.brake,     target: Math.round(t.brake * MTD_R) },
-    { key: 'shockUp',   name: 'Shock UP',    unit: 'ชิ้น', actual: m.shockUp,   target: Math.round(t.shock * MTD_R) },
-    { key: 'mp',        name: 'MP',          unit: 'ชุด',  actual: m.mp,        target: Math.round(t.mp * MTD_R) },
-    { key: 'lubricant', name: 'Lubricant',   unit: 'ลิตร', actual: m.lubricant, target: Math.round(t.lube * MTD_R) },
+    { key: 'battery',   name: 'Battery',     unit: 'ลูก',  actual: m.battery,   target: Math.round(t.battery * REPORT_R) },
+    { key: 'brake',     name: 'Brake',       unit: 'ชิ้น', actual: m.brake,     target: Math.round(t.brake * REPORT_R) },
+    { key: 'shockUp',   name: 'Shock UP',    unit: 'ชิ้น', actual: m.shockUp,   target: Math.round(t.shock * REPORT_R) },
+    { key: 'mp',        name: 'MP',          unit: 'ชุด',  actual: m.mp,        target: Math.round(t.mp * REPORT_R) },
+    { key: 'lubricant', name: 'Lubricant',   unit: 'ลิตร', actual: m.lubricant, target: Math.round(t.lube * REPORT_R) },
     { key: 'filter',    name: 'Filter',      unit: '',     actual: m.filter,    target: null },
     { key: 'airFilter', name: 'Air Filter',  unit: '',     actual: m.airFilter, target: null },
     { key: 'service',   name: 'Service',     unit: '',     actual: m.service,   target: null },
-    { key: 'jobOrder',  name: 'Job Order',   unit: 'ราย',  actual: m.jobOrder,  target: Math.round(t.ccFormula * MTD_R) },
+    { key: 'jobOrder',  name: 'Job Order',   unit: 'ราย',  actual: m.jobOrder,  target: Math.round(t.ccFormula * REPORT_R) },
   ]
 
   const asp = (m.tire > 0 && m.tireSales > 0) ? m.tireSales / m.tire : 0
@@ -92,15 +112,17 @@ function buildBriefData(bid, ctx) {
   return {
     branch: { id: branch.id, name: branch.short, color },
     dateLabel: `${TODAY_D} ${MONTH_TH} ${cfg.year}`,
-    monthDay: `${TODAY_D} ${MONTH_TH}`,
+    monthDay: `${REPORT_D} ${MONTH_TH}`,
+    planDateLabel: `${PLAN_D} ${MONTH_TH}`,
 
-    today:  { sales: todaySales, salesTarget: salesDayTgt, tires: todayTire, tiresTarget: tireDayTgt },
-    mtd:    { day: TODAY_D, totalDay: TOTAL_D, sales: ts, salesTarget: Math.round(t.sales * MTD_R),
-              tires: m.tire, tiresTarget: Math.round(t.tire * MTD_R) },
+    yesterday: { sales: yesterday.sales, salesTarget: yesterday.salesTgt, tires: yesterday.tire, tiresTarget: yesterday.tireTgt },
+    tomorrow:  { salesTarget: tomorrow.salesTgt, tiresTarget: tomorrow.tireTgt },
+    mtd:    { day: REPORT_D, totalDay: TOTAL_D, sales: ts, salesTarget: Math.round(t.sales * REPORT_R),
+              tires: m.tire, tiresTarget: Math.round(t.tire * REPORT_R) },
     month:  { salesTarget: t.sales, tiresTarget: t.tire },
 
-    tireRev:  { actual: m.tireSales, target: Math.round(t.tireSalesTgt * MTD_R) },
-    jobOrder: { actual: m.jobOrder,  target: Math.round(t.ccFormula * MTD_R) },
+    tireRev:  { actual: m.tireSales, target: Math.round(t.tireSalesTgt * REPORT_R) },
+    jobOrder: { actual: m.jobOrder,  target: Math.round(t.ccFormula * REPORT_R) },
 
     kpi: { asp, aspTarget: 3800, spd, spdTarget: 5100 },
     products,
@@ -236,8 +258,8 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
 
   const mtdSalesP = pct(b.mtd.sales, b.mtd.salesTarget)
   const mtdTireP  = pct(b.mtd.tires, b.mtd.tiresTarget)
-  const todaySP   = pct(b.today.sales, b.today.salesTarget)
-  const todayTP   = pct(b.today.tires, b.today.tiresTarget)
+  const yesterdaySP = pct(b.yesterday.sales, b.yesterday.salesTarget)
+  const yesterdayTP = pct(b.yesterday.tires, b.yesterday.tiresTarget)
   const monSP     = pct(b.mtd.sales, b.month.salesTarget)
   const monTP     = pct(b.mtd.tires, b.month.tiresTarget)
   const tireRevP  = pct(b.tireRev.actual, b.tireRev.target)
@@ -307,10 +329,10 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
           {page === 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 8 }}>
             <div style={cardBox}>
-              <CardTitle bg={CI.red}>📅 วันนี้ ({b.monthDay})</CardTitle>
-              <Metric label="ยอดขายวันนี้" big={kFmt(b.today.sales)} sub={`เป้าวัน ${kFmt(b.today.salesTarget)}`} p={todaySP} color={CI.red}/>
+              <CardTitle bg={CI.red}>📅 เมื่อวาน ({b.monthDay})</CardTitle>
+              <Metric label="ยอดขายเมื่อวาน" big={kFmt(b.yesterday.sales)} sub={`เป้าวัน ${kFmt(b.yesterday.salesTarget)}`} p={yesterdaySP} color={CI.red}/>
               <Divider/>
-              <Metric label="ยางวันนี้" big={`${num(b.today.tires)} เส้น`} sub={`เป้าวัน ${num(b.today.tiresTarget)} เส้น`} p={todayTP} color={CI.red}/>
+              <Metric label="ยางเมื่อวาน" big={`${num(b.yesterday.tires)} เส้น`} sub={`เป้าวัน ${num(b.yesterday.tiresTarget)} เส้น`} p={yesterdayTP} color={CI.red}/>
             </div>
 
             <div style={cardBox}>
@@ -325,6 +347,23 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
               <RingMetric label="ยอดขายเป้ารวม" big={kFmt(b.month.salesTarget)} sub={`(MTD ${kFmt(b.mtd.sales)})`} p={monSP} ringFg={CI.red}/>
               <Divider/>
               <RingMetric label="ยางเป้ารวม" big={`${num(b.month.tiresTarget)} เส้น`} sub={`(MTD ${num(b.mtd.tires)} เส้น)`} p={monTP} ringFg={CI.yellow}/>
+            </div>
+
+            <div style={cardBox}>
+              <CardTitle bg="#1d4ed8">🚀 พรุ่งนี้ ({b.planDateLabel}) ต้องทำ</CardTitle>
+              <div style={{ marginTop: 7 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>ยอดขายที่ต้องทำ</div>
+                <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color: '#1d4ed8', lineHeight: 1 }}>
+                  {kFmt(b.tomorrow.salesTarget)}
+                </div>
+              </div>
+              <Divider/>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>ยางที่ต้องทำ</div>
+                <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color: '#1d4ed8', lineHeight: 1 }}>
+                  {num(b.tomorrow.tiresTarget)} เส้น
+                </div>
+              </div>
             </div>
           </div>
           )}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase.js'
 import * as XLSX from 'xlsx'
+import html2canvas from 'html2canvas'
 import {
   BarChart, Bar, ComposedChart, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
@@ -282,6 +283,36 @@ export default function App() {
   const [selBr, setSelBr] = useState('ALL')
   const [ready, setReady] = useState(false)
   const [connErr, setConnErr] = useState(false)
+  const contentRef = useRef(null)
+  const [capturing, setCapturing] = useState(false)
+
+  /* ── บันทึกภาพหน้านี้ทั้งหมด (รวมส่วนที่ต้องเลื่อนดู) เป็น PNG ── */
+  const captureScreen = useCallback(async () => {
+    const el = contentRef.current
+    if (!el || capturing) return
+    setCapturing(true)
+    try {
+      const canvas = await html2canvas(el, {
+        backgroundColor: '#0d1117',
+        useCORS: true,
+        scale: 2,
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight,
+        height: el.scrollHeight,
+      })
+      const link = document.createElement('a')
+      const stamp = new Date().toISOString().slice(0,10)
+      link.download = `cockpit-${tab}-${stamp}.png`
+      link.href = canvas.toDataURL('image/png')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } catch (err) {
+      alert('บันทึกภาพไม่สำเร็จ: ' + (err?.message || err))
+    } finally {
+      setCapturing(false)
+    }
+  }, [tab, capturing])
 
   /* ── App state (synced via Supabase) ── */
   const [de, setDe]         = useState(() => Object.fromEntries(BRANCHES.map(b=>[b.id,{}])))
@@ -509,6 +540,14 @@ export default function App() {
           <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?13:20,letterSpacing:mobile?1:3,color:'#f59e0b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>COCKPIT SALES INTELLIGENCE</div>
           <div style={{fontSize:9,color:'#6b7280'}}>{DATE_LABEL} · เหลือ {DAYS_LEFT} วัน · 10 สาขา</div>
         </div>
+        {/* บันทึกภาพหน้านี้ทั้งหมด */}
+        <button onClick={captureScreen} disabled={capturing} title="บันทึกภาพหน้านี้ทั้งหมด"
+          style={{display:'flex',alignItems:'center',gap:5,background:capturing?'#333':CI.yellow,
+                  color:CI.black,border:'none',borderRadius:8,padding:mobile?'6px 8px':'6px 12px',
+                  cursor:capturing?'default':'pointer',flexShrink:0,fontFamily:'Barlow Condensed',fontWeight:700,fontSize:mobile?11:12}}>
+          {capturing ? '⏳' : '📸'}{!mobile && <span>{capturing?'กำลังบันทึก...':'บันทึกภาพ'}</span>}
+        </button>
+
         {/* LIVE badge */}
         <div style={{display:'flex',alignItems:'center',gap:5,background:'#0d2a1a',border:'1px solid #22c55e',borderRadius:10,padding:'3px 8px',flexShrink:0}}>
           <div style={{width:6,height:6,borderRadius:'50%',background:'#22c55e',animation:'pulse 2s infinite'}}/>
@@ -537,7 +576,7 @@ export default function App() {
       )}
 
       {/* CONTENT — scrollable */}
-      <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:mobile?'10px 10px':'18px 20px',paddingBottom:mobile?`calc(80px + env(safe-area-inset-bottom,0px))`:'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
+      <div ref={contentRef} style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:mobile?'10px 10px':'18px 20px',paddingBottom:mobile?`calc(80px + env(safe-area-inset-bottom,0px))`:'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
         {tab==='overview' && <Overview ctx={ctx}/>}
         {tab==='morning'  && <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr}/>}
         {tab==='mtd'      && <MTDTab ctx={ctx}/>}

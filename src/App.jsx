@@ -1189,14 +1189,14 @@ function Daily({ctx}) {
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
-          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b'}}>
+          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:CI.red}}>
             รายวัน — {isAll?'รวม':BRANCHES.find(x=>x.id===selBr)?.short} ({MONTH_TH} {cfg.year})
           </div>
 
         </div>
 
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-          <Card label="เฉลี่ย/วัน (ยอดขาย)"  value={fM(Math.round(avgSales))} color="#f59e0b" small/>
+          <Card label="เฉลี่ย/วัน (ยอดขาย)"  value={fM(Math.round(avgSales))} color={CI.red} small/>
           <Card label="เป้า/วัน (ยอดขาย)"    value={fM(Math.round(tgtSalesD))} color="#a78bfa" small/>
           <Card label="เฉลี่ย/วัน (ยาง)"      value={N(Math.round(avgTire))+' เส้น'} color="#3b82f6" small/>
           <Card label="ต้องทำ/วัน (ยอดเหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/Math.max(1,DAYS_LEFT)))} color="#ef4444" small/>
@@ -1205,7 +1205,7 @@ function Daily({ctx}) {
         {/* ── Sales chart ── */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,flexWrap:'wrap',gap:4}}>
-            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b'}}>💰 ยอดขายรายวัน (฿) — วันที่ 1–{TODAY_D}</div>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.red}}>💰 ยอดขายรายวัน (฿) — วันที่ 1–{TODAY_D}</div>
             <div style={{display:'flex',gap:4}}>
               {[2024,2025,2026].map(yr=>(
                 <button key={yr} onClick={()=>setShowYrS(p=>({...p,[yr]:!p[yr]}))} style={yrBtnSt(yr,showYrS[yr])}>{yr}</button>
@@ -1265,6 +1265,7 @@ function Daily({ctx}) {
             <span style={{color:'#a78bfa'}}>-- เป้า/วัน</span>
           </div>
         </div>
+        <MascotFooter compact={mobile}/>
       </div>
     </div>
   )

@@ -1513,7 +1513,7 @@ function Tracker({ctx}) {
 
   return (
     <div>
-      <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:22,color:'#f59e0b',letterSpacing:2,marginBottom:6}}>
+      <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:22,color:CI.red,letterSpacing:2,marginBottom:6}}>
         🎯 TRACKER — {TODAY_D} {MONTH_TH} {cfg.year}
       </div>
       <div style={{fontSize:10,color:'#6b7280',marginBottom:12}}>
@@ -1524,7 +1524,7 @@ function Tracker({ctx}) {
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
         <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
           <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed',textTransform:'uppercase'}}>วันนี้รวม (ยอดขาย)</div>
-          <div style={{fontSize:22,fontWeight:700,color:todayTotSales>0?'#22c55e':'#374151',fontFamily:"'JetBrains Mono',monospace"}}>{fM(todayTotSales)}</div>
+          <div style={{fontSize:22,fontWeight:700,color:todayTotSales>0?STATUS.over:'#374151',fontFamily:"'JetBrains Mono',monospace"}}>{fM(todayTotSales)}</div>
           <div style={{fontSize:9,color:'#6b7280'}}>เป้า/วัน {fM(todayTotTgt)}</div>
           {todayTotTgt>0&&<AchBadge pct={P(todayTotSales,todayTotTgt)}/>}
         </div>
@@ -1536,7 +1536,7 @@ function Tracker({ctx}) {
         </div>
         <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
           <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>MTD ยอดขายรวม</div>
-          <div style={{fontSize:16,fontWeight:700,color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace"}}>{fM(totTS)}</div>
+          <div style={{fontSize:16,fontWeight:700,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(totTS)}</div>
           <AchBadge pct={P(totTS,totTgt)}/>
         </div>
         <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
@@ -1548,55 +1548,46 @@ function Tracker({ctx}) {
 
       {/* Per branch */}
       {mobile ? (
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {rows.map((r,i) => (
-            <div key={r.id} style={{background:'#161b25',border:`1px solid ${r.hasToday?'#22c55e33':'#2d3548'}`,borderRadius:10,padding:12}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-                <span style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:BCLR[i]}}>{r.id} {r.short}</span>
-                <div style={{display:'flex',gap:4,alignItems:'center'}}>
-                  {!r.hasToday&&<span style={{fontSize:9,color:'#ef4444',background:'#450a0a',padding:'2px 6px',borderRadius:3}}>ยังไม่กรอกวันนี้</span>}
-                  <PBadge value={r.mtdSalesPct}/>
-                </div>
+        <div style={{background:CI.black,borderRadius:10,overflow:'hidden'}}>
+          {rows.map((r,i) => {
+            const READCLR=['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
+            return (
+            <div key={r.id} style={{background:CI.white,padding:'7px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
+                <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR[i],flexShrink:0}}>{r.id} {r.short}</span>
+                <span style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontSize:10,color:'#777'}}>MTD</span>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,fontWeight:800,color:CI.red}}>{fM(r.ts)}</span>
+                  <span style={{width:7,height:7,borderRadius:'50%',background:statusColor(r.mtdSalesPct)}}/>
+                  <span style={{fontSize:11,fontWeight:800,color:statusColor(r.mtdSalesPct),minWidth:32,textAlign:'right'}}>{r.mtdSalesPct.toFixed(0)}%</span>
+                </span>
               </div>
-              {/* Today row */}
-              <div style={{background:'#0d1117',borderRadius:8,padding:'8px 10px',marginBottom:8}}>
-                <div style={{fontSize:9,color:'#22c55e',fontFamily:'Barlow Condensed',fontWeight:700,marginBottom:4}}>⚡ วันนี้ (วันที่ {TODAY_D})</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                  <div>
-                    <div style={{fontSize:9,color:'#6b7280'}}>ยอดขาย</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:15,color:r.todaySales>0?'#22c55e':'#374151'}}>{r.todaySales>0?fM(r.todaySales):'—'}</div>
-                    <div style={{fontSize:9,color:'#6b7280'}}>เป้า {fM(r.salesDayTgt)}</div>
-                    <AchBadge pct={r.salesAch}/>
-                  </div>
-                  <div>
-                    <div style={{fontSize:9,color:'#6b7280'}}>ยาง</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:15,color:r.todayTire>0?'#3b82f6':'#374151'}}>{r.todayTire>0?N(r.todayTire)+' เส้น':'—'}</div>
-                    <div style={{fontSize:9,color:'#6b7280'}}>เป้า {N(r.tireDayTgt)} เส้น</div>
-                    <AchBadge pct={r.tireAch}/>
-                  </div>
-                </div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginTop:3,flexWrap:'wrap'}}>
+                <span style={{fontSize:10.5,color:'#444',fontWeight:600}}>
+                  วันนี้ {r.todaySales>0?fM(r.todaySales):'—'}/{fM(r.salesDayTgt)}
+                  {r.salesAch!=null&&<span style={{color:statusColor(r.salesAch),fontWeight:800}}> {r.salesAch.toFixed(0)}%</span>}
+                </span>
+                <span style={{fontSize:10.5,color:'#444',fontWeight:600}}>
+                  ยาง {r.todayTire>0?r.todayTire:'—'}/{r.tireDayTgt}
+                  {r.tireAch!=null&&<span style={{color:statusColor(r.tireAch),fontWeight:800}}> {r.tireAch.toFixed(0)}%</span>}
+                </span>
               </div>
-              {/* MTD row */}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,fontSize:10}}>
-                <div><div style={{color:'#6b7280',fontSize:8}}>MTD ยอด</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#f59e0b',fontWeight:700}}>{fM(r.ts)}</div></div>
-                <div><div style={{color:'#6b7280',fontSize:8}}>MTD ยาง</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#3b82f6',fontWeight:700}}>{r.m.tire} เส้น</div></div>
-                <div><div style={{color:'#6b7280',fontSize:8}}>% MTD</div><AchBadge pct={r.mtdTirePct}/></div>
-              </div>
+              {!r.hasToday && <div style={{fontSize:9.5,color:CI.red,fontWeight:700,marginTop:2}}>⚠ ยังไม่กรอกวันนี้</div>}
             </div>
-          ))}
+          )})}
         </div>
       ) : (
         <div style={{background:'#161b25',borderRadius:10,border:'1px solid #2d3548',overflow:'auto'}}>
-          <div style={{padding:'10px 14px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#f59e0b',borderBottom:'1px solid #2d3548'}}>
+          <div style={{padding:'10px 14px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.red,borderBottom:'1px solid #2d3548'}}>
             เป้าวัน = (เป้าเดือน − MTD วันก่อน) ÷ {TOTAL_D - TODAY_D + 1} วัน — วันที่ {TODAY_D} {MONTH_TH} {cfg.year}
           </div>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
             <thead>
               <tr style={{background:'#0d1117'}}>
                 <th rowSpan={2} style={{padding:'6px 8px',textAlign:'left',color:'#6b7280',fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538',verticalAlign:'bottom'}}>สาขา</th>
-                <th colSpan={3} style={{padding:'5px 8px',textAlign:'center',color:'#22c55e',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>⚡ วันนี้ (ยอดขาย)</th>
+                <th colSpan={3} style={{padding:'5px 8px',textAlign:'center',color:STATUS.over,fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>⚡ วันนี้ (ยอดขาย)</th>
                 <th colSpan={3} style={{padding:'5px 8px',textAlign:'center',color:'#3b82f6',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>🏷️ วันนี้ (ยาง)</th>
-                <th colSpan={2} style={{padding:'5px 8px',textAlign:'center',color:'#f59e0b',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>MTD ยอด</th>
+                <th colSpan={2} style={{padding:'5px 8px',textAlign:'center',color:CI.red,fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>MTD ยอด</th>
                 <th colSpan={2} style={{padding:'5px 8px',textAlign:'center',color:'#94a3b8',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>MTD ยาง</th>
               </tr>
               <tr style={{background:'#0d1117'}}>
@@ -1610,7 +1601,7 @@ function Tracker({ctx}) {
                 <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:r.hasToday?'#0d1a0d':i%2===0?'transparent':'#131820'}}>
                   <td style={{padding:'7px 8px',fontFamily:'Barlow Condensed',fontWeight:700,color:BCLR[r.idx],fontSize:12,whiteSpace:'nowrap'}}>{r.id} {r.short}{!r.hasToday&&<span style={{color:'#ef4444',fontSize:8,marginLeft:4}}>⚠</span>}</td>
                   {/* Today sales */}
-                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.todaySales>0?'#22c55e':'#374151',borderLeft:'1px solid #1e2538'}}>{r.todaySales>0?fM(r.todaySales):'—'}</td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.todaySales>0?STATUS.over:'#374151',borderLeft:'1px solid #1e2538'}}>{r.todaySales>0?fM(r.todaySales):'—'}</td>
                   <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{fM(r.salesDayTgt)}</td>
                   <td style={{padding:'7px 8px',textAlign:'center'}}><AchBadge pct={r.salesAch}/></td>
                   {/* Today tire */}
@@ -1618,22 +1609,22 @@ function Tracker({ctx}) {
                   <td style={{padding:'7px 8px',textAlign:'center',color:'#6b7280'}}>{N(r.tireDayTgt)}</td>
                   <td style={{padding:'7px 8px',textAlign:'center'}}><AchBadge pct={r.tireAch}/></td>
                   {/* MTD */}
-                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b',borderLeft:'1px solid #1e2538'}}>{fM(r.ts)}</td>
+                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:CI.red,borderLeft:'1px solid #1e2538'}}>{fM(r.ts)}</td>
                   <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.mtdSalesPct}/></td>
                   <td style={{padding:'7px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#3b82f6',fontWeight:700,borderLeft:'1px solid #1e2538'}}>{r.m.tire}</td>
                   <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.mtdTirePct}/></td>
                 </tr>
               ))}
               {/* Total */}
-              <tr style={{background:'#1e2538',borderTop:'2px solid #f59e0b'}}>
+              <tr style={{background:'#1e2538',borderTop:`2px solid ${CI.red}`}}>
                 <td style={{padding:'7px 8px',fontWeight:900,fontFamily:'Barlow Condensed',fontSize:13}}>รวม</td>
-                <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#22c55e',borderLeft:'1px solid #2d3548'}}>{fM(todayTotSales)}</td>
+                <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:STATUS.over,borderLeft:'1px solid #2d3548'}}>{fM(todayTotSales)}</td>
                 <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#6b7280'}}>{fM(todayTotTgt)}</td>
                 <td style={{padding:'7px 8px',textAlign:'center'}}><AchBadge pct={todayTotTgt>0?P(todayTotSales,todayTotTgt):null}/></td>
                 <td style={{padding:'7px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6',borderLeft:'1px solid #2d3548'}}>{N(todayTotTire)}</td>
                 <td style={{padding:'7px 8px',textAlign:'center',color:'#6b7280'}}>{N(todayTotTireT)}</td>
                 <td style={{padding:'7px 8px',textAlign:'center'}}><AchBadge pct={todayTotTireT>0?P(todayTotTire,todayTotTireT):null}/></td>
-                <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#f59e0b',borderLeft:'1px solid #2d3548'}}>{fM(totTS)}</td>
+                <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:CI.red,borderLeft:'1px solid #2d3548'}}>{fM(totTS)}</td>
                 <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totTS,totTgt)}/></td>
                 <td style={{padding:'7px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#3b82f6',borderLeft:'1px solid #2d3548'}}>{N(totTire)}</td>
                 <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totTire,totTireT)}/></td>
@@ -1642,6 +1633,7 @@ function Tracker({ctx}) {
           </table>
         </div>
       )}
+      <MascotFooter compact={mobile}/>
     </div>
   )
 }

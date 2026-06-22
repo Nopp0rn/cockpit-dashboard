@@ -118,6 +118,11 @@ const BCLR = ['#f59e0b','#3b82f6','#10b981','#ef4444','#8b5cf6','#f97316','#06b6
 const YRCLR = {2023:'#475569',2024:'#94a3b8',2025:'#f59e0b',2026:'#22c55e'}
 const DEFAULT_CFG = {year:2026, month:5, todayDay:15}
 
+/* ── Cockpit CI palette — เหลือง/ดำ/แดง ตาม logo (ใช้ร่วมกับ MorningBrief.jsx) ── */
+const CI = { yellow:'#FFEB00', black:'#15181C', ink:'#0D1117', red:'#E2231A', white:'#FFFFFF', paper:'#F4F4F2', line:'#E3E3DE' }
+const STATUS = { over:'#1A7F3E', near:'#F2B100', push:'#E2231A' }
+const statusColor = p => (p>=100?STATUS.over:p>=80?STATUS.near:STATUS.push)
+
 /* ── Helpers ── */
 const N  = (n,d=0) => Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:d,maximumFractionDigits:d})
 const fM = (n) => n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':N(n)
@@ -173,9 +178,8 @@ function calcTS(agg) {
 function PBadge({value, threshold}) {
   const v = parseFloat(value)||0
   const t = threshold ?? 100
-  const bg = v>=t?'#166534':v>=t*0.95?'#92400e':'#991b1b'
-  const tx = v>=t?'#bbf7d0':v>=t*0.95?'#fef3c7':'#fecaca'
-  return <span style={{background:bg,color:tx,borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",whiteSpace:'nowrap'}}>{v.toFixed(1)}%</span>
+  const c = v>=t?STATUS.over:v>=t*0.95?STATUS.near:STATUS.push
+  return <span style={{background:c+'22',color:c,borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",whiteSpace:'nowrap'}}>{v.toFixed(1)}%</span>
 }
 
 function Card({label,value,sub,color='#f59e0b',small}) {
@@ -192,16 +196,16 @@ function Card({label,value,sub,color='#f59e0b',small}) {
 function GrowthBadge({pct, label, threshold}) {
   // threshold: dynamic expected-progress %, default 100 (fixed benchmarks)
   const t = threshold ?? 100
-  const clr = pct >= t ? '#22c55e' : pct >= t * 0.95 ? '#f59e0b' : '#ef4444'
+  const clr = pct >= t ? STATUS.over : pct >= t * 0.95 ? STATUS.near : STATUS.push
   return <span style={{fontSize:9,color:clr,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>vs{label} {pct.toFixed(0)}%</span>
 }
 function PctBadge({v}) {
-  const c=v>=100?'#22c55e':v>=90?'#f59e0b':v>=80?'#f97316':'#ef4444'
+  const c=v>=100?STATUS.over:v>=90?STATUS.near:v>=80?'#f97316':STATUS.push
   return <span style={{background:c+'22',color:c,borderRadius:4,padding:'1px 7px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{v.toFixed(0)}%</span>
 }
 function AchBadge({pct}) {
   if (pct===null||pct===undefined) return <span style={{fontSize:10,color:'#4b5563'}}>—</span>
-  const c=pct>=100?'#22c55e':pct>=80?'#f59e0b':'#ef4444'
+  const c=pct>=100?STATUS.over:pct>=80?STATUS.near:STATUS.push
   return <span style={{background:c+'22',color:c,borderRadius:4,padding:'2px 6px',fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{pct.toFixed(0)}%</span>
 }
 /* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
@@ -584,59 +588,67 @@ function Overview({ctx}) {
     <div>
       {/* Summary cards row */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
-          <div style={{fontSize:9,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>ยอดขายรวม MTD</div>
-          <div style={{fontSize:22,fontWeight:700,color:'#f59e0b',fontFamily:"'JetBrains Mono',monospace"}}>{fM(totS)}</div>
-          <div style={{fontSize:9,color:'#6b7280'}}>เป้า {fM(Math.round(totT))}</div>
+        <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'10px 12px'}}>
+          <div style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>ยอดขายรวม MTD</div>
+          <div style={{fontSize:22,fontWeight:700,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(totS)}</div>
+          <div style={{fontSize:9,color:'#888'}}>เป้า {fM(Math.round(totT))}</div>
           <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
             <GrowthBadge pct={P(totS,totT)} label="เป้า" threshold={MTD_R*100}/>
             <GrowthBadge pct={P(totS,totPY25)} label="PY25"/>
             <GrowthBadge pct={P(totS,totPY24)} label="PY24"/>
           </div>
         </div>
-        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
-          <div style={{fontSize:9,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>ยางรวม MTD</div>
-          <div style={{fontSize:22,fontWeight:700,color:'#3b82f6',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
-          <div style={{fontSize:9,color:'#6b7280'}}>เป้า {N(Math.round(totTireT))}</div>
+        <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'10px 12px'}}>
+          <div style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>ยางรวม MTD</div>
+          <div style={{fontSize:22,fontWeight:700,color:'#1d4ed8',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
+          <div style={{fontSize:9,color:'#888'}}>เป้า {N(Math.round(totTireT))}</div>
           <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
             <GrowthBadge pct={P(totTire,totTireT)} label="เป้า" threshold={MTD_R*100}/>
             <GrowthBadge pct={P(totTire,totTirePY25)} label="PY25"/>
             <GrowthBadge pct={P(totTire,totTirePY24)} label="PY24"/>
           </div>
         </div>
-        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
-          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>PY25 MTD รวม</div>
-          <div style={{fontSize:16,fontWeight:700,color:'#94a3b8',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY25))}</div>
-          <div style={{fontSize:9,color:'#4b5563'}}>ยาง: {N(Math.round(totTirePY25))} เส้น</div>
+        <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'8px 12px'}}>
+          <div style={{fontSize:9,color:'#777',fontFamily:'Barlow Condensed'}}>PY25 MTD รวม</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#555',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY25))}</div>
+          <div style={{fontSize:9,color:'#999'}}>ยาง: {N(Math.round(totTirePY25))} เส้น</div>
         </div>
-        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
-          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>PY24 MTD รวม</div>
-          <div style={{fontSize:16,fontWeight:700,color:'#475569',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY24))}</div>
-          <div style={{fontSize:9,color:'#4b5563'}}>ยาง: {N(Math.round(totTirePY24))} เส้น</div>
+        <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'8px 12px'}}>
+          <div style={{fontSize:9,color:'#777',fontFamily:'Barlow Condensed'}}>PY24 MTD รวม</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#888',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY24))}</div>
+          <div style={{fontSize:9,color:'#999'}}>ยาง: {N(Math.round(totTirePY24))} เส้น</div>
         </div>
       </div>
 
       {mobile ? (
-        /* Mobile: cards per branch */
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {rows.map((r,i) => (
-            <div key={r.id} style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,padding:12}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-                <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:BCLR[i]}}>{r.id} {r.short}</div>
-                <PBadge value={P(r.ts,r.tgtSales)} threshold={MTD_R*100}/>
+        /* Mobile: compact single-line-per-branch rows (เหมือน Morning Brief) ให้ 10 สาขาพอดีจอมากขึ้น */
+        <div style={{background:CI.black,borderRadius:10,overflow:'hidden'}}>
+          <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
+            📊 ภาพรวมทุกสาขา — MTD 1-{TODAY_D} {MONTH_TH}
+          </div>
+          {rows.map((r,i) => {
+            const p = P(r.ts, r.tgtSales)
+            const tp = r.tireAch
+            return (
+              <div key={r.id} style={{background:CI.paper,padding:'7px 9px',borderTop:`1px solid ${CI.line}`}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
+                  <span style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12,color:BCLR[i],flexShrink:0}}>{r.id} {r.short}</span>
+                  <span style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:CI.red,fontWeight:700}}>{fM(r.ts)}</span>
+                    <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(p)}}/>
+                    <span style={{fontSize:10.5,fontWeight:700,color:statusColor(p),minWidth:34,textAlign:'right'}}>{p.toFixed(0)}%</span>
+                  </span>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginTop:2}}>
+                  <span style={{fontSize:10,color:'#888'}}>ยาง {r.m.tire} เส้น</span>
+                  <span style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontSize:10,color:'#888'}}>vs PY25 {r.vsPY25.toFixed(0)}% · PY24 {r.vsPY24.toFixed(0)}%</span>
+                    <span style={{fontSize:10.5,fontWeight:700,color:statusColor(tp)}}>{tp.toFixed(0)}%</span>
+                  </span>
+                </div>
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,fontSize:11,marginBottom:6}}>
-                <div><div style={{color:'#6b7280',fontSize:8}}>ยอด MTD</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#f59e0b'}}>{fM(r.ts)}</div></div>
-                <div><div style={{color:'#6b7280',fontSize:8}}>PY25</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(r.py25Sales))}</div></div>
-                <div><div style={{color:'#6b7280',fontSize:8}}>PY24</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:'#475569'}}>{fM(Math.round(r.py24Sales))}</div></div>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,fontSize:11}}>
-                <div><div style={{color:'#6b7280',fontSize:8}}>ยาง MTD</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#3b82f6'}}>{r.m.tire} เส้น</div></div>
-                <div><div style={{color:'#6b7280',fontSize:8}}>vs PY25</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:r.vsPY25>=100?'#22c55e':r.vsPY25>=90?'#f59e0b':'#ef4444',fontWeight:700}}>{r.vsPY25.toFixed(0)}%</div></div>
-                <div><div style={{color:'#6b7280',fontSize:8}}>vs PY24</div><div style={{fontFamily:"'JetBrains Mono',monospace",color:r.vsPY24>=100?'#22c55e':r.vsPY24>=90?'#f59e0b':'#ef4444',fontWeight:700}}>{r.vsPY24.toFixed(0)}%</div></div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         /* Desktop: table with PY24+PY25 for both metrics */

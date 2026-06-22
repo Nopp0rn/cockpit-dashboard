@@ -291,15 +291,19 @@ export default function App() {
     const el = contentRef.current
     if (!el || capturing) return
     setCapturing(true)
-    // เปิด overflow ที่ซ่อน/ตัดเนื้อหาไว้ชั่วคราว (เช่น ตารางที่เลื่อนแนวนอนได้)
-    // เพื่อให้บันทึกภาพได้ครบทุกคอลัมน์ ไม่ใช่แค่ส่วนที่มองเห็นบนจอ
+    // 1) ปลดล็อก flex:1 ชั่วคราว — ปกติ contentRef ถูกยืดให้เต็มจอด้วย flex-grow แม้เนื้อหาสั้นกว่าจอ
+    //    ทำให้ภาพที่บันทึกมีพื้นที่ว่างเปล่าด้านล่างเท่ากับส่วนที่ยืดเกินเนื้อหาจริง
+    const elPrev = { flex: el.style.flex, height: el.style.height, minHeight: el.style.minHeight }
+    el.style.flex = '0 0 auto'
+    el.style.height = 'auto'
+    el.style.minHeight = '0'
+    // 2) เปิด overflow ทุกชนิดที่ซ่อน/ตัดเนื้อหาไว้ชั่วคราว (auto/scroll/hidden) เช่น ตารางเลื่อนแนวนอน
+    //    เพื่อให้บันทึกภาพได้ครบทุกคอลัมน์ ไม่ใช่แค่ส่วนที่มองเห็นบนจอ
     const touched = []
     const nodes = [el, ...el.querySelectorAll('*')]
     nodes.forEach(node => {
       const cs = window.getComputedStyle(node)
-      if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' ||
-          cs.overflowY === 'auto' || cs.overflowY === 'scroll' ||
-          cs.overflow  === 'auto' || cs.overflow  === 'scroll') {
+      if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') {
         touched.push({
           node,
           overflow: node.style.overflow, overflowX: node.style.overflowX, overflowY: node.style.overflowY,
@@ -337,6 +341,9 @@ export default function App() {
         node.style.maxHeight = maxHeight
         node.style.maxWidth = maxWidth
       })
+      el.style.flex = elPrev.flex
+      el.style.height = elPrev.height
+      el.style.minHeight = elPrev.minHeight
       setCapturing(false)
     }
   }, [tab, capturing])

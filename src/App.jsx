@@ -318,11 +318,19 @@ export default function App() {
     })
     // รอเฟรมนึงให้ layout จัดใหม่ตามขนาดจริงหลังเปิด overflow แล้ว ก่อนวัดขนาด/บันทึกภาพ
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+    // วัดขนาดเต็มจริงหลังเปิด overflow แล้ว — ต้องบอก html2canvas ตรงๆ ว่าภาพควรกว้าง/สูงเท่านี้
+    // เพราะแค่เปิด overflow:visible ทำให้ "ไม่ถูกตัด" แต่ผืนภาพ (canvas) เดิมยังแคบเท่าตัวกล่องเดิมอยู่
+    const fullWidth  = Math.max(el.scrollWidth,  el.getBoundingClientRect().width)
+    const fullHeight = Math.max(el.scrollHeight, el.getBoundingClientRect().height)
     try {
       const canvas = await html2canvas(el, {
         backgroundColor: '#0d1117',
         useCORS: true,
         scale: 2,
+        width: fullWidth,
+        height: fullHeight,
+        windowWidth: fullWidth,
+        windowHeight: fullHeight,
       })
       const link = document.createElement('a')
       const stamp = new Date().toISOString().slice(0,10)

@@ -241,9 +241,9 @@ function GaugeBar({ value, height=8 }) {
 }
 
 /* ── Gauge ครึ่งวงกลม — เทียบเป้าแบบสปีดมิเตอร์ ใช้ร่วมกันได้ทุกแท็บ ── */
-function SemiGauge({ value, size=88, strokeWidth=10 }) {
+function SemiGauge({ value, size=88, strokeWidth=10, color }) {
   const v = Math.max(0, Math.min(value ?? 0, 100))
-  const color = statusColor(v)
+  const c = color || statusColor(v)
   const cx = size/2, cy = size/2, r = size/2 - strokeWidth/2 - 2
   const pt = deg => {
     const rad = deg*Math.PI/180
@@ -258,9 +258,16 @@ function SemiGauge({ value, size=88, strokeWidth=10 }) {
   return (
     <svg width={size} height={size/2+strokeWidth/2+2} style={{display:'block',margin:'0 auto'}}>
       <path d={bgPath} fill="none" stroke="#1e2538" strokeWidth={strokeWidth} strokeLinecap="round"/>
-      {v>0 && <path d={fgPath} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>}
+      {v>0 && <path d={fgPath} fill="none" stroke={c} strokeWidth={strokeWidth} strokeLinecap="round"/>}
     </svg>
   )
+}
+
+/* สีกำกับตัวเลขจริง vs เป้า — เขียว=เกินเป้า, ดำ=มีตัวเลขแล้ว(กำลังทำ), แดง=ยังไม่มียอดเลย */
+function actualColor(actualVal, pct) {
+  if (pct >= 100) return STATUS.over
+  if (actualVal > 0) return '#1a1a1a'
+  return STATUS.push
 }
 
 /* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
@@ -1677,18 +1684,24 @@ function Tracker({ctx}) {
 
               {/* วันนี้ vs เป้าวันนี้ — กล่องคู่ ยอดขาย/ยาง พร้อมเกจครึ่งวงกลม */}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                {(() => {
+                  const sCol = actualColor(r.todaySales, sp)
+                  const tCol = actualColor(r.todayTire, tp)
+                  return <>
                 <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
                   <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>💰 ยอดขายวันนี้</div>
-                  <SemiGauge value={sp}/>
-                  <div style={{fontSize:16,fontWeight:900,color:statusColor(sp),marginTop:-4}}>{sp.toFixed(0)}%</div>
+                  <SemiGauge value={sp} color={sCol}/>
+                  <div style={{fontSize:16,fontWeight:900,color:sCol,marginTop:-4}}>{sp.toFixed(0)}%</div>
                   <div style={{fontSize:10,color:'#888',marginTop:1}}>{r.todaySales>0?fM(r.todaySales):'—'} / {fM(r.salesDayTgt)}</div>
                 </div>
                 <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
                   <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🏷️ ยางวันนี้</div>
-                  <SemiGauge value={tp}/>
-                  <div style={{fontSize:16,fontWeight:900,color:statusColor(tp),marginTop:-4}}>{tp.toFixed(0)}%</div>
+                  <SemiGauge value={tp} color={tCol}/>
+                  <div style={{fontSize:16,fontWeight:900,color:tCol,marginTop:-4}}>{tp.toFixed(0)}%</div>
                   <div style={{fontSize:10,color:'#888',marginTop:1}}>{r.todayTire>0?r.todayTire:'—'} / {r.tireDayTgt} เส้น</div>
                 </div>
+                  </>
+                })()}
               </div>
             </div>
           )})}

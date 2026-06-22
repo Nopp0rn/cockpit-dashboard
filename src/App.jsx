@@ -977,38 +977,39 @@ function Products({ctx}) {
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1}}>
-        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?13:16,color:'#f59e0b',marginBottom:10,letterSpacing:1}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?13:16,color:CI.red,marginBottom:10,letterSpacing:1}}>
           สินค้า MTD — {isAll?'ทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}
           {' '}({TODAY_D}–{TODAY_D} {MONTH_TH} {cfg.year})
           <span style={{color:'#6b7280',fontSize:10,fontWeight:400,marginLeft:8}}>เป้า = รายเดือน×{TODAY_D}/{TOTAL_D}</span>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:mobile?'1fr 1fr':'repeat(4,1fr)',gap:8}}>
-          {PCARDS.map(p => {
+        <div style={{background:CI.black,borderRadius:10,overflow:'hidden'}}>
+          {PCARDS.map((p,i) => {
             const actual = m[p.key]||0
             const tgt = p.tgt()
             const pct = tgt>0?(actual/tgt)*100:0
-            const barClr = pct>=100?'#22c55e':pct>=70?'#f59e0b':'#ef4444'
+            const has = tgt>0
             return (
-              <div key={p.key} style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,padding:mobile?10:12,display:'flex',flexDirection:'column',gap:3}}>
-                <div style={{fontSize:mobile?11:12,color:'#9ca3af',fontFamily:'Barlow Condensed',fontWeight:600}}>
+              <div key={p.key} style={{background:CI.white,padding:'8px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,
+                                        display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                <span style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:mobile?12:13,color:'#222',flexShrink:0}}>
                   {p.icon} {p.label}
-                </div>
-                <div style={{fontSize:mobile?20:26,fontWeight:900,fontFamily:"'JetBrains Mono',monospace",color:actual>0?p.color:'#374151',lineHeight:1,marginTop:2}}>
-                  {p.money&&actual>0?fM(actual):N(actual)}
-                </div>
-                <div style={{fontSize:9,color:'#6b7280'}}>
-                  เป้า: {tgt>0?(p.money?fM(tgt):N(tgt)):'—'}{tgt>0?' '+p.unit:''}
-                </div>
-                {tgt>0 && <>
-                  <div style={{background:'#0d1117',borderRadius:3,height:3,overflow:'hidden',marginTop:2}}>
-                    <div style={{width:Math.min(pct,100)+'%',height:'100%',background:barClr,borderRadius:3,transition:'width .5s'}}/>
-                  </div>
-                  <div style={{marginTop:2}}><PBadge value={pct}/></div>
-                </>}
+                </span>
+                <span style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:mobile?12:13,fontWeight:800,color:'#222'}}>
+                    {p.money&&actual>0?fM(actual):N(actual)}{has?` / ${p.money?fM(tgt):N(tgt)}`:''} {has?p.unit:''}
+                  </span>
+                  {has
+                    ? <>
+                        <span style={{width:7,height:7,borderRadius:'50%',background:statusColor(pct)}}/>
+                        <span style={{fontSize:11.5,fontWeight:800,color:statusColor(pct),minWidth:38,textAlign:'right'}}>{pct.toFixed(1)}%</span>
+                      </>
+                    : <span style={{fontSize:11,color:'#999'}}>—</span>}
+                </span>
               </div>
             )
           })}
         </div>
+        <MascotFooter compact={mobile}/>
       </div>
     </div>
   )

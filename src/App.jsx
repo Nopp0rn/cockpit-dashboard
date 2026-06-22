@@ -1366,7 +1366,7 @@ function Monthly({ctx}) {
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:12}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:CI.red,letterSpacing:2,marginBottom:12}}>
           รายเดือน — {isAll?'รวมทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}
         </div>
 
@@ -1374,7 +1374,7 @@ function Monthly({ctx}) {
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
             <div>
-              <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#f59e0b'}}>💰 ยอดขายรายเดือน (฿000)</div>
+              <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:CI.red}}>💰 ยอดขายรายเดือน (฿000)</div>
               <div style={{fontSize:9,color:'#6b7280'}}>เส้นประ 2026 = ม.ค.–{cfg.month<=12?'ปัจจุบัน':''} รวม MTD</div>
             </div>
             <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
@@ -1430,7 +1430,7 @@ function Monthly({ctx}) {
         {/* Tire Sales Monthly chart - only when upload data available */}
         {hasTireSalesData && (
           <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
-            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#f59e0b',marginBottom:4}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:CI.red,marginBottom:4}}>
               💰 ยอดขายยาง รายเดือน (฿000)
             </div>
             <div style={{fontSize:9,color:'#6b7280',marginBottom:8}}>จาก ยอดขายยางรายวัน.xlsx ที่อัพโหลด (sum ทุกวัน)</div>
@@ -1448,6 +1448,7 @@ function Monthly({ctx}) {
             </ResponsiveContainer>
           </div>
         )}
+        <MascotFooter compact={mobile}/>
       </div>
     </div>
   )

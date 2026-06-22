@@ -584,39 +584,43 @@ function Overview({ctx}) {
   const totTirePY25 = rows.reduce((s,r)=>s+r.py25Tire,0)
   const totTirePY24 = rows.reduce((s,r)=>s+r.py24Tire,0)
 
+  // สีป้ายสาขาที่อ่านชัดบนพื้นสว่าง (ตัวอ่อนเช่น lime/cyan จะถูกแทนด้วยโทนเข้มกว่า)
+  const READCLR = ['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
+  const gc = p => (p>=100?STATUS.over:p>=90?STATUS.near:STATUS.push)
+
   return (
     <div>
       {/* Summary cards row */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-        <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'10px 12px'}}>
-          <div style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>ยอดขายรวม MTD</div>
-          <div style={{fontSize:22,fontWeight:700,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(totS)}</div>
-          <div style={{fontSize:9,color:'#888'}}>เป้า {fM(Math.round(totT))}</div>
-          <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
-            <GrowthBadge pct={P(totS,totT)} label="เป้า" threshold={MTD_R*100}/>
-            <GrowthBadge pct={P(totS,totPY25)} label="PY25"/>
-            <GrowthBadge pct={P(totS,totPY24)} label="PY24"/>
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
+          <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:.5,fontFamily:'Barlow Condensed'}}>ยอดขายรวม MTD</div>
+          <div style={{fontSize:23,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(totS)}</div>
+          <div style={{fontSize:10,color:'#777'}}>เป้า {fM(Math.round(totT))}</div>
+          <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
+            <span style={{color:gc(P(totS,totT)/(MTD_R||1))}}>vsเป้า {P(totS,totT).toFixed(0)}%</span>
+            <span style={{color:gc(P(totS,totPY25))}}>vsPY25 {P(totS,totPY25).toFixed(0)}%</span>
+            <span style={{color:gc(P(totS,totPY24))}}>vsPY24 {P(totS,totPY24).toFixed(0)}%</span>
           </div>
         </div>
-        <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'10px 12px'}}>
-          <div style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>ยางรวม MTD</div>
-          <div style={{fontSize:22,fontWeight:700,color:'#1d4ed8',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
-          <div style={{fontSize:9,color:'#888'}}>เป้า {N(Math.round(totTireT))}</div>
-          <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
-            <GrowthBadge pct={P(totTire,totTireT)} label="เป้า" threshold={MTD_R*100}/>
-            <GrowthBadge pct={P(totTire,totTirePY25)} label="PY25"/>
-            <GrowthBadge pct={P(totTire,totTirePY24)} label="PY24"/>
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
+          <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:.5,fontFamily:'Barlow Condensed'}}>ยางรวม MTD</div>
+          <div style={{fontSize:23,fontWeight:900,color:'#1D4ED8',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
+          <div style={{fontSize:10,color:'#777'}}>เป้า {N(Math.round(totTireT))}</div>
+          <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
+            <span style={{color:gc(P(totTire,totTireT)/(MTD_R||1))}}>vsเป้า {P(totTire,totTireT).toFixed(0)}%</span>
+            <span style={{color:gc(P(totTire,totTirePY25))}}>vsPY25 {P(totTire,totTirePY25).toFixed(0)}%</span>
+            <span style={{color:gc(P(totTire,totTirePY24))}}>vsPY24 {P(totTire,totTirePY24).toFixed(0)}%</span>
           </div>
         </div>
-        <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'8px 12px'}}>
-          <div style={{fontSize:9,color:'#777',fontFamily:'Barlow Condensed'}}>PY25 MTD รวม</div>
-          <div style={{fontSize:16,fontWeight:700,color:'#555',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY25))}</div>
-          <div style={{fontSize:9,color:'#999'}}>ยาง: {N(Math.round(totTirePY25))} เส้น</div>
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 12px'}}>
+          <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>PY25 MTD รวม</div>
+          <div style={{fontSize:16,fontWeight:800,color:'#333',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY25))}</div>
+          <div style={{fontSize:10,color:'#888'}}>ยาง: {N(Math.round(totTirePY25))} เส้น</div>
         </div>
-        <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'8px 12px'}}>
-          <div style={{fontSize:9,color:'#777',fontFamily:'Barlow Condensed'}}>PY24 MTD รวม</div>
-          <div style={{fontSize:16,fontWeight:700,color:'#888',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY24))}</div>
-          <div style={{fontSize:9,color:'#999'}}>ยาง: {N(Math.round(totTirePY24))} เส้น</div>
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 12px'}}>
+          <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>PY24 MTD รวม</div>
+          <div style={{fontSize:16,fontWeight:800,color:'#555',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY24))}</div>
+          <div style={{fontSize:10,color:'#888'}}>ยาง: {N(Math.round(totTirePY24))} เส้น</div>
         </div>
       </div>
 
@@ -630,20 +634,20 @@ function Overview({ctx}) {
             const p = P(r.ts, r.tgtSales)
             const tp = r.tireAch
             return (
-              <div key={r.id} style={{background:CI.paper,padding:'7px 9px',borderTop:`1px solid ${CI.line}`}}>
+              <div key={r.id} style={{background:CI.white,padding:'7px 10px',borderTop:`2px solid ${CI.black}`}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
-                  <span style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12,color:BCLR[i],flexShrink:0}}>{r.id} {r.short}</span>
+                  <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR[i],flexShrink:0}}>{r.id} {r.short}</span>
                   <span style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',justifyContent:'flex-end'}}>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:CI.red,fontWeight:700}}>{fM(r.ts)}</span>
-                    <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(p)}}/>
-                    <span style={{fontSize:10.5,fontWeight:700,color:statusColor(p),minWidth:34,textAlign:'right'}}>{p.toFixed(0)}%</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:CI.red,fontWeight:800}}>{fM(r.ts)}</span>
+                    <span style={{width:7,height:7,borderRadius:'50%',background:statusColor(p)}}/>
+                    <span style={{fontSize:11,fontWeight:800,color:statusColor(p),minWidth:34,textAlign:'right'}}>{p.toFixed(0)}%</span>
                   </span>
                 </div>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginTop:2}}>
-                  <span style={{fontSize:10,color:'#888'}}>ยาง {r.m.tire} เส้น</span>
+                  <span style={{fontSize:11,color:'#555',fontWeight:600}}>ยาง {r.m.tire} เส้น</span>
                   <span style={{display:'flex',alignItems:'center',gap:6}}>
-                    <span style={{fontSize:10,color:'#888'}}>vs PY25 {r.vsPY25.toFixed(0)}% · PY24 {r.vsPY24.toFixed(0)}%</span>
-                    <span style={{fontSize:10.5,fontWeight:700,color:statusColor(tp)}}>{tp.toFixed(0)}%</span>
+                    <span style={{fontSize:10.5,color:'#666'}}>vs PY25 {r.vsPY25.toFixed(0)}% · PY24 {r.vsPY24.toFixed(0)}%</span>
+                    <span style={{fontSize:11,fontWeight:800,color:statusColor(tp)}}>{tp.toFixed(0)}%</span>
                   </span>
                 </div>
               </div>

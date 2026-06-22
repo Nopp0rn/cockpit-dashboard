@@ -291,14 +291,34 @@ export default function App() {
     const el = contentRef.current
     if (!el || capturing) return
     setCapturing(true)
+    // เปิด overflow ที่ซ่อน/ตัดเนื้อหาไว้ชั่วคราว (เช่น ตารางที่เลื่อนแนวนอนได้)
+    // เพื่อให้บันทึกภาพได้ครบทุกคอลัมน์ ไม่ใช่แค่ส่วนที่มองเห็นบนจอ
+    const touched = []
+    const nodes = [el, ...el.querySelectorAll('*')]
+    nodes.forEach(node => {
+      const cs = window.getComputedStyle(node)
+      if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' ||
+          cs.overflowY === 'auto' || cs.overflowY === 'scroll' ||
+          cs.overflow  === 'auto' || cs.overflow  === 'scroll') {
+        touched.push({
+          node,
+          overflow: node.style.overflow, overflowX: node.style.overflowX, overflowY: node.style.overflowY,
+          maxHeight: node.style.maxHeight, maxWidth: node.style.maxWidth,
+        })
+        node.style.overflow = 'visible'
+        node.style.overflowX = 'visible'
+        node.style.overflowY = 'visible'
+        node.style.maxHeight = 'none'
+        node.style.maxWidth = 'none'
+      }
+    })
+    // รอเฟรมนึงให้ layout จัดใหม่ตามขนาดจริงหลังเปิด overflow แล้ว ก่อนวัดขนาด/บันทึกภาพ
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
     try {
       const canvas = await html2canvas(el, {
         backgroundColor: '#0d1117',
         useCORS: true,
         scale: 2,
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
-        height: el.scrollHeight,
       })
       const link = document.createElement('a')
       const stamp = new Date().toISOString().slice(0,10)
@@ -310,6 +330,13 @@ export default function App() {
     } catch (err) {
       alert('บันทึกภาพไม่สำเร็จ: ' + (err?.message || err))
     } finally {
+      touched.forEach(({node,overflow,overflowX,overflowY,maxHeight,maxWidth}) => {
+        node.style.overflow = overflow
+        node.style.overflowX = overflowX
+        node.style.overflowY = overflowY
+        node.style.maxHeight = maxHeight
+        node.style.maxWidth = maxWidth
+      })
       setCapturing(false)
     }
   }, [tab, capturing])

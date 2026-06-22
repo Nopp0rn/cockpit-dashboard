@@ -15,6 +15,19 @@ const ST = { over: '#1A7F3E', near: '#F2B100', push: '#E2231A' }
 const statusOf = p => (p >= 100 ? 'over' : p >= 80 ? 'near' : 'push')
 const dotColor = p => ST[statusOf(p)]
 
+// ── คำแนะนำต่อสินค้า ใช้ประกอบสร้าง "แนวทางเร่งรัด" จากจุดอ่อนจริงของแต่ละสาขา/วัน ──
+const ACTION_TIPS = {
+  tire:       'เร่งกระตุ้นยอดขายยาง เน้นโปรโมชั่นและแนะนำเปลี่ยนยางก่อนกำหนด',
+  bsTire:     'โฟกัสแนะนำ Bridgestone โดยเฉพาะ ชูจุดขายรุ่นที่มาร์จิ้นดี',
+  battery:    'เช็คสต็อก Battery ให้พร้อม แนะนำตรวจเช็คแบตให้ลูกค้าทุกคัน',
+  brake:      'ตรวจเบรกให้ลูกค้าทุกคันที่เข้าศูนย์ แนะนำเปลี่ยนผ้าเบรกเมื่อจำเป็น',
+  shockUp:    'แนะนำตรวจช็อคอัพให้ลูกค้าเก่าที่ยังไม่ได้เปลี่ยน',
+  mp:         'เพิ่มการแนะนำ MP (น้ำมันเครื่อง+บริการ) ในทุก Job Order',
+  lubricant:  'กระตุ้นยอดน้ำมันหล่อลื่น แนะนำเปลี่ยนตามรอบเลขไมล์',
+  jobOrder:   'เพิ่ม Traffic / ลูกค้าใหม่ ดันยอด Job Order ให้ถึงเป้า',
+}
+const fallbackTip = 'เร่งติดตามและกระตุ้นยอดให้ถึงเป้า'
+
 const F_DISP = "'Barlow Condensed', 'Arial Narrow', sans-serif"
 const F_NUM  = "'JetBrains Mono', 'Roboto Mono', monospace"
 const F_BODY = "'Barlow', system-ui, -apple-system, sans-serif"
@@ -270,6 +283,12 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
   const weak   = scored.filter(x => x.p < 100).sort((a, c) => a.p - c.p).slice(0, 5)
   const strong = scored.filter(x => x.p >= 100).sort((a, c) => c.p - a.p).slice(0, 5)
 
+  const actionLines = useMemo(() => weak.slice(0, 4).map(w => {
+    const shortfall = Math.max(0, Math.round(w.target - w.actual))
+    const tip = ACTION_TIPS[w.key] || fallbackTip
+    return `${w.name} ขาดอีก ${shortfall}${w.unit ? ' ' + w.unit : ''} ถึงเป้า — ${tip}`
+  }), [weak])
+
   return (
     <div style={{ fontFamily: F_BODY, color: CI.black, maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ background: CI.paper, borderRadius: 14, overflow: 'hidden',
@@ -451,10 +470,10 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
               ))}
             </Panel>
             <Panel title="แนวทางเร่งรัด" accent="#1d4ed8">
-              <li style={liS}>เพิ่ม Traffic / ลูกค้าใหม่ ดันยอด Job Order</li>
-              <li style={liS}>โฟกัสกลุ่มยางต่อเนื่อง รักษายอดขาย</li>
-              <li style={liS}>เร่งเพิ่ม MP และ Shock UP แนะนำสินค้าเพิ่มเติม</li>
-              <li style={liS}>จับกลุ่มลูกค้าเก่า / Fleet ต่อเนื่อง</li>
+              {actionLines.length === 0 && (
+                <li style={{ ...liS, color: '#888' }}>ทุกตัวชี้วัดผ่านเป้าหมด 🎉 รักษามาตรฐานต่อเนื่อง</li>
+              )}
+              {actionLines.map((line, i) => <li key={i} style={liS}>{line}</li>)}
             </Panel>
             <Panel title="KPI สำคัญ" accent={CI.yellow} dark>
               <KpiRow label="ASP (บาท/เส้น)" val={b.kpi.asp > 0 ? '฿' + num(b.kpi.asp) : '—'} target={b.kpi.aspTarget} ok={b.kpi.asp >= b.kpi.aspTarget}/>

@@ -1641,37 +1641,37 @@ function Tracker({ctx}) {
 /* ════ ASP & SPD ════ */
 function ASP({ctx}) {
   const {selBr,setSelBr,getMTD,getAllMTD,getTS,getAllTS,mobile} = ctx
-  const AT=3800,ST=5100
+  const AT=3800,SPD_T=5100
   const rows=BRANCHES.map((b,i)=>{const m=getMTD(b.id),ts=getTS(b.id);return{...b,m,ts,asp:m.tire>0&&m.tireSales>0?m.tireSales/m.tire:0,spd:m.jobOrder>0?ts/m.jobOrder:0,idx:i}})
   const aM=getAllMTD(),aTS=getAllTS(),aASP=aM.tire>0&&aM.tireSales>0?aM.tireSales/aM.tire:0,aSPD=aM.jobOrder>0?aTS/aM.jobOrder:0
+  const READCLR=['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1}}>
-        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#f59e0b',letterSpacing:2,marginBottom:10}}>💰 ASP & SPD</div>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:CI.red,letterSpacing:2,marginBottom:10}}>💰 ASP & SPD</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-          <Card label="ASP threshold" value={'฿'+N(AT)} sub="ยอดยาง ÷ เส้น"/>
-          <Card label="SPD threshold" value={'฿'+N(ST)} sub="ยอดรวม ÷ Job" color="#10b981"/>
-          <Card label="ASP รวม" value={aASP>0?'฿'+N(Math.round(aASP)):'—'} color={aASP>=AT?'#22c55e':'#ef4444'}/>
-          <Card label="SPD รวม" value={aSPD>0?'฿'+N(Math.round(aSPD)):'—'} color={aSPD>=ST?'#22c55e':'#ef4444'}/>
+          <Card label="ASP threshold" value={'฿'+N(AT)} sub="ยอดยาง ÷ เส้น" color={CI.red}/>
+          <Card label="SPD threshold" value={'฿'+N(SPD_T)} sub="ยอดรวม ÷ Job" color="#10b981"/>
+          <Card label="ASP รวม" value={aASP>0?'฿'+N(Math.round(aASP)):'—'} color={aASP>=AT?STATUS.over:STATUS.push}/>
+          <Card label="SPD รวม" value={aSPD>0?'฿'+N(Math.round(aSPD)):'—'} color={aSPD>=SPD_T?STATUS.over:STATUS.push}/>
         </div>
         {mobile ? (
-          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{background:CI.black,borderRadius:10,overflow:'hidden'}}>
             {rows.map((r,i)=>(
-              <div key={r.id} style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,padding:12}}>
-                <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:BCLR[i],marginBottom:8}}>{r.id} {r.short}</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                  <div style={{background:'#0d1117',borderRadius:6,padding:8,textAlign:'center'}}>
-                    <div style={{fontSize:9,color:'#6b7280',marginBottom:2}}>ASP</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:15,color:r.asp>=AT?'#22c55e':r.asp>0?'#ef4444':'#6b7280'}}>{r.asp>0?'฿'+N(Math.round(r.asp)):'—'}</div>
-                    <div style={{fontSize:12}}>{r.asp===0?'—':r.asp>=AT?'✅':'❌'}</div>
-                  </div>
-                  <div style={{background:'#0d1117',borderRadius:6,padding:8,textAlign:'center'}}>
-                    <div style={{fontSize:9,color:'#6b7280',marginBottom:2}}>SPD</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:15,color:r.spd>=ST?'#22c55e':r.spd>0?'#ef4444':'#6b7280'}}>{r.spd>0?'฿'+N(Math.round(r.spd)):'—'}</div>
-                    <div style={{fontSize:12}}>{r.spd===0?'—':r.spd>=ST?'✅':'❌'}</div>
-                  </div>
-                </div>
+              <div key={r.id} style={{background:CI.white,padding:'7px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,
+                                       display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR[i],flexShrink:0}}>{r.id} {r.short}</span>
+                <span style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                  <span style={{display:'flex',alignItems:'center',gap:4}}>
+                    <span style={{fontSize:10,color:'#888'}}>ASP</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:12,color:r.asp===0?'#999':r.asp>=AT?STATUS.over:STATUS.push}}>{r.asp>0?'฿'+N(Math.round(r.asp)):'—'}</span>
+                  </span>
+                  <span style={{display:'flex',alignItems:'center',gap:4}}>
+                    <span style={{fontSize:10,color:'#888'}}>SPD</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:12,color:r.spd===0?'#999':r.spd>=SPD_T?STATUS.over:STATUS.push}}>{r.spd>0?'฿'+N(Math.round(r.spd)):'—'}</span>
+                  </span>
+                </span>
               </div>
             ))}
           </div>
@@ -1684,17 +1684,18 @@ function ASP({ctx}) {
                   <td style={{padding:'8px 10px',fontWeight:600,color:BCLR[r.idx],fontSize:11}}>{r.short}</td>
                   <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{N(r.m.tireSales)}</td>
                   <td style={{padding:'8px 10px',textAlign:'center',fontSize:11}}>{r.m.tire}</td>
-                  <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.asp>=AT?'#22c55e':r.asp>0?'#ef4444':'#6b7280',fontSize:11}}>{r.asp>0?'฿'+N(Math.round(r.asp)):'—'}</td>
+                  <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.asp>=AT?STATUS.over:r.asp>0?STATUS.push:'#6b7280',fontSize:11}}>{r.asp>0?'฿'+N(Math.round(r.asp)):'—'}</td>
                   <td style={{padding:'8px 10px',textAlign:'center',fontSize:13}}>{r.asp===0?'—':r.asp>=AT?'✅':'❌'}</td>
                   <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{N(r.ts)}</td>
                   <td style={{padding:'8px 10px',textAlign:'center',fontSize:11}}>{r.m.jobOrder}</td>
-                  <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.spd>=ST?'#22c55e':r.spd>0?'#ef4444':'#6b7280',fontSize:11}}>{r.spd>0?'฿'+N(Math.round(r.spd)):'—'}</td>
-                  <td style={{padding:'8px 10px',textAlign:'center',fontSize:13}}>{r.spd===0?'—':r.spd>=ST?'✅':'❌'}</td>
+                  <td style={{padding:'8px 10px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.spd>=SPD_T?STATUS.over:r.spd>0?STATUS.push:'#6b7280',fontSize:11}}>{r.spd>0?'฿'+N(Math.round(r.spd)):'—'}</td>
+                  <td style={{padding:'8px 10px',textAlign:'center',fontSize:13}}>{r.spd===0?'—':r.spd>=SPD_T?'✅':'❌'}</td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
         )}
+        <MascotFooter compact={mobile}/>
       </div>
     </div>
   )

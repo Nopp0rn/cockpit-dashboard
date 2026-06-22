@@ -208,7 +208,26 @@ function AchBadge({pct}) {
   const c=pct>=100?STATUS.over:pct>=80?STATUS.near:STATUS.push
   return <span style={{background:c+'22',color:c,borderRadius:4,padding:'2px 6px',fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{pct.toFixed(0)}%</span>
 }
-/* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
+/* ── Mascot footer — แบนเนอร์ปิดท้ายหน้า ใช้ร่วมกันได้ทุกแท็บ (รูปจาก /icons/) ── */
+function MascotFooter({ compact }) {
+  return (
+    <div style={{background:CI.yellow,borderRadius:10,marginTop:12,display:'flex',alignItems:'flex-end',
+                 justifyContent:'space-between',padding:'0 10px',overflow:'hidden'}}>
+      <img src="/icons/cockpit-boy.png" alt="" style={{width:compact?60:80,height:'auto',objectFit:'contain'}}
+           onError={e=>{e.target.style.display='none'}}/>
+      <div style={{textAlign:'center',paddingBottom:compact?8:12}}>
+        <div style={{fontWeight:700,fontSize:compact?10:11,color:CI.red,fontStyle:'italic'}}>
+          รักษามาตรฐานที่ดีต่อเนื่อง! ปิดจุดอ่อน เพิ่มจุดแข็ง
+        </div>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?18:22,letterSpacing:-.5,color:CI.black}}>
+          COCKPIT <span style={{color:CI.red}}>100%</span>
+        </div>
+      </div>
+      <img src="/icons/cockpit-girl.png" alt="" style={{width:compact?60:80,height:'auto',objectFit:'contain',transform:'scaleX(-1)'}}
+           onError={e=>{e.target.style.display='none'}}/>
+    </div>
+  )
+}
 function BranchSelect({sel, onSel, showAll=true, mobile}) {
   if (mobile) return (
     <div style={{marginBottom:12}}>
@@ -709,6 +728,7 @@ function Overview({ctx}) {
           </div>
         </div>
       )}
+      <MascotFooter compact={mobile}/>
     </div>
   )
 }

@@ -1578,7 +1578,7 @@ function Monthly({ctx}) {
 }
 
 function Tracker({ctx}) {
-  const {getMTD,getTS,getT,fcst,de,MTD_R,TODAY_D,TOTAL_D,DAYS_LEFT,MONTH_TH,cfg,mobile,FIELDS} = ctx
+  const {getMTD,getTS,getT,fcst,de,MTD_R,TODAY_D,TOTAL_D,DAYS_LEFT,MONTH_TH,cfg,mobile,FIELDS,selBr,setSelBr} = ctx
 
   // Build per-branch data with today's entry vs dynamic daily target
   const rows = BRANCHES.map((b,i) => {
@@ -1623,19 +1623,23 @@ function Tracker({ctx}) {
     }
   })
 
-  const totTS    = rows.reduce((s,r)=>s+r.ts,0)
-  const totTgt   = rows.reduce((s,r)=>s+r.t.sales*MTD_R,0)
-  const totTire  = rows.reduce((s,r)=>s+r.m.tire,0)
-  const totTireT = rows.reduce((s,r)=>s+r.t.tire*MTD_R,0)
-  const todayTotSales = rows.reduce((s,r)=>s+r.todaySales,0)
-  const todayTotTire  = rows.reduce((s,r)=>s+r.todayTire,0)
-  const todayTotTgt   = rows.reduce((s,r)=>s+r.salesDayTgt,0)
-  const todayTotTireT = rows.reduce((s,r)=>s+r.tireDayTgt,0)
+  const visibleRows = (!selBr || selBr==='ALL') ? rows : rows.filter(r => r.id === selBr)
+
+  const totTS    = visibleRows.reduce((s,r)=>s+r.ts,0)
+  const totTgt   = visibleRows.reduce((s,r)=>s+r.t.sales*MTD_R,0)
+  const totTire  = visibleRows.reduce((s,r)=>s+r.m.tire,0)
+  const totTireT = visibleRows.reduce((s,r)=>s+r.t.tire*MTD_R,0)
+  const todayTotSales = visibleRows.reduce((s,r)=>s+r.todaySales,0)
+  const todayTotTire  = visibleRows.reduce((s,r)=>s+r.todayTire,0)
+  const todayTotTgt   = visibleRows.reduce((s,r)=>s+r.salesDayTgt,0)
+  const todayTotTireT = visibleRows.reduce((s,r)=>s+r.tireDayTgt,0)
 
 
 
   return (
-    <div>
+    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
+      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+      <div style={{flex:1,minWidth:0}}>
       <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:22,color:CI.red,letterSpacing:2,marginBottom:6}}>
         🎯 TRACKER — {TODAY_D} {MONTH_TH} {cfg.year}
       </div>
@@ -1672,7 +1676,7 @@ function Tracker({ctx}) {
       {/* Per branch */}
       {mobile ? (
         <div style={{background:CI.black,borderRadius:10,overflow:'hidden'}}>
-          {rows.map((r,i) => {
+          {visibleRows.map((r,i) => {
             const READCLR=['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
             const sp = r.salesAch ?? 0, tp = r.tireAch ?? 0
             return (
@@ -1747,7 +1751,7 @@ function Tracker({ctx}) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r,i) => (
+              {visibleRows.map((r,i) => (
                 <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:r.hasToday?'#0d1a0d':i%2===0?'transparent':'#131820'}}>
                   <td style={{padding:'7px 8px',fontFamily:'Barlow Condensed',fontWeight:700,color:BCLR[r.idx],fontSize:12,whiteSpace:'nowrap'}}>{r.id} {r.short}{!r.hasToday&&<span style={{color:'#ef4444',fontSize:8,marginLeft:4}}>⚠</span>}</td>
                   {/* Today sales */}
@@ -1784,6 +1788,7 @@ function Tracker({ctx}) {
         </div>
       )}
       <MascotFooter compact={mobile}/>
+      </div>
     </div>
   )
 }

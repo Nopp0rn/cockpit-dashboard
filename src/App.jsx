@@ -241,7 +241,7 @@ function GaugeBar({ value, height=8 }) {
 }
 
 /* ── Gauge ครึ่งวงกลม — เทียบเป้าแบบสปีดมิเตอร์ ใช้ร่วมกันได้ทุกแท็บ ── */
-function SemiGauge({ value, size=88, strokeWidth=10, color }) {
+function SemiGauge({ value, size=88, strokeWidth=10, color, trackColor='#E3E3DE' }) {
   const v = Math.max(0, Math.min(value ?? 0, 100))
   const c = color || statusColor(v)
   const cx = size/2, cy = size/2, r = size/2 - strokeWidth/2 - 2
@@ -257,7 +257,7 @@ function SemiGauge({ value, size=88, strokeWidth=10, color }) {
   const fgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${xv} ${yv}`
   return (
     <svg width={size} height={size/2+strokeWidth/2+2} style={{display:'block',margin:'0 auto'}}>
-      <path d={bgPath} fill="none" stroke="#1e2538" strokeWidth={strokeWidth} strokeLinecap="round"/>
+      <path d={bgPath} fill="none" stroke={trackColor} strokeWidth={strokeWidth} strokeLinecap="round"/>
       {v>0 && <path d={fgPath} fill="none" stroke={c} strokeWidth={strokeWidth} strokeLinecap="round"/>}
     </svg>
   )
@@ -1690,19 +1690,35 @@ function Tracker({ctx}) {
                   return <>
                 <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
                   <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>💰 ยอดขายวันนี้</div>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-                    <SemiGauge value={sp} color={sCol} size={68}/>
-                    <span style={{fontSize:13,fontWeight:800,color:sCol,lineHeight:1.15}}>{r.todaySales>0?fM(r.todaySales):'—'}<br/>/{fM(r.salesDayTgt)}</span>
+                  <SemiGauge value={sp} color={sCol} size={74}/>
+                  <div style={{fontSize:19,fontWeight:900,color:sCol,marginTop:1}}>{sp.toFixed(0)}%</div>
+                  <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:8,marginTop:4}}>
+                    <div>
+                      <div style={{fontSize:8.5,color:'#999',fontWeight:700}}>ทำได้</div>
+                      <div style={{fontSize:13,fontWeight:800,color:sCol}}>{r.todaySales>0?fM(r.todaySales):'—'}</div>
+                    </div>
+                    <div style={{width:1,height:24,background:CI.line}}/>
+                    <div>
+                      <div style={{fontSize:8.5,color:'#999',fontWeight:700}}>เป้า</div>
+                      <div style={{fontSize:13,fontWeight:700,color:'#555'}}>{fM(r.salesDayTgt)}</div>
+                    </div>
                   </div>
-                  <div style={{fontSize:18,fontWeight:900,color:sCol,marginTop:1}}>{sp.toFixed(0)}%</div>
                 </div>
                 <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
                   <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🏷️ ยางวันนี้</div>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-                    <SemiGauge value={tp} color={tCol} size={68}/>
-                    <span style={{fontSize:13,fontWeight:800,color:tCol,lineHeight:1.15}}>{r.todayTire>0?r.todayTire:'—'}<br/>/{r.tireDayTgt} เส้น</span>
+                  <SemiGauge value={tp} color={tCol} size={74}/>
+                  <div style={{fontSize:19,fontWeight:900,color:tCol,marginTop:1}}>{tp.toFixed(0)}%</div>
+                  <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:8,marginTop:4}}>
+                    <div>
+                      <div style={{fontSize:8.5,color:'#999',fontWeight:700}}>ทำได้</div>
+                      <div style={{fontSize:13,fontWeight:800,color:tCol}}>{r.todayTire>0?r.todayTire:'—'} เส้น</div>
+                    </div>
+                    <div style={{width:1,height:24,background:CI.line}}/>
+                    <div>
+                      <div style={{fontSize:8.5,color:'#999',fontWeight:700}}>เป้า</div>
+                      <div style={{fontSize:13,fontWeight:700,color:'#555'}}>{r.tireDayTgt} เส้น</div>
+                    </div>
                   </div>
-                  <div style={{fontSize:18,fontWeight:900,color:tCol,marginTop:1}}>{tp.toFixed(0)}%</div>
                 </div>
                   </>
                 })()}

@@ -36,13 +36,10 @@ const DB = {
 
 /* ── Mobile hook ── */
 function useIsMobile() {
-  const [m, setM] = useState(window.innerWidth < 768)
-  useEffect(() => {
-    const h = () => setM(window.innerWidth < 768)
-    window.addEventListener('resize', h)
-    return () => window.removeEventListener('resize', h)
-  }, [])
-  return m
+  // บังคับใช้ layout เดียวกันทุกแพลตฟอร์ม/ทุก orientation เสมอ
+  // (iOS แนวตั้ง-แนวนอน, Android แนวตั้ง-แนวนอน, website, PC) — ไม่สลับ layout ตามขนาดจออีกต่อไป
+  // ตามที่ผู้ใช้ขอให้ทุกระบบแสดงผลแบบเดียวกันหมด
+  return true
 }
 
 /* ════════════════════════════════════════════════════════

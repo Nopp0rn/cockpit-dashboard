@@ -777,19 +777,25 @@ function Overview({ctx}) {
             const tp = r.tireAch
             return (
               <div key={r.id} style={{background:CI.white,padding:'7px 10px',borderTop:`2px solid ${CI.black}`}}>
+                <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR[i],marginBottom:3}}>{r.id} {r.short}</div>
+
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
-                  <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR[i],flexShrink:0}}>{r.id} {r.short}</span>
-                  <span style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                  <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0}}>💰 ยอดขาย</span>
+                  <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end'}}>
                     <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:CI.red,fontWeight:800}}>{fM(r.ts)}</span>
-                    <span style={{width:7,height:7,borderRadius:'50%',background:statusColor(p)}}/>
-                    <span style={{fontSize:11,fontWeight:800,color:statusColor(p),minWidth:34,textAlign:'right'}}>{p.toFixed(0)}%</span>
+                    <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(p)}}/>
+                    <span style={{fontSize:11,fontWeight:800,color:statusColor(p),minWidth:30,textAlign:'right'}}>{p.toFixed(0)}%</span>
+                    <span style={{fontSize:9.5,color:'#999'}}>PY25 {r.vsPY25.toFixed(0)}%·PY24 {r.vsPY24.toFixed(0)}%</span>
                   </span>
                 </div>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginTop:2}}>
-                  <span style={{fontSize:11,color:'#555',fontWeight:600}}>ยาง {r.m.tire} เส้น</span>
-                  <span style={{display:'flex',alignItems:'center',gap:6}}>
-                    <span style={{fontSize:10.5,color:'#666'}}>vs PY25 {r.vsPY25.toFixed(0)}% · PY24 {r.vsPY24.toFixed(0)}%</span>
-                    <span style={{fontSize:11,fontWeight:800,color:statusColor(tp)}}>{tp.toFixed(0)}%</span>
+
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginTop:3}}>
+                  <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0}}>🏷️ ยาง</span>
+                  <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'#1D4ED8',fontWeight:800}}>{r.m.tire} เส้น</span>
+                    <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(tp)}}/>
+                    <span style={{fontSize:11,fontWeight:800,color:statusColor(tp),minWidth:30,textAlign:'right'}}>{tp.toFixed(0)}%</span>
+                    <span style={{fontSize:9.5,color:'#999'}}>PY25 {r.tirePY25.toFixed(0)}%·PY24 {r.tirePY24.toFixed(0)}%</span>
                   </span>
                 </div>
               </div>

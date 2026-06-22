@@ -698,7 +698,7 @@ export default function App() {
    OVERVIEW TAB
 ════════════════════════════════════════════════════════ */
 function Overview({ctx}) {
-  const {getMTD,getTS,TARGET,MTD_R,TODAY_D,MONTH_TH,cfg,mobile,de,HIST} = ctx
+  const {getMTD,getTS,TARGET,MTD_R,TODAY_D,MONTH_TH,cfg,mobile,de,HIST,selBr,setSelBr} = ctx
 
   const rows = BRANCHES.map((b,i) => {
     const t=TARGET[b.id]||SEED_T[b.id], m=getMTD(b.id), ts=getTS(b.id)
@@ -717,21 +717,25 @@ function Overview({ctx}) {
     }
   })
 
-  const totS     = rows.reduce((s,r)=>s+r.ts,0)
-  const totT     = rows.reduce((s,r)=>s+r.tgtSales,0)
-  const totTire  = rows.reduce((s,r)=>s+r.m.tire,0)
-  const totTireT = rows.reduce((s,r)=>s+r.tgtTire,0)
-  const totPY25  = rows.reduce((s,r)=>s+r.py25Sales,0)
-  const totPY24  = rows.reduce((s,r)=>s+r.py24Sales,0)
-  const totTirePY25 = rows.reduce((s,r)=>s+r.py25Tire,0)
-  const totTirePY24 = rows.reduce((s,r)=>s+r.py24Tire,0)
+  const visibleRows = (!selBr || selBr==='ALL') ? rows : rows.filter(r => r.id === selBr)
+
+  const totS     = visibleRows.reduce((s,r)=>s+r.ts,0)
+  const totT     = visibleRows.reduce((s,r)=>s+r.tgtSales,0)
+  const totTire  = visibleRows.reduce((s,r)=>s+r.m.tire,0)
+  const totTireT = visibleRows.reduce((s,r)=>s+r.tgtTire,0)
+  const totPY25  = visibleRows.reduce((s,r)=>s+r.py25Sales,0)
+  const totPY24  = visibleRows.reduce((s,r)=>s+r.py24Sales,0)
+  const totTirePY25 = visibleRows.reduce((s,r)=>s+r.py25Tire,0)
+  const totTirePY24 = visibleRows.reduce((s,r)=>s+r.py24Tire,0)
 
   // สีป้ายสาขาที่อ่านชัดบนพื้นสว่าง (ตัวอ่อนเช่น lime/cyan จะถูกแทนด้วยโทนเข้มกว่า)
   const READCLR = ['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
   const gc = p => (p>=100?STATUS.over:p>=90?STATUS.near:STATUS.push)
 
   return (
-    <div>
+    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
+      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+      <div style={{flex:1,minWidth:0}}>
       {/* Summary cards row */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
         <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
@@ -770,9 +774,9 @@ function Overview({ctx}) {
         /* Mobile: compact single-line-per-branch rows (เหมือน Morning Brief) ให้ 10 สาขาพอดีจอมากขึ้น */
         <div style={{background:CI.black,borderRadius:10,overflow:'hidden'}}>
           <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
-            📊 ภาพรวมทุกสาขา — MTD 1-{TODAY_D} {MONTH_TH}
+            📊 {(!selBr||selBr==='ALL') ? 'ภาพรวมทุกสาขา' : `สาขา ${visibleRows[0]?.id} ${visibleRows[0]?.short}`} — MTD 1-{TODAY_D} {MONTH_TH}
           </div>
-          {rows.map((r,i) => {
+          {visibleRows.map((r,i) => {
             const p = P(r.ts, r.tgtSales)
             const tp = r.tireAch
             return (
@@ -805,8 +809,8 @@ function Overview({ctx}) {
       ) : (
         /* Desktop: table with PY24+PY25 for both metrics */
         <div style={{background:'#161b25',borderRadius:10,border:'1px solid #2d3548',overflow:'hidden'}}>
-          <div style={{padding:'11px 15px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,color:'#f59e0b',borderBottom:'1px solid #2d3548'}}>
-            📊 ภาพรวมทุกสาขา — MTD 1-{TODAY_D} {MONTH_TH} {cfg.year}
+          <div style={{padding:'11px 15px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,color:CI.red,borderBottom:'1px solid #2d3548'}}>
+            📊 {(!selBr||selBr==='ALL') ? 'ภาพรวมทุกสาขา' : `สาขา ${visibleRows[0]?.id} ${visibleRows[0]?.short}`} — MTD 1-{TODAY_D} {MONTH_TH} {cfg.year}
           </div>
           <div style={{overflowX:'auto'}}>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
@@ -822,7 +826,7 @@ function Overview({ctx}) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r,i) => (
+                {visibleRows.map((r,i) => (
                   <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:i%2===0?'transparent':'#131820'}}>
                     <td style={{padding:'7px 8px',fontFamily:'Barlow Condensed',fontWeight:700,color:BCLR[i],fontSize:12,whiteSpace:'nowrap'}}>{r.id} {r.short}</td>
                     {/* Sales */}
@@ -858,6 +862,7 @@ function Overview({ctx}) {
         </div>
       )}
       <MascotFooter compact={mobile}/>
+      </div>
     </div>
   )
 }

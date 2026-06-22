@@ -230,7 +230,7 @@ function MascotFooter({ compact }) {
   )
 }
 
-/* ── Gauge bar — เกจเทียบเป้า ใช้ร่วมกันได้ทุกแท็บ ── */
+/* ── Gauge bar — เกจเทียบเป้าแบบเส้นตรง ใช้ร่วมกันได้ทุกแท็บ ── */
 function GaugeBar({ value, height=8 }) {
   const v = Math.max(0, Math.min(value, 100))
   return (
@@ -240,6 +240,30 @@ function GaugeBar({ value, height=8 }) {
   )
 }
 
+/* ── Gauge ครึ่งวงกลม — เทียบเป้าแบบสปีดมิเตอร์ ใช้ร่วมกันได้ทุกแท็บ ── */
+function SemiGauge({ value, size=88, strokeWidth=10 }) {
+  const v = Math.max(0, Math.min(value ?? 0, 100))
+  const color = statusColor(v)
+  const cx = size/2, cy = size/2, r = size/2 - strokeWidth/2 - 2
+  const pt = deg => {
+    const rad = deg*Math.PI/180
+    return [cx + r*Math.cos(rad), cy - r*Math.sin(rad)]
+  }
+  const [x1,y1] = pt(180)
+  const [x2,y2] = pt(0)
+  const angleV = 180 - 180*(v/100)
+  const [xv,yv] = pt(angleV)
+  const bgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`
+  const fgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${xv} ${yv}`
+  return (
+    <svg width={size} height={size/2+strokeWidth/2+2} style={{display:'block',margin:'0 auto'}}>
+      <path d={bgPath} fill="none" stroke="#1e2538" strokeWidth={strokeWidth} strokeLinecap="round"/>
+      {v>0 && <path d={fgPath} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>}
+    </svg>
+  )
+}
+
+/* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
 function BranchSelect({sel, onSel, showAll=true, mobile}) {
   if (mobile) return (
     <div style={{marginBottom:12}}>
@@ -1643,50 +1667,28 @@ function Tracker({ctx}) {
         <div style={{background:CI.black,borderRadius:10,overflow:'hidden'}}>
           {rows.map((r,i) => {
             const READCLR=['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
-            const salesTgt = r.t.sales*MTD_R, tireTgt = r.t.tire*MTD_R
+            const sp = r.salesAch ?? 0, tp = r.tireAch ?? 0
             return (
             <div key={r.id} style={{background:CI.white,padding:'9px 11px',borderTop:i===0?'none':`1px solid ${CI.line}`}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginBottom:6}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginBottom:7}}>
                 <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:14,color:READCLR[i]}}>{r.id} {r.short}</span>
                 {!r.hasToday && <span style={{fontSize:9.5,color:CI.red,fontWeight:700}}>⚠ ยังไม่กรอกวันนี้</span>}
               </div>
 
-              {/* ยอดขาย MTD — ตัวเลขเด่น + เกจเทียบเป้า */}
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:2}}>
-                <span style={{fontSize:11,color:'#666',fontWeight:700}}>💰 ยอดขาย MTD</span>
-                <span>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:17,fontWeight:900,color:CI.red}}>{fM(r.ts)}</span>
-                  <span style={{fontSize:10.5,color:'#999'}}> / {fM(Math.round(salesTgt))}</span>
-                </span>
-              </div>
-              <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:8}}>
-                <GaugeBar value={r.mtdSalesPct}/>
-                <span style={{fontSize:12,fontWeight:800,color:statusColor(r.mtdSalesPct),minWidth:36,textAlign:'right'}}>{r.mtdSalesPct.toFixed(0)}%</span>
-              </div>
-
-              {/* ยาง MTD — ตัวเลขเด่น + เกจเทียบเป้า */}
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:2}}>
-                <span style={{fontSize:11,color:'#666',fontWeight:700}}>🏷️ ยาง MTD</span>
-                <span>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:17,fontWeight:900,color:'#1D4ED8'}}>{r.m.tire}</span>
-                  <span style={{fontSize:10.5,color:'#999'}}> / {Math.round(tireTgt)} เส้น</span>
-                </span>
-              </div>
-              <div style={{display:'flex',alignItems:'center',gap:7}}>
-                <GaugeBar value={r.mtdTirePct}/>
-                <span style={{fontSize:12,fontWeight:800,color:statusColor(r.mtdTirePct),minWidth:36,textAlign:'right'}}>{r.mtdTirePct.toFixed(0)}%</span>
-              </div>
-
-              {/* วันนี้ — ข้อมูลรอง บรรทัดเล็ก */}
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginTop:7,paddingTop:6,borderTop:`1px solid ${CI.line}`,flexWrap:'wrap'}}>
-                <span style={{fontSize:10,color:'#888'}}>
-                  วันนี้ขาย {r.todaySales>0?fM(r.todaySales):'—'}/{fM(r.salesDayTgt)}
-                  {r.salesAch!=null&&<span style={{color:statusColor(r.salesAch),fontWeight:800}}> {r.salesAch.toFixed(0)}%</span>}
-                </span>
-                <span style={{fontSize:10,color:'#888'}}>
-                  วันนี้ยาง {r.todayTire>0?r.todayTire:'—'}/{r.tireDayTgt}
-                  {r.tireAch!=null&&<span style={{color:statusColor(r.tireAch),fontWeight:800}}> {r.tireAch.toFixed(0)}%</span>}
-                </span>
+              {/* วันนี้ vs เป้าวันนี้ — กล่องคู่ ยอดขาย/ยาง พร้อมเกจครึ่งวงกลม */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
+                  <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>💰 ยอดขายวันนี้</div>
+                  <SemiGauge value={sp}/>
+                  <div style={{fontSize:16,fontWeight:900,color:statusColor(sp),marginTop:-4}}>{sp.toFixed(0)}%</div>
+                  <div style={{fontSize:10,color:'#888',marginTop:1}}>{r.todaySales>0?fM(r.todaySales):'—'} / {fM(r.salesDayTgt)}</div>
+                </div>
+                <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
+                  <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🏷️ ยางวันนี้</div>
+                  <SemiGauge value={tp}/>
+                  <div style={{fontSize:16,fontWeight:900,color:statusColor(tp),marginTop:-4}}>{tp.toFixed(0)}%</div>
+                  <div style={{fontSize:10,color:'#888',marginTop:1}}>{r.todayTire>0?r.todayTire:'—'} / {r.tireDayTgt} เส้น</div>
+                </div>
               </div>
             </div>
           )})}

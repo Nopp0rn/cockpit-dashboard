@@ -334,8 +334,8 @@ export default function App() {
       })
       const link = document.createElement('a')
       const stamp = new Date().toISOString().slice(0,10)
-      link.download = `cockpit-${tab}-${stamp}.png`
-      link.href = canvas.toDataURL('image/png')
+      link.download = `cockpit-${tab}-${stamp}.jpg`
+      link.href = canvas.toDataURL('image/jpeg', 0.92)
       document.body.appendChild(link)
       link.click()
       link.remove()

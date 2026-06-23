@@ -118,8 +118,8 @@ const DEFAULT_CFG = {year:2026, month:5, todayDay:15}
 
 /* ── Cockpit CI palette — เหลือง/ดำ/แดง ตาม logo (ใช้ร่วมกับ MorningBrief.jsx) ── */
 const CI = { yellow:'#FFEB00', black:'#15181C', ink:'#0D1117', red:'#E2231A', white:'#FFFFFF', paper:'#F4F4F2', line:'#E3E3DE' }
-const STATUS = { over:CI.black, near:'#B45309', push:CI.red }
-const statusColor = p => (p>=100?STATUS.over:p>=80?STATUS.near:STATUS.push)
+const STATUS = { over:'#1A7F3E', near:'#B45309', push:CI.red }
+const statusColor = p => (p>=100?STATUS.over:p>=90?STATUS.near:STATUS.push)
 
 /* ── Helpers ── */
 const N  = (n,d=0) => Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:d,maximumFractionDigits:d})
@@ -175,8 +175,7 @@ function calcTS(agg) {
 /* ── UI atoms ── */
 function PBadge({value, threshold}) {
   const v = parseFloat(value)||0
-  const t = threshold ?? 100
-  const c = v>=t?STATUS.over:v>=t*0.95?STATUS.near:STATUS.push
+  const c = statusColor(v)
   return <span style={{background:c+'22',color:c,borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",whiteSpace:'nowrap'}}>{v.toFixed(1)}%</span>
 }
 
@@ -192,18 +191,17 @@ function Card({label,value,sub,color=CI.red,small}) {
 
 /* ── Extra badge components (module-level to avoid TDZ) ── */
 function GrowthBadge({pct, label, threshold}) {
-  // threshold: dynamic expected-progress %, default 100 (fixed benchmarks)
-  const t = threshold ?? 100
-  const clr = pct >= t ? STATUS.over : pct >= t * 0.95 ? STATUS.near : STATUS.push
+  // สีตามกฎ 3 ระดับเดียวกันทั้งแอป: <90%=แดง, 90-99.99%=เหลือง, >=100%=เขียว
+  const clr = statusColor(pct)
   return <span style={{fontSize:9,color:clr,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>vs{label} {pct.toFixed(0)}%</span>
 }
 function PctBadge({v}) {
-  const c=v>=100?STATUS.over:v>=80?STATUS.near:STATUS.push
+  const c=statusColor(v)
   return <span style={{background:c+'22',color:c,borderRadius:4,padding:'1px 7px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{v.toFixed(0)}%</span>
 }
 function AchBadge({pct}) {
   if (pct===null||pct===undefined) return <span style={{fontSize:10,color:'#4b5563'}}>—</span>
-  const c=pct>=100?STATUS.over:pct>=80?STATUS.near:STATUS.push
+  const c=statusColor(pct)
   return <span style={{background:c+'22',color:c,borderRadius:4,padding:'2px 6px',fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>{pct.toFixed(0)}%</span>
 }
 /* ── Mascot footer — แบนเนอร์ปิดท้ายหน้า ใช้ร่วมกันได้ทุกแท็บ (รูปจาก /icons/) ── */
@@ -262,9 +260,8 @@ function SemiGauge({ value, size=88, strokeWidth=10, color, trackColor='#E3E3DE'
 
 /* สีกำกับตัวเลขจริง vs เป้า — เขียว=เกินเป้า, ดำ=มีตัวเลขแล้ว(กำลังทำ), แดง=ยังไม่มียอดเลย */
 function actualColor(actualVal, pct) {
-  if (pct >= 100) return STATUS.over
-  if (actualVal > 0) return '#1a1a1a'
-  return STATUS.push
+  // ใช้กฎสี 3 ระดับเดียวกันทั้งแอป: <90%=แดง, 90-99.99%=เหลือง, >=100%=เขียว
+  return statusColor(pct)
 }
 
 /* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
@@ -1736,27 +1733,27 @@ function Tracker({ctx}) {
           </div>
         </div>
 
-        {/* MTD ยอดขาย+ยาง รวมเป็นกล่องเดียว มีเส้นแบ่งกลาง เหมือนหน้าหลัก */}
-        <div style={{gridColumn:'1 / span 2',background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 12px',display:'flex',gap:10}}>
-          <div style={{flex:1}}>
+        {/* MTD ยอดขาย / ยาง — แยก 2 กล่องซ้ายขวา */}
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
+          <div>
             <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>MTD ยอดขายรวม</div>
-            <div style={{fontSize:16,fontWeight:800,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(totTS)}</div>
-            <div style={{height:1,background:CI.line,margin:'5px 0'}}/>
-            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>MTD ยางรวม</div>
-            <div style={{fontSize:16,fontWeight:800,color:'#15181C',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} เส้น</div>
+            <div style={{fontSize:18,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(totTS)}</div>
           </div>
-          <div style={{width:1,background:CI.line}}/>
-          <div style={{display:'flex',flexDirection:'column',justifyContent:'space-around',gap:4}}>
-            <div style={{position:'relative'}}>
-              <Ring value={P(totTS,totTgt)} size={50} stroke={6}/>
-              <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                           fontSize:10,fontWeight:900,color:statusColor(P(totTS,totTgt))}}>{P(totTS,totTgt).toFixed(0)}%</div>
-            </div>
-            <div style={{position:'relative'}}>
-              <Ring value={P(totTire,totTireT)} size={50} stroke={6}/>
-              <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                           fontSize:10,fontWeight:900,color:statusColor(P(totTire,totTireT))}}>{P(totTire,totTireT).toFixed(0)}%</div>
-            </div>
+          <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
+            <Ring value={P(totTS,totTgt)} size={54} stroke={7}/>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+                         fontSize:11,fontWeight:900,color:statusColor(P(totTS,totTgt))}}>{P(totTS,totTgt).toFixed(0)}%</div>
+          </div>
+        </div>
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
+          <div>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>MTD ยางรวม</div>
+            <div style={{fontSize:18,fontWeight:900,color:'#15181C',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} <span style={{fontSize:12}}>เส้น</span></div>
+          </div>
+          <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
+            <Ring value={P(totTire,totTireT)} size={54} stroke={7}/>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+                         fontSize:11,fontWeight:900,color:statusColor(P(totTire,totTireT))}}>{P(totTire,totTireT).toFixed(0)}%</div>
           </div>
         </div>
       </div>

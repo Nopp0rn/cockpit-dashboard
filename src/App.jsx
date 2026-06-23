@@ -644,10 +644,10 @@ export default function App() {
           {capturing ? '⏳' : '📸'}{!mobile && <span>{capturing?'กำลังบันทึก...':'บันทึกภาพ'}</span>}
         </button>
 
-        {/* LIVE badge */}
-        <div style={{display:'flex',alignItems:'center',gap:5,background:CI.black,border:`1px solid ${CI.yellow}`,borderRadius:10,padding:'3px 8px',flexShrink:0}}>
-          <div style={{width:6,height:6,borderRadius:'50%',background:CI.yellow,animation:'pulse 2s infinite'}}/>
-          <span style={{fontSize:9,color:CI.yellow,fontFamily:'Barlow Condensed',fontWeight:700}}>LIVE</span>
+        {/* LIVE badge — เขียว=เชื่อมต่อ, แดง=หลุดการเชื่อมต่อ */}
+        <div style={{display:'flex',alignItems:'center',gap:5,background:connErr?'#2a0d0d':'#0d2a1a',border:`1px solid ${connErr?'#E2231A':'#22c55e'}`,borderRadius:10,padding:'3px 8px',flexShrink:0}}>
+          <div style={{width:6,height:6,borderRadius:'50%',background:connErr?'#E2231A':'#22c55e',animation:'pulse 2s infinite'}}/>
+          <span style={{fontSize:9,color:connErr?'#E2231A':'#22c55e',fontFamily:'Barlow Condensed',fontWeight:700}}>{connErr?'OFFLINE':'LIVE'}</span>
         </div>
         <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
       </div>
@@ -1085,9 +1085,9 @@ function MTDTab({ctx}) {
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
           <Card label="ยอดขาย MTD" value={fM(ts)} sub={`เป้า ${fM(Math.round(t.sales*MTD_R))}`}/>
-          <Card label="% เทียบเป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={P(ts,t.sales*MTD_R)>=100?'#FFFFFF':P(ts,t.sales*MTD_R)>=90?CI.red:'#E2231A'}/>
+          <Card label="% เทียบเป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={statusColor(P(ts,t.sales*MTD_R))}/>
           <Card label="ยาง MTD" value={N(m.tire)+' เส้น'} sub={`เป้า ${N(Math.round(t.tire*MTD_R))}`} color="#15181C"/>
-          <Card label="vs PY25" value={P(ts,pyMTD).toFixed(1)+'%'} color="#94a3b8"/>
+          <Card label="% เทียบเป้ายาง" value={P(m.tire,t.tire*MTD_R).toFixed(1)+'%'} color={statusColor(P(m.tire,t.tire*MTD_R))}/>
         </div>
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
@@ -1403,14 +1403,14 @@ function Daily({ctx}) {
               {showYrS[2024]&&<Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false}/>}
               {showYrS[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2}   dot={false} strokeDasharray="5 2" connectNulls={false}/>}
               {showYrS[2026]&&<Line type="monotone" dataKey={2026} stroke="#FFFFFF" strokeWidth={2.5} dot={{r:3,fill:'#FFFFFF'}} connectNulls={false}/>}
-              <Line type="monotone" dataKey="forecast" stroke="#E2231A" strokeWidth={2} dot={{r:2,fill:'#E2231A'}} strokeDasharray="5 3" connectNulls={false}/>
+              <Line type="monotone" dataKey="forecast" stroke="#FFEB00" strokeWidth={2} dot={{r:2,fill:'#FFEB00'}} strokeDasharray="5 3" connectNulls={false}/>
             </LineChart>
           </ResponsiveContainer>
           <div style={{display:'flex',gap:12,fontSize:9,color:'#6b7280',marginTop:4,flexWrap:'wrap'}}>
             <span style={{color:'#FFFFFF'}}>● {cfg.year} จริง</span>
             <span style={{color:YRCLR[2025]}}>⟶ PY25 {Object.keys(histDailySales).length>0?'จริง':'ประมาณ'}</span>
             <span style={{color:YRCLR[2024]}}>⟶ PY24 {Object.keys(histDailySales).length>0?'จริง':'ประมาณ'}</span>
-            <span style={{color:'#E2231A'}}>⟶ Forecast</span>
+            <span style={{color:'#FFEB00'}}>⟶ Forecast</span>
             <span style={{color:'#6b7280'}}>-- เป้า/วัน</span>
           </div>
         </div>
@@ -1435,14 +1435,14 @@ function Daily({ctx}) {
               {showYrT[2024]&&<Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false}/>}
               {showYrT[2025]&&<Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2}   dot={false} strokeDasharray="5 2" connectNulls={false}/>}
               {showYrT[2026]&&<Line type="monotone" dataKey={2026} stroke="#FFFFFF" strokeWidth={2.5} dot={{r:3,fill:'#FFFFFF'}} connectNulls={false}/>}
-              <Line type="monotone" dataKey="forecast" stroke="#E2231A" strokeWidth={2} dot={{r:2}} strokeDasharray="5 3" connectNulls={false}/>
+              <Line type="monotone" dataKey="forecast" stroke="#FFEB00" strokeWidth={2} dot={{r:2,fill:'#FFEB00'}} strokeDasharray="5 3" connectNulls={false}/>
             </LineChart>
           </ResponsiveContainer>
           <div style={{display:'flex',gap:12,fontSize:9,color:'#6b7280',marginTop:4,flexWrap:'wrap'}}>
             <span style={{color:'#FFFFFF'}}>● {cfg.year} จริง</span>
             <span style={{color:YRCLR[2025]}}>⟶ PY25</span>
             <span style={{color:YRCLR[2024]}}>⟶ PY24</span>
-            <span style={{color:'#E2231A'}}>⟶ Forecast</span>
+            <span style={{color:'#FFEB00'}}>⟶ Forecast</span>
             <span style={{color:'#6b7280'}}>-- เป้า/วัน</span>
           </div>
         </div>
@@ -1991,7 +1991,7 @@ function Entry({ctx}) {
         {/* MTD summary */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
           <Card label={`ยอด MTD (${filled.length}วัน)`} value={fM(ts)} sub={`เป้า ${fM(Math.round(t.sales*MTD_R))}`} small/>
-          <Card label="% เป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={P(ts,t.sales*MTD_R)>=100?'#FFFFFF':P(ts,t.sales*MTD_R)>=90?'#E2231A':'#E2231A'} small/>
+          <Card label="% เป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={statusColor(P(ts,t.sales*MTD_R))} small/>
           <Card label="ยาง MTD" value={N(mtd.tire)+' เส้น'} sub={`เป้า ${Math.round(t.tire*MTD_R)}`} color="#15181C" small/>
           <Card label="Job Order" value={N(mtd.jobOrder)} sub={`เป้า ${Math.round(t.cc*MTD_R)}`} color="#15181C" small/>
         </div>

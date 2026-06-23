@@ -966,8 +966,9 @@ function MTDTab({ctx}) {
     return {padding:'4px 10px',borderRadius:4,cursor:'pointer',border:`1px solid ${clr}`,background:map[yr]?clr+'33':'transparent',color:map[yr]?clr:'#4b5563',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11}
   }
 
+  const READCLR2 = ['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
   if (isAll) return (
-    /* ══ ALL BRANCHES — Image 3 style ══ */
+    /* ══ ALL BRANCHES — white-card style เหมือนหน้าหลัก/Tracker/สินค้า ══ */
     <div style={{display:'flex',gap:14,flexDirection:mobile?'column':'row'}}>
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1,minWidth:0}}>
@@ -978,51 +979,58 @@ function MTDTab({ctx}) {
           ⚡ เป้า MTD = เป้ารายเดือน × ({TODAY_D} ÷ {TOTAL_D}) คำนวณตามวันปฏิบัติการ
         </div>
 
-        {/* ── Summary table ── */}
-        <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,overflow:'hidden',marginBottom:12}}>
-          <div style={{overflowX:'auto'}}>
-            <table style={{width:'100%',borderCollapse:'collapse',fontSize:mobile?10:11}}>
-              <thead>
-                <tr style={{background:'#0d1117'}}>
-                  <th rowSpan={2} style={{padding:'7px 10px',textAlign:'left',color:'#6b7280',fontFamily:'Barlow Condensed',verticalAlign:'bottom',borderBottom:'1px solid #1e2538'}}>สาขา</th>
-                  <th colSpan={5} style={{padding:'5px 8px',textAlign:'center',color:'#FFFFFF',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>🏷️ ยาง (เส้น)</th>
-                  <th colSpan={4} style={{padding:'5px 8px',textAlign:'center',color:CI.red,fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548'}}>💰 ยอดขาย (฿)</th>
-                </tr>
-                <tr style={{background:'#0d1117'}}>
-                  {[`ยาง ${BE2(2024)}`,`ยาง ${BE2(2025)}`,`ยาง ${BE2(2026)}`,'เป้า MTD','%',`Sale ${BE2(2025)}`,`Sale ${BE2(2026)}`,'เป้า MTD','%'].map((h,i)=>(
-                    <th key={i} style={{padding:'5px 8px',textAlign:'center',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',borderLeft:i===0||i===5?'1px solid #2d3548':'none',whiteSpace:'nowrap'}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {allRows.map((r,i)=>(
-                  <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:i%2===0?'transparent':'#131820',cursor:'pointer'}} onClick={()=>setSelBr(r.id)}>
-                    <td style={{padding:'7px 10px',fontFamily:'Barlow Condensed',fontWeight:700,color:BCLR[i],fontSize:12,whiteSpace:'nowrap'}}>{r.id} {r.short}</td>
-                    <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{N(r.tire24)}</td>
-                    <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{N(r.tire25)}</td>
-                    <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#FFFFFF'}}>{N(r.tire26)}</td>
-                    <td style={{padding:'6px 8px',textAlign:'center',color:'#6b7280'}}>{N(r.tireTgt)}</td>
-                    <td style={{padding:'6px 8px',textAlign:'center'}}><PctBadge v={r.tirePct}/></td>
-                    <td style={{padding:'6px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8',borderLeft:'1px solid #1e2538'}}>{fM(r.sale25)}</td>
-                    <td style={{padding:'6px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:CI.red}}>{fM(r.sale26)}</td>
-                    <td style={{padding:'6px 8px',textAlign:'right',color:'#6b7280'}}>{fM(r.saleTgt)}</td>
-                    <td style={{padding:'6px 8px',textAlign:'center'}}><PctBadge v={r.salePct}/></td>
-                  </tr>
-                ))}
-                <tr style={{background:'#1e2538',borderTop:`2px solid ${CI.red}`}}>
-                  <td style={{padding:'7px 10px',fontWeight:900,fontFamily:'Barlow Condensed',fontSize:12}}>รวมทุกสาขา</td>
-                  <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #2d3548'}}>{N(totTire24)}</td>
-                  <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{N(totTire25)}</td>
-                  <td style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#FFFFFF'}}>{N(totTire26)}</td>
-                  <td style={{padding:'6px 8px',textAlign:'center',color:'#6b7280'}}>{N(totTireTgt)}</td>
-                  <td style={{padding:'6px 8px',textAlign:'center'}}><PctBadge v={P(totTire26,totTireTgt)}/></td>
-                  <td style={{padding:'6px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8',borderLeft:'1px solid #2d3548'}}>{fM(totSale25)}</td>
-                  <td style={{padding:'6px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:CI.red}}>{fM(totSale26)}</td>
-                  <td style={{padding:'6px 8px',textAlign:'right',color:'#6b7280'}}>{fM(totSaleTgt)}</td>
-                  <td style={{padding:'6px 8px',textAlign:'center'}}><PctBadge v={P(totSale26,totSaleTgt)}/></td>
-                </tr>
-              </tbody>
-            </table>
+        {/* ── Summary: compact rows สไตล์เดียวกับหน้าหลัก/Tracker/สินค้า ── */}
+        <div style={{background:CI.black,borderRadius:10,overflow:'hidden',marginBottom:12}}>
+          <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
+            📊 ภาพรวมทุกสาขา — MTD 1-{TODAY_D} {MONTH_TH} {cfg.year}
+          </div>
+          {allRows.map((r,i) => (
+            <div key={r.id} style={{background:CI.white,padding:'7px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,cursor:'pointer'}} onClick={()=>setSelBr(r.id)}>
+              <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[i],marginBottom:3}}>{r.id} {r.short}</div>
+
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>💰 ยอดขาย</span>
+                <GaugeBar value={r.salePct} height={6}/>
+                <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:CI.red,fontWeight:800}}>{fM(r.sale26)}</span>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(r.salePct)}}/>
+                  <span style={{fontSize:11,fontWeight:800,color:statusColor(r.salePct),minWidth:30,textAlign:'right'}}>{r.salePct.toFixed(0)}%</span>
+                  <span style={{fontSize:9.5,color:'#999'}}>PY{BE2(2025)} {fM(r.sale25)}</span>
+                </span>
+              </div>
+
+              <div style={{display:'flex',alignItems:'center',gap:8,marginTop:3}}>
+                <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>🏷️ ยาง</span>
+                <GaugeBar value={r.tirePct} height={6}/>
+                <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'#222',fontWeight:800}}>{N(r.tire26)} เส้น</span>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(r.tirePct)}}/>
+                  <span style={{fontSize:11,fontWeight:800,color:statusColor(r.tirePct),minWidth:30,textAlign:'right'}}>{r.tirePct.toFixed(0)}%</span>
+                  <span style={{fontSize:9.5,color:'#999'}}>PY{BE2(2025)} {N(r.tire25)} เส้น</span>
+                </span>
+              </div>
+            </div>
+          ))}
+
+          {/* รวมทุกสาขา */}
+          <div style={{background:'#FFF7D6',padding:'8px 10px',borderTop:`2px solid ${CI.red}`}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:13,color:CI.black,marginBottom:3}}>รวมทุกสาขา</div>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>💰 ยอดขาย</span>
+              <GaugeBar value={P(totSale26,totSaleTgt)} height={6}/>
+              <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:CI.red,fontWeight:900}}>{fM(totSale26)}</span>
+                <span style={{fontSize:11,fontWeight:900,color:statusColor(P(totSale26,totSaleTgt))}}>{P(totSale26,totSaleTgt).toFixed(0)}%</span>
+              </span>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginTop:3}}>
+              <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>🏷️ ยาง</span>
+              <GaugeBar value={P(totTire26,totTireTgt)} height={6}/>
+              <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:'#222',fontWeight:900}}>{N(totTire26)} เส้น</span>
+                <span style={{fontSize:11,fontWeight:900,color:statusColor(P(totTire26,totTireTgt))}}>{P(totTire26,totTireTgt).toFixed(0)}%</span>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1040,7 +1048,7 @@ function MTDTab({ctx}) {
                 <Legend wrapperStyle={{fontSize:9}}/>
                 <Bar dataKey="ยาง24" fill="#475569" radius={[2,2,0,0]}/>
                 <Bar dataKey="ยาง25" fill={CI.red} radius={[2,2,0,0]}/>
-                <Bar dataKey="ยาง26" fill="#15181C" radius={[2,2,0,0]}/>
+                <Bar dataKey="ยาง26" fill="#FFFFFF" radius={[2,2,0,0]}/>
                 <Line type="monotone" dataKey="เป้ายาง" stroke="#6b7280" strokeWidth={2} strokeDasharray="4 2" dot={{r:3}}/>
               </ComposedChart>
             </ResponsiveContainer>
@@ -1056,7 +1064,7 @@ function MTDTab({ctx}) {
                 <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}} formatter={v=>[fM(v*1000),'']}/>
                 <Legend wrapperStyle={{fontSize:9}}/>
                 <Bar dataKey="ยอด25" fill={CI.red} radius={[2,2,0,0]}/>
-                <Bar dataKey="ยอด26" fill="#15181C" radius={[2,2,0,0]}/>
+                <Bar dataKey="ยอด26" fill="#FFFFFF" radius={[2,2,0,0]}/>
                 <Line type="monotone" dataKey="เป้าขาย" stroke="#6b7280" strokeWidth={2} strokeDasharray="4 2" dot={{r:3}}/>
               </ComposedChart>
             </ResponsiveContainer>

@@ -752,15 +752,15 @@ function Overview({ctx}) {
             <div style={{fontSize:23,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(totS)}</div>
             <div style={{fontSize:10,color:'#777'}}>เป้า {fM(Math.round(totT))}</div>
             <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
-              <span style={{color:gc(P(totS,totT)/(MTD_R||1))}}>vsเป้า {P(totS,totT).toFixed(0)}%</span>
-              <span style={{color:gc(P(totS,totPY25))}}>vsPY25 {P(totS,totPY25).toFixed(0)}%</span>
-              <span style={{color:gc(P(totS,totPY24))}}>vsPY24 {P(totS,totPY24).toFixed(0)}%</span>
+              <span style={{color:statusColor(P(totS,totT))}}>vsเป้า {P(totS,totT).toFixed(0)}%</span>
+              <span style={{color:statusColor(P(totS,totPY25))}}>vsPY25 {P(totS,totPY25).toFixed(0)}%</span>
+              <span style={{color:statusColor(P(totS,totPY24))}}>vsPY24 {P(totS,totPY24).toFixed(0)}%</span>
             </div>
           </div>
           <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
-            <Ring value={P(totS,totT)} color={gc(P(totS,totT)/(MTD_R||1))}/>
+            <Ring value={P(totS,totT)}/>
             <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                         fontSize:13,fontWeight:900,color:gc(P(totS,totT)/(MTD_R||1))}}>{P(totS,totT).toFixed(0)}%</div>
+                         fontSize:13,fontWeight:900,color:statusColor(P(totS,totT))}}>{P(totS,totT).toFixed(0)}%</div>
           </div>
         </div>
         <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
@@ -769,15 +769,15 @@ function Overview({ctx}) {
             <div style={{fontSize:23,fontWeight:900,color:'#15181C',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
             <div style={{fontSize:10,color:'#777'}}>เป้า {N(Math.round(totTireT))}</div>
             <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
-              <span style={{color:gc(P(totTire,totTireT)/(MTD_R||1))}}>vsเป้า {P(totTire,totTireT).toFixed(0)}%</span>
-              <span style={{color:gc(P(totTire,totTirePY25))}}>vsPY25 {P(totTire,totTirePY25).toFixed(0)}%</span>
-              <span style={{color:gc(P(totTire,totTirePY24))}}>vsPY24 {P(totTire,totTirePY24).toFixed(0)}%</span>
+              <span style={{color:statusColor(P(totTire,totTireT))}}>vsเป้า {P(totTire,totTireT).toFixed(0)}%</span>
+              <span style={{color:statusColor(P(totTire,totTirePY25))}}>vsPY25 {P(totTire,totTirePY25).toFixed(0)}%</span>
+              <span style={{color:statusColor(P(totTire,totTirePY24))}}>vsPY24 {P(totTire,totTirePY24).toFixed(0)}%</span>
             </div>
           </div>
           <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
-            <Ring value={P(totTire,totTireT)} color={gc(P(totTire,totTireT)/(MTD_R||1))}/>
+            <Ring value={P(totTire,totTireT)}/>
             <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                         fontSize:13,fontWeight:900,color:gc(P(totTire,totTireT)/(MTD_R||1))}}>{P(totTire,totTireT).toFixed(0)}%</div>
+                         fontSize:13,fontWeight:900,color:statusColor(P(totTire,totTireT))}}>{P(totTire,totTireT).toFixed(0)}%</div>
           </div>
         </div>
 

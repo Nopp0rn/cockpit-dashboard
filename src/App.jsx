@@ -780,9 +780,10 @@ function Overview({ctx}) {
               <div key={r.id} style={{background:CI.white,padding:'7px 10px',borderTop:`2px solid ${CI.black}`}}>
                 <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR[i],marginBottom:3}}>{r.id} {r.short}</div>
 
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
-                  <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0}}>💰 ยอดขาย</span>
-                  <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>💰 ยอดขาย</span>
+                  <GaugeBar value={p} height={6}/>
+                  <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
                     <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:CI.red,fontWeight:800}}>{fM(r.ts)}</span>
                     <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(p)}}/>
                     <span style={{fontSize:11,fontWeight:800,color:statusColor(p),minWidth:30,textAlign:'right'}}>{p.toFixed(0)}%</span>
@@ -790,9 +791,10 @@ function Overview({ctx}) {
                   </span>
                 </div>
 
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginTop:3}}>
-                  <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0}}>🏷️ ยาง</span>
-                  <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginTop:3}}>
+                  <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>🏷️ ยาง</span>
+                  <GaugeBar value={tp} height={6}/>
+                  <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
                     <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'#1D4ED8',fontWeight:800}}>{r.m.tire} เส้น</span>
                     <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(tp)}}/>
                     <span style={{fontSize:11,fontWeight:800,color:statusColor(tp),minWidth:30,textAlign:'right'}}>{tp.toFixed(0)}%</span>

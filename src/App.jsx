@@ -180,12 +180,12 @@ function PBadge({value, threshold}) {
   return <span style={{background:c+'22',color:c,borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",whiteSpace:'nowrap'}}>{v.toFixed(1)}%</span>
 }
 
-function Card({label,value,sub,color='#f59e0b',small}) {
+function Card({label,value,sub,color=CI.red,small}) {
   return (
-    <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
-      <div style={{fontSize:9,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:2,fontFamily:'Barlow Condensed'}}>{label}</div>
-      <div style={{fontSize:small?16:20,fontWeight:700,color,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{value}</div>
-      {sub&&<div style={{fontSize:10,color:'#6b7280',marginTop:2}}>{sub}</div>}
+    <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
+      <div style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,marginBottom:2,fontFamily:'Barlow Condensed',fontWeight:700}}>{label}</div>
+      <div style={{fontSize:small?16:20,fontWeight:800,color,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{value}</div>
+      {sub&&<div style={{fontSize:10,color:'#888',marginTop:2}}>{sub}</div>}
     </div>
   )
 }
@@ -1371,9 +1371,9 @@ function Daily({ctx}) {
 
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
           <Card label="เฉลี่ย/วัน (ยอดขาย)"  value={fM(Math.round(avgSales))} color={CI.red} small/>
-          <Card label="เป้า/วัน (ยอดขาย)"    value={fM(Math.round(tgtSalesD))} color="#a78bfa" small/>
-          <Card label="เฉลี่ย/วัน (ยาง)"      value={N(Math.round(avgTire))+' เส้น'} color="#3b82f6" small/>
-          <Card label="ต้องทำ/วัน (ยอดเหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/Math.max(1,DAYS_LEFT)))} color="#ef4444" small/>
+          <Card label="เป้า/วัน (ยอดขาย)"    value={fM(Math.round(tgtSalesD))} color="#555" small/>
+          <Card label="เฉลี่ย/วัน (ยาง)"      value={N(Math.round(avgTire))+' เส้น'} color="#1D4ED8" small/>
+          <Card label="ต้องทำ/วัน (ยอดเหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/Math.max(1,DAYS_LEFT)))} color={CI.red} small/>
         </div>
 
         {/* ── Sales chart ── */}
@@ -1698,29 +1698,59 @@ function Tracker({ctx}) {
         เป้าวัน = (เป้าเดือน − ยอด MTD วันก่อนหน้า) ÷ {TOTAL_D - TODAY_D + 1} วันที่เหลือ (รวมวันนี้)
       </div>
 
-      {/* Summary cards */}
+      {/* Summary cards — สไตล์เดียวกับหน้าหลัก (การ์ดขาว + เกจวงกลม) */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
-        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
-          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed',textTransform:'uppercase'}}>วันนี้รวม (ยอดขาย)</div>
-          <div style={{fontSize:22,fontWeight:700,color:todayTotSales>0?STATUS.over:'#374151',fontFamily:"'JetBrains Mono',monospace"}}>{fM(todayTotSales)}</div>
-          <div style={{fontSize:9,color:'#6b7280'}}>เป้า/วัน {fM(todayTotTgt)}</div>
-          {todayTotTgt>0&&<AchBadge pct={P(todayTotSales,todayTotTgt)}/>}
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
+          <div>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed',letterSpacing:.5}}>วันนี้รวม (ยอดขาย)</div>
+            <div style={{fontSize:21,fontWeight:900,color:todayTotSales>0?CI.red:'#999',fontFamily:"'JetBrains Mono',monospace"}}>{fM(todayTotSales)}</div>
+            <div style={{fontSize:10,color:'#777'}}>เป้า/วัน {fM(todayTotTgt)}</div>
+          </div>
+          <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
+            <Ring value={todayTotTgt>0?P(todayTotSales,todayTotTgt):0} size={56} stroke={7}/>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+                         fontSize:11.5,fontWeight:900,color:statusColor(todayTotTgt>0?P(todayTotSales,todayTotTgt):0)}}>
+              {todayTotTgt>0?P(todayTotSales,todayTotTgt).toFixed(0):0}%
+            </div>
+          </div>
         </div>
-        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'10px 12px'}}>
-          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed',textTransform:'uppercase'}}>วันนี้รวม (ยาง)</div>
-          <div style={{fontSize:22,fontWeight:700,color:todayTotTire>0?'#3b82f6':'#374151',fontFamily:"'JetBrains Mono',monospace"}}>{N(todayTotTire)} <span style={{fontSize:13}}>เส้น</span></div>
-          <div style={{fontSize:9,color:'#6b7280'}}>เป้า/วัน {N(todayTotTireT)} เส้น</div>
-          {todayTotTireT>0&&<AchBadge pct={P(todayTotTire,todayTotTireT)}/>}
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
+          <div>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed',letterSpacing:.5}}>วันนี้รวม (ยาง)</div>
+            <div style={{fontSize:21,fontWeight:900,color:todayTotTire>0?'#1D4ED8':'#999',fontFamily:"'JetBrains Mono',monospace"}}>{N(todayTotTire)} <span style={{fontSize:12}}>เส้น</span></div>
+            <div style={{fontSize:10,color:'#777'}}>เป้า/วัน {N(todayTotTireT)} เส้น</div>
+          </div>
+          <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
+            <Ring value={todayTotTireT>0?P(todayTotTire,todayTotTireT):0} size={56} stroke={7}/>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+                         fontSize:11.5,fontWeight:900,color:statusColor(todayTotTireT>0?P(todayTotTire,todayTotTireT):0)}}>
+              {todayTotTireT>0?P(todayTotTire,todayTotTireT).toFixed(0):0}%
+            </div>
+          </div>
         </div>
-        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
-          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>MTD ยอดขายรวม</div>
-          <div style={{fontSize:16,fontWeight:700,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(totTS)}</div>
-          <AchBadge pct={P(totTS,totTgt)}/>
-        </div>
-        <div style={{background:'#1e2538',border:'1px solid #2d3548',borderRadius:8,padding:'8px 12px'}}>
-          <div style={{fontSize:9,color:'#6b7280',fontFamily:'Barlow Condensed'}}>MTD ยางรวม</div>
-          <div style={{fontSize:16,fontWeight:700,color:'#3b82f6',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} เส้น</div>
-          <AchBadge pct={P(totTire,totTireT)}/>
+
+        {/* MTD ยอดขาย+ยาง รวมเป็นกล่องเดียว มีเส้นแบ่งกลาง เหมือนหน้าหลัก */}
+        <div style={{gridColumn:'1 / span 2',background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 12px',display:'flex',gap:10}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>MTD ยอดขายรวม</div>
+            <div style={{fontSize:16,fontWeight:800,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(totTS)}</div>
+            <div style={{height:1,background:CI.line,margin:'5px 0'}}/>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>MTD ยางรวม</div>
+            <div style={{fontSize:16,fontWeight:800,color:'#1D4ED8',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} เส้น</div>
+          </div>
+          <div style={{width:1,background:CI.line}}/>
+          <div style={{display:'flex',flexDirection:'column',justifyContent:'space-around',gap:4}}>
+            <div style={{position:'relative'}}>
+              <Ring value={P(totTS,totTgt)} size={50} stroke={6}/>
+              <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+                           fontSize:10,fontWeight:900,color:statusColor(P(totTS,totTgt))}}>{P(totTS,totTgt).toFixed(0)}%</div>
+            </div>
+            <div style={{position:'relative'}}>
+              <Ring value={P(totTire,totTireT)} size={50} stroke={6}/>
+              <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+                           fontSize:10,fontWeight:900,color:statusColor(P(totTire,totTireT))}}>{P(totTire,totTireT).toFixed(0)}%</div>
+            </div>
+          </div>
         </div>
       </div>
 

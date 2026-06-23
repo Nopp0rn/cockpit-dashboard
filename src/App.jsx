@@ -268,6 +268,21 @@ function actualColor(actualVal, pct) {
 }
 
 /* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
+/* ── Ring — เกจวงกลมเทียบเป้า ใช้ร่วมกันได้ทุกแท็บ ── */
+function Ring({ value, size=62, stroke=8, color }) {
+  const v = Math.max(0, Math.min(value ?? 0, 100))
+  const c = color || statusColor(v)
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  return (
+    <svg width={size} height={size} style={{display:'block',transform:'rotate(-90deg)'}}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E3E3DE" strokeWidth={stroke}/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={c} strokeWidth={stroke}
+              strokeDasharray={`${(v/100)*circ} ${circ}`} strokeLinecap="round"/>
+    </svg>
+  )
+}
+
 function BranchSelect({sel, onSel, showAll=true, mobile}) {
   if (mobile) return (
     <div style={{marginBottom:12}}>
@@ -735,35 +750,61 @@ function Overview({ctx}) {
       <div style={{flex:1,minWidth:0}}>
       {/* Summary cards row */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
-          <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:.5,fontFamily:'Barlow Condensed'}}>ยอดขายรวม MTD</div>
-          <div style={{fontSize:23,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(totS)}</div>
-          <div style={{fontSize:10,color:'#777'}}>เป้า {fM(Math.round(totT))}</div>
-          <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
-            <span style={{color:gc(P(totS,totT)/(MTD_R||1))}}>vsเป้า {P(totS,totT).toFixed(0)}%</span>
-            <span style={{color:gc(P(totS,totPY25))}}>vsPY25 {P(totS,totPY25).toFixed(0)}%</span>
-            <span style={{color:gc(P(totS,totPY24))}}>vsPY24 {P(totS,totPY24).toFixed(0)}%</span>
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
+          <div>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:.5,fontFamily:'Barlow Condensed'}}>ยอดขายรวม MTD</div>
+            <div style={{fontSize:23,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(totS)}</div>
+            <div style={{fontSize:10,color:'#777'}}>เป้า {fM(Math.round(totT))}</div>
+            <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
+              <span style={{color:gc(P(totS,totT)/(MTD_R||1))}}>vsเป้า {P(totS,totT).toFixed(0)}%</span>
+              <span style={{color:gc(P(totS,totPY25))}}>vsPY25 {P(totS,totPY25).toFixed(0)}%</span>
+              <span style={{color:gc(P(totS,totPY24))}}>vsPY24 {P(totS,totPY24).toFixed(0)}%</span>
+            </div>
+          </div>
+          <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
+            <Ring value={P(totS,totT)} color={gc(P(totS,totT)/(MTD_R||1))}/>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+                         fontSize:13,fontWeight:900,color:gc(P(totS,totT)/(MTD_R||1))}}>{P(totS,totT).toFixed(0)}%</div>
           </div>
         </div>
-        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
-          <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:.5,fontFamily:'Barlow Condensed'}}>ยางรวม MTD</div>
-          <div style={{fontSize:23,fontWeight:900,color:'#1D4ED8',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
-          <div style={{fontSize:10,color:'#777'}}>เป้า {N(Math.round(totTireT))}</div>
-          <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
-            <span style={{color:gc(P(totTire,totTireT)/(MTD_R||1))}}>vsเป้า {P(totTire,totTireT).toFixed(0)}%</span>
-            <span style={{color:gc(P(totTire,totTirePY25))}}>vsPY25 {P(totTire,totTirePY25).toFixed(0)}%</span>
-            <span style={{color:gc(P(totTire,totTirePY24))}}>vsPY24 {P(totTire,totTirePY24).toFixed(0)}%</span>
+        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
+          <div>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:.5,fontFamily:'Barlow Condensed'}}>ยางรวม MTD</div>
+            <div style={{fontSize:23,fontWeight:900,color:'#1D4ED8',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
+            <div style={{fontSize:10,color:'#777'}}>เป้า {N(Math.round(totTireT))}</div>
+            <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
+              <span style={{color:gc(P(totTire,totTireT)/(MTD_R||1))}}>vsเป้า {P(totTire,totTireT).toFixed(0)}%</span>
+              <span style={{color:gc(P(totTire,totTirePY25))}}>vsPY25 {P(totTire,totTirePY25).toFixed(0)}%</span>
+              <span style={{color:gc(P(totTire,totTirePY24))}}>vsPY24 {P(totTire,totTirePY24).toFixed(0)}%</span>
+            </div>
+          </div>
+          <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
+            <Ring value={P(totTire,totTireT)} color={gc(P(totTire,totTireT)/(MTD_R||1))}/>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+                         fontSize:13,fontWeight:900,color:gc(P(totTire,totTireT)/(MTD_R||1))}}>{P(totTire,totTireT).toFixed(0)}%</div>
           </div>
         </div>
-        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 12px'}}>
-          <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>PY25 MTD รวม</div>
-          <div style={{fontSize:16,fontWeight:800,color:'#333',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY25))}</div>
-          <div style={{fontSize:10,color:'#888'}}>ยาง: {N(Math.round(totTirePY25))} เส้น</div>
-        </div>
-        <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 12px'}}>
-          <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>PY24 MTD รวม</div>
-          <div style={{fontSize:16,fontWeight:800,color:'#555',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY24))}</div>
-          <div style={{fontSize:10,color:'#888'}}>ยาง: {N(Math.round(totTirePY24))} เส้น</div>
+
+        {/* PY25+PY24 รวมเป็นกล่องเดียว — ใช้พื้นที่ขวาที่ว่างแสดงยอดที่ขาดถึงเป้า */}
+        <div style={{gridColumn:'1 / span 2',background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,
+                     padding:'8px 12px',display:'flex',gap:10}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>PY25 MTD รวม</div>
+            <div style={{fontSize:16,fontWeight:800,color:'#333',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY25))}</div>
+            <div style={{fontSize:10,color:'#888',marginBottom:6}}>ยาง: {N(Math.round(totTirePY25))} เส้น</div>
+            <div style={{height:1,background:CI.line,margin:'4px 0'}}/>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed',marginTop:6}}>PY24 MTD รวม</div>
+            <div style={{fontSize:16,fontWeight:800,color:'#555',fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.round(totPY24))}</div>
+            <div style={{fontSize:10,color:'#888'}}>ยาง: {N(Math.round(totTirePY24))} เส้น</div>
+          </div>
+          <div style={{width:1,background:CI.line}}/>
+          <div style={{flex:1,textAlign:'right'}}>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>ขาดยอดขายอีก (ถึงเป้า)</div>
+            <div style={{fontSize:18,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(Math.max(0,Math.round(totT-totS)))}</div>
+            <div style={{height:1,background:CI.line,margin:'8px 0'}}/>
+            <div style={{fontSize:10,color:'#666',fontWeight:700,fontFamily:'Barlow Condensed'}}>ขาดยางอีก (ถึงเป้า)</div>
+            <div style={{fontSize:18,fontWeight:900,color:'#1D4ED8',fontFamily:"'JetBrains Mono',monospace"}}>{N(Math.max(0,Math.round(totTireT-totTire)))} เส้น</div>
+          </div>
         </div>
       </div>
 

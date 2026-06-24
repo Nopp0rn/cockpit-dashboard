@@ -140,6 +140,13 @@ const fM = (n) => n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':N(
 const P  = (a,b) => b?(a/b)*100:0
 const dIM = (y,m) => new Date(y,m,0).getDate()
 
+// แปลงรหัสผ่านเป็น SHA-256 hex — ใช้เทียบรหัส ไม่เก็บ/ส่งรหัสผ่านเป็นตัวอักษรเปล่าๆ
+async function sha256Hex(text) {
+  const enc = new TextEncoder().encode(text)
+  const buf = await crypto.subtle.digest('SHA-256', enc)
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('')
+}
+
 /* ── Entry field definitions ── */
 const FIELDS = [
   {key:'totalSales', label:'ยอดขายรวมวัน (฿)',         tgt:null},   // ← เพิ่มใหม่
@@ -352,6 +359,113 @@ const TABS = [
 ]
 
 /* ════════════════════════════════════════════════════════
+   LOCK SCREEN — ก่อนเข้าแอปต้องใส่รหัสผ่าน
+   - authHash=null (ยังไม่มีใครตั้งรหัส) → โหมดตั้งรหัสผ่านครั้งแรก
+   - authHash มีค่าแล้ว → โหมดใส่รหัสเข้าระบบ
+   - รหัสเก็บเป็น SHA-256 hash บน Supabase (key 'cp_auth') ไม่เก็บตัวอักษรเปล่าๆ
+   - เปลี่ยนรหัสได้ตลอดเวลาที่แท็บ "ตั้งค่า" โดยไม่ต้องแก้โค้ด/redeploy
+════════════════════════════════════════════════════════ */
+function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
+  const isSetup = !authHash
+  const [pw, setPw]     = useState('')
+  const [pw2, setPw2]   = useState('')
+  const [show, setShow] = useState(false)
+  const [err, setErr]   = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    if (busy) return
+    setErr('')
+    if (isSetup) {
+      if (pw.length < 4) return setErr('รหัสผ่านสั้นเกินไป — อย่างน้อย 4 ตัวอักษร')
+      if (pw !== pw2)    return setErr('รหัสผ่านยืนยันไม่ตรงกัน')
+      setBusy(true)
+      try {
+        const h = await sha256Hex(pw)
+        const ok = await DB.set('cp_auth', h)
+        setBusy(false)
+        if (!ok) return setErr('บันทึกรหัสผ่านไม่สำเร็จ ลองใหม่อีกครั้ง')
+        setAuthHash(h)
+        onUnlock()
+      } catch(e) { setBusy(false); setErr('เกิดข้อผิดพลาด: '+(e?.message||e)) }
+    } else {
+      if (!pw) return
+      setBusy(true)
+      try {
+        const h = await sha256Hex(pw)
+        setBusy(false)
+        if (h === authHash) onUnlock()
+        else { setErr('รหัสผ่านไม่ถูกต้อง'); setPw('') }
+      } catch(e) { setBusy(false); setErr('เกิดข้อผิดพลาด: '+(e?.message||e)) }
+    }
+  }
+
+  const fieldSt = {display:'flex',alignItems:'center',background:'#fff',borderRadius:8,padding:'0 12px',border:err?`1px solid ${CI.red}`:'1px solid transparent'}
+  const inputSt = {flex:1,background:'transparent',border:'none',outline:'none',color:'#15181C',fontFamily:'Barlow Condensed',fontSize:15,padding:'12px 4px'}
+
+  return (
+    <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:compact?'24px 16px':'40px 20px',position:'relative',overflow:'hidden'}}>
+
+      {/* มาสคอตยืนข้างการ์ด — แสดงเฉพาะจอกว้าง ไม่รก mobile */}
+      {!compact && (
+        <>
+          <img src="/icons/cockpit-boy.png" alt="" style={{position:'absolute',left:'3%',bottom:0,width:240,height:'auto',objectFit:'contain',pointerEvents:'none'}}
+               onError={e=>{e.target.style.display='none'}}/>
+          <img src="/icons/cockpit-girl.png" alt="" style={{position:'absolute',right:'3%',bottom:0,width:240,height:'auto',objectFit:'contain',transform:'scaleX(-1)',pointerEvents:'none'}}
+               onError={e=>{e.target.style.display='none'}}/>
+        </>
+      )}
+
+      {/* หัวเรื่องด้านบน */}
+      <div style={{textAlign:'center',marginBottom:18,zIndex:1}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?32:54,color:CI.black,letterSpacing:1,lineHeight:1}}>COCKPIT</div>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?18:28,color:CI.yellow,background:CI.black,display:'inline-block',padding:'2px 14px',marginTop:6,letterSpacing:1,fontStyle:'italic',borderRadius:3}}>
+          sale intelligence
+        </div>
+      </div>
+
+      {/* การ์ดดำ — ฟอร์มรหัสผ่าน */}
+      <div style={{background:CI.black,borderRadius:18,padding:compact?'24px 20px':'32px 36px',width:'100%',maxWidth:380,zIndex:1,boxShadow:'0 12px 40px rgba(0,0,0,.35)'}}>
+        <div style={{textAlign:'center',marginBottom:18}}>
+          <div style={{color:'#fff',fontFamily:'Barlow Condensed',fontSize:14,marginBottom:2}}>{isSetup?'ตั้งรหัสผ่านครั้งแรก':'ยินดีต้อนรับสู่'}</div>
+          <div style={{color:CI.yellow,fontFamily:'Barlow Condensed',fontWeight:900,fontSize:22,letterSpacing:1}}>COCKPIT</div>
+          <div style={{color:CI.yellow,fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,fontStyle:'italic'}}>sale intelligence</div>
+        </div>
+
+        <div style={{color:'#fff',fontFamily:'Barlow Condensed',fontSize:13,marginBottom:10,textAlign:'center'}}>
+          {isSetup ? 'ตั้งรหัสผ่านสำหรับเข้าใช้งาน' : 'กรุณาใส่รหัสผ่าน'}
+        </div>
+
+        <div style={{...fieldSt,marginBottom:isSetup?10:14}}>
+          <span style={{fontSize:15,marginRight:4}}>🔒</span>
+          <input type={show?'text':'password'} value={pw} onChange={e=>setPw(e.target.value)}
+            onKeyDown={e=>{if(e.key==='Enter'){ isSetup ? document.getElementById('cp-pw2')?.focus() : submit() }}}
+            placeholder="Password" autoFocus style={inputSt}/>
+          <span onClick={()=>setShow(s=>!s)} style={{cursor:'pointer',fontSize:15,opacity:.6,userSelect:'none'}}>{show?'🙈':'👁️'}</span>
+        </div>
+
+        {isSetup && (
+          <div style={{...fieldSt,marginBottom:14}}>
+            <span style={{fontSize:15,marginRight:4}}>🔒</span>
+            <input id="cp-pw2" type={show?'text':'password'} value={pw2} onChange={e=>setPw2(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter') submit()}}
+              placeholder="ยืนยันรหัสผ่าน" style={inputSt}/>
+          </div>
+        )}
+
+        {err && <div style={{color:CI.red,fontSize:12,textAlign:'center',marginBottom:10,fontFamily:'Barlow Condensed',fontWeight:700}}>⚠️ {err}</div>}
+
+        <button onClick={submit} disabled={busy} style={{width:'100%',padding:14,background:busy?'#7a6a00':CI.yellow,color:CI.black,border:'none',borderRadius:8,cursor:busy?'default':'pointer',fontFamily:'Barlow Condensed',fontWeight:900,fontSize:16,letterSpacing:1}}>
+          {busy ? 'กำลังตรวจสอบ...' : (isSetup ? 'ตั้งรหัสผ่าน' : 'เข้าสู่ระบบ')}
+        </button>
+      </div>
+
+      <div style={{marginTop:16,fontSize:10,color:'#5c5200',fontFamily:'Barlow Condensed',zIndex:1}}>COCKPIT SALES INTELLIGENCE © {new Date().getFullYear()}</div>
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════
    ROOT APP
 ════════════════════════════════════════════════════════ */
 export default function App() {
@@ -446,6 +560,29 @@ export default function App() {
   const [histDailyTire,  setHistDailyTire]  = useState({})  // { bid: {'YYYY-MM':{day:qty}} }
   const [uploadedMtAll,  setUploadedMtAll]  = useState({})  // {yr:{mo:qty}} Total sheet จาก Data_sale_by_Store
 
+  /* ── Password gate — ต้องใส่รหัสใหม่ทุกวัน (จำไว้แค่ภายในวันเดียวกัน) ── */
+  const [authHash, setAuthHash] = useState(null)   // SHA-256 hex ของรหัสผ่านปัจจุบัน (เก็บบน Supabase key 'cp_auth')
+  const [unlocked, setUnlocked] = useState(() => {
+    try { return localStorage.getItem('cp_unlocked_date') === new Date().toDateString() } catch { return false }
+  })
+  const onUnlock = useCallback(() => {
+    setUnlocked(true)
+    try { localStorage.setItem('cp_unlocked_date', new Date().toDateString()) } catch {}
+  }, [])
+  const logout = useCallback(() => {
+    try { localStorage.removeItem('cp_unlocked_date') } catch {}
+    setUnlocked(false)
+  }, [])
+  // เผื่อเปิดแอปทิ้งไว้ข้ามคืน — เช็คทุก 1 นาทีว่าข้ามวันแล้วหรือยัง ถ้าข้ามวันให้ล็อกออกอัตโนมัติ
+  useEffect(() => {
+    const iv = setInterval(() => {
+      let d = null
+      try { d = localStorage.getItem('cp_unlocked_date') } catch {}
+      if (d !== new Date().toDateString()) setUnlocked(false)
+    }, 60000)
+    return () => clearInterval(iv)
+  }, [])
+
   /* ── Load all data & subscribe to realtime changes ── */
   useEffect(() => {
     let settled = false
@@ -459,7 +596,7 @@ export default function App() {
 
     ;(async () => {
       try {
-        const keys = ['cp_de','cp_tgt','cp_hist','cp_cfg','cp_fcst','cp_up','cp_hdsl','cp_hdtr','cp_tireq']
+        const keys = ['cp_de','cp_tgt','cp_hist','cp_cfg','cp_fcst','cp_up','cp_hdsl','cp_hdtr','cp_tireq','cp_auth']
         const { data: rows, error } = await supabase
           .from('app_data').select('key,value').in('key', keys)
 
@@ -476,6 +613,7 @@ export default function App() {
             if (r.key==='cp_hdsl') setHistDailySales(r.value)
             if (r.key==='cp_hdtr') setHistDailyTire(r.value)
             if (r.key==='cp_tireq') setHistTireQ(r.value)
+            if (r.key==='cp_auth')  setAuthHash(r.value)
           })
         }
         finish(false)  // ✅ โหลดสำเร็จ ไม่โชว์ banner
@@ -500,6 +638,7 @@ export default function App() {
       if (r.key==='cp_hdtr' && r.value!=null) setHistDailyTire(r.value)
       if (r.key==='cp_umtal'&& r.value!=null) setUploadedMtAll(r.value)
       if (r.key==='cp_tireq'&& r.value!=null) setHistTireQ(r.value)
+      if (r.key==='cp_auth' && r.value!=null) setAuthHash(r.value)
     })
 
     // Timeout 10s — แสดง app แต่ไม่โชว์ banner (ช้าไม่ใช่ error)
@@ -619,7 +758,7 @@ export default function App() {
 
 
 
-  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR}
+  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR,authHash,setAuthHash,logout}
 
   /* ── Loading screen ── */
   if (!ready) return (
@@ -633,6 +772,9 @@ export default function App() {
       <div style={{fontSize:11,color:'#4b5563'}}>กำลังเชื่อมต่อ Supabase...</div>
     </div>
   )
+
+  /* ── Password gate — ต้องผ่านก่อนเข้าแอป ── */
+  if (!unlocked) return <LockScreen authHash={authHash} setAuthHash={setAuthHash} onUnlock={onUnlock} compact={compact}/>
 
   /* ── Connection error banner (shown inside app) ── */
   const ConnBanner = connErr ? (
@@ -2751,11 +2893,36 @@ function Upload({ ctx }) {
 }
 /* ════ SETTINGS ════ */
 function Settings({ctx}) {
-  const {cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,mobile} = ctx
+  const {cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,mobile,authHash,setAuthHash,logout} = ctx
   const [form,setForm]=useState({year:cfg.year,month:cfg.month,todayDay:cfg.todayDay})
   const [saved,setSaved]=useState(false)
   const totalDP=dIM(form.year,form.month), daysLP=Math.max(1,totalDP-form.todayDay)
   const IS={width:'100%',boxSizing:'border-box',background:'#0d1117',border:'1px solid #2d3548',borderRadius:6,padding:'11px 10px',color:'#E2231A',fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:700,outline:'none',textAlign:'center'}
+
+  /* ── เปลี่ยนรหัสผ่าน ── */
+  const [newPw, setNewPw]   = useState('')
+  const [newPw2, setNewPw2] = useState('')
+  const [pwErr, setPwErr]   = useState('')
+  const [pwSaved, setPwSaved] = useState(false)
+  const [pwBusy, setPwBusy] = useState(false)
+  const pwInputSt = {width:'100%',boxSizing:'border-box',background:'#0d1117',border:'1px solid #2d3548',borderRadius:6,padding:'11px 10px',color:'#fff',fontFamily:'Barlow Condensed',fontSize:14,outline:'none'}
+
+  const handlePwSave = async () => {
+    setPwErr('')
+    if (newPw.length < 4) return setPwErr('รหัสผ่านสั้นเกินไป — อย่างน้อย 4 ตัวอักษร')
+    if (newPw !== newPw2) return setPwErr('รหัสผ่านยืนยันไม่ตรงกัน')
+    setPwBusy(true)
+    try {
+      const h = await sha256Hex(newPw)
+      const ok = await DB.set('cp_auth', h)
+      setPwBusy(false)
+      if (!ok) return setPwErr('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง')
+      setAuthHash(h)
+      setNewPw(''); setNewPw2('')
+      setPwSaved(true); setTimeout(()=>setPwSaved(false),3000)
+    } catch(e) { setPwBusy(false); setPwErr('เกิดข้อผิดพลาด: '+(e?.message||e)) }
+  }
+
 
   const handleSave = () => {
     saveCfg({year:Number(form.year),month:Number(form.month),todayDay:Number(form.todayDay)})
@@ -2764,6 +2931,33 @@ function Settings({ctx}) {
 
   return (
     <div style={{maxWidth:560,margin:'0 auto'}}>
+      {/* ── ความปลอดภัย: เปลี่ยนรหัสผ่าน / ออกจากระบบ ── */}
+      <div style={{background:'#161b25',border:`1px solid ${CI.red}55`,borderRadius:10,padding:16,marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+          <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#e5e7eb'}}>🔒 ความปลอดภัย — เปลี่ยนรหัสผ่าน</div>
+          <button onClick={logout} style={{padding:'5px 12px',background:'transparent',border:`1px solid ${CI.red}`,color:CI.red,borderRadius:6,cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>
+            🚪 ออกจากระบบ
+          </button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:mobile?'1fr':'1fr 1fr',gap:10,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:9,color:'#6b7280',marginBottom:4,fontFamily:'Barlow Condensed'}}>รหัสผ่านใหม่</div>
+            <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="อย่างน้อย 4 ตัวอักษร" style={pwInputSt}/>
+          </div>
+          <div>
+            <div style={{fontSize:9,color:'#6b7280',marginBottom:4,fontFamily:'Barlow Condensed'}}>ยืนยันรหัสผ่านใหม่</div>
+            <input type="password" value={newPw2} onChange={e=>setNewPw2(e.target.value)} placeholder="พิมพ์อีกครั้ง" style={pwInputSt}/>
+          </div>
+        </div>
+        {pwErr && <div style={{color:CI.red,fontSize:12,marginBottom:8,fontFamily:'Barlow Condensed',fontWeight:700}}>⚠️ {pwErr}</div>}
+        <button onClick={handlePwSave} disabled={pwBusy} style={{width:'100%',padding:11,background:pwSaved?'#1A7F3E':pwBusy?'#555':CI.red,color:'#fff',border:'none',borderRadius:6,cursor:pwBusy?'default':'pointer',fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,letterSpacing:1}}>
+          {pwSaved ? '✅ เปลี่ยนรหัสผ่านแล้ว — ทุกเครื่องอัพเดท!' : pwBusy ? 'กำลังบันทึก...' : '💾 บันทึกรหัสผ่านใหม่'}
+        </button>
+        <div style={{fontSize:10,color:'#6b7280',marginTop:8,lineHeight:1.5}}>
+          เปลี่ยนได้ตลอดเวลาจากหน้านี้ — ไม่ต้องแก้โค้ด ทุกเครื่องที่ใส่รหัสใหม่ครั้งถัดไปจะใช้รหัสนี้ทันที (เครื่องที่ล็อกอินอยู่แล้วจะไม่ถูกตัดออกจากระบบโดยอัตโนมัติ)
+        </div>
+      </div>
+
       <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?20:26,color:'#6b7280',marginBottom:4}}>⚙️ ตั้งค่าเดือน</div>
       <div style={{fontSize:12,color:'#6b7280',marginBottom:14}}>เปลี่ยนจากหน้านี้ได้เลย — กด "บันทึก" <strong style={{color:'#FFFFFF'}}>ทุกเครื่องเห็นพร้อมกัน</strong> (Supabase Realtime)</div>
 

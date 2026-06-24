@@ -38,8 +38,9 @@
     <link rel="apple-touch-icon" sizes="167x167" href="/icons/apple-167.png"/>
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-180.png"/>
 
-    <!-- iOS Splash screens (covers major iPhone/iPad sizes) -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+    <!-- (เอาเมตาแท็ก apple-mobile-web-app-status-bar-style ตัวที่ 2 ออก — มันซ้ำกับด้านบนแต่ค่าขัดกัน (black vs black-translucent)
+         ทำให้ iOS สับสนว่าจะใช้ตัวไหน ส่งผลให้ env(safe-area-inset-top) คำนวณไม่ตรงบนเครื่องที่มี Dynamic Island
+         เนื้อหาในแอปจึงไปชนเกาะ Dynamic Island พอดี — เหลือไว้แค่ตัวเดียว (black-translucent) ด้านบน ตรงกับ CSS ที่ใช้ env(safe-area-inset-*) ทั่วแอปอยู่แล้ว -->
 
     <!-- ── Favicon (all browsers) ── -->
     <link rel="icon" type="image/x-icon"  href="/icons/favicon.ico"/>

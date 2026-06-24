@@ -408,10 +408,10 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
   return (
     <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:compact?'24px 16px':'40px 20px',position:'relative',overflow:'hidden'}}>
 
-      {/* มาสคอตยืนข้างการ์ด — ตัดมาจากภาพตัวอย่างจริงที่ส่งมา ไม่ใช่ไอคอนทั่วไป */}
-      <img src="/icons/cockpit-boy-login.png" alt="" style={{position:'absolute',left:compact?-10:'2%',bottom:0,width:compact?138:250,maxHeight:compact?'38vh':'72vh',height:'auto',objectFit:'contain',objectPosition:'bottom',pointerEvents:'none',zIndex:0}}
+      {/* มาสคอตยืนข้างการ์ด — กำหนดด้วย "ความกว้าง" (ภาพใหม่เป็นครึ่งตัว สัดส่วนกว้าง ถ้ากำหนดด้วยความสูงแบบเดิมจะกว้างเกินจนล้นจอมือถือ) */}
+      <img src="/icons/cockpit-boy-login.png" alt="" style={{position:'absolute',left:compact?-10:'2%',bottom:compact?'5%':'8%',width:compact?104:200,height:'auto',zIndex:0,pointerEvents:'none'}}
            onError={e=>{e.target.style.display='none'}}/>
-      <img src="/icons/cockpit-girl-login.png" alt="" style={{position:'absolute',right:compact?-10:'2%',bottom:0,width:compact?164:296,maxHeight:compact?'36vh':'68vh',height:'auto',objectFit:'contain',objectPosition:'bottom',pointerEvents:'none',zIndex:0}}
+      <img src="/icons/cockpit-girl-login.png" alt="" style={{position:'absolute',right:compact?-10:'2%',bottom:compact?'5%':'8%',width:compact?104:200,height:'auto',zIndex:0,pointerEvents:'none'}}
            onError={e=>{e.target.style.display='none'}}/>
 
       {/* หัวเรื่องด้านบน */}
@@ -2945,7 +2945,7 @@ function Settings({ctx}) {
 
   return (
     <div style={{maxWidth:560,margin:'0 auto'}}>
-      {/* ── ความปลอดภัย: เปลี่ยนรหัสผ่าน / ออกจากระบบ ── */}
+      {/* ── ความปลอดภัย: เปลี่ยนรหัสผ่าน (ล็อกด้วยรหัสกุญแจ) / ออกจากระบบ ── */}
       <div style={{background:'#161b25',border:`1px solid ${CI.red}55`,borderRadius:10,padding:16,marginBottom:16}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
           <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#e5e7eb'}}>🔒 ความปลอดภัย — เปลี่ยนรหัสผ่าน</div>
@@ -2953,6 +2953,7 @@ function Settings({ctx}) {
             🚪 ออกจากระบบ
           </button>
         </div>
+
         {!mkOk ? (
           <>
             <div style={{fontSize:11,color:'#9ca3af',marginBottom:8}}>🔑 ต้องใส่รหัสกุญแจก่อนจึงจะเปลี่ยนรหัสผ่านได้ (เฉพาะผู้ดูแลระบบ)</div>

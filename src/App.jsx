@@ -406,16 +406,16 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
   const inputSt = {flex:1,background:'transparent',border:'none',outline:'none',color:'#15181C',fontFamily:'Barlow Condensed',fontSize:15,padding:'12px 4px'}
 
   return (
-    <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:compact?'24px 16px':'40px 20px',position:'relative',overflow:'hidden'}}>
+    <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:compact?'flex-start':'center',padding:compact?'calc(28px + env(safe-area-inset-top,0px)) 16px 0':'40px 20px',position:'relative',overflow:'hidden'}}>
 
-      {/* มาสคอตยืนข้างการ์ด — กำหนดด้วย "ความกว้าง" (ภาพใหม่เป็นครึ่งตัว สัดส่วนกว้าง ถ้ากำหนดด้วยความสูงแบบเดิมจะกว้างเกินจนล้นจอมือถือ) */}
-      <img src="/icons/cockpit-boy-login.png" alt="" style={{position:'absolute',left:compact?-10:'2%',bottom:compact?'5%':'8%',width:compact?104:200,height:'auto',zIndex:0,pointerEvents:'none'}}
+      {/* มาสคอตยืนคู่กันด้านล่าง — มือถือ: ใหญ่เต็มขอบจอ ชนกึ่งกลาง / จอกว้าง: ขนาดเดิม ขนาบการ์ด */}
+      <img src="/icons/cockpit-boy-login.png" alt="" style={compact?{position:'absolute',left:0,bottom:0,width:'47vw',height:'auto',zIndex:0,pointerEvents:'none'}:{position:'absolute',left:'2%',bottom:'8%',width:200,height:'auto',zIndex:0,pointerEvents:'none'}}
            onError={e=>{e.target.style.display='none'}}/>
-      <img src="/icons/cockpit-girl-login.png" alt="" style={{position:'absolute',right:compact?-10:'2%',bottom:compact?'5%':'8%',width:compact?104:200,height:'auto',zIndex:0,pointerEvents:'none'}}
+      <img src="/icons/cockpit-girl-login.png" alt="" style={compact?{position:'absolute',right:0,bottom:0,width:'47vw',height:'auto',zIndex:0,pointerEvents:'none'}:{position:'absolute',right:'2%',bottom:'8%',width:200,height:'auto',zIndex:0,pointerEvents:'none'}}
            onError={e=>{e.target.style.display='none'}}/>
 
       {/* หัวเรื่องด้านบน */}
-      <div style={{textAlign:'center',marginBottom:18,zIndex:1}}>
+      <div style={{textAlign:'center',marginBottom:18,zIndex:1,position:'relative'}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?32:54,color:CI.black,letterSpacing:1,lineHeight:1}}>COCKPIT</div>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?18:28,color:CI.yellow,background:CI.black,display:'inline-block',padding:'2px 14px',marginTop:6,letterSpacing:1,fontStyle:'italic',borderRadius:3}}>
           sale intelligence
@@ -423,7 +423,7 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
       </div>
 
       {/* การ์ดดำ — ฟอร์มรหัสผ่าน */}
-      <div style={{background:CI.black,borderRadius:18,padding:compact?'24px 20px':'32px 36px',width:'100%',maxWidth:380,zIndex:1,boxShadow:'0 12px 40px rgba(0,0,0,.35)'}}>
+      <div style={{background:CI.black,borderRadius:18,padding:compact?'24px 20px':'32px 36px',width:'100%',maxWidth:380,zIndex:1,position:'relative',boxShadow:'0 12px 40px rgba(0,0,0,.35)'}}>
         <div style={{textAlign:'center',marginBottom:18}}>
           <div style={{color:'#fff',fontFamily:'Barlow Condensed',fontSize:14,marginBottom:2}}>{isSetup?'ตั้งรหัสผ่านครั้งแรก':'ยินดีต้อนรับสู่'}</div>
           <div style={{color:CI.yellow,fontFamily:'Barlow Condensed',fontWeight:900,fontSize:22,letterSpacing:1}}>COCKPIT</div>
@@ -458,7 +458,7 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
         </button>
       </div>
 
-      <div style={{marginTop:16,fontSize:10,color:'#5c5200',fontFamily:'Barlow Condensed',zIndex:1}}>COCKPIT SALES INTELLIGENCE © {new Date().getFullYear()}</div>
+      <div style={{marginTop:16,fontSize:10,color:'#5c5200',fontFamily:'Barlow Condensed',zIndex:1,position:'relative'}}>COCKPIT SALES INTELLIGENCE © {new Date().getFullYear()}</div>
     </div>
   )
 }
@@ -819,23 +819,27 @@ export default function App() {
       {/* CONNECTION ERROR BANNER */}
       {ConnBanner}
 
-      {/* DESKTOP NAV */}
-      {!compact && (
-        <div style={{display:'flex',background:'#0d1117',borderBottom:'1px solid #1e2538',overflowX:'auto',flexShrink:0}}>
-          {TABS.map(t => {
-            const isActive  = tab===t.id
-            return (
-              <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{padding:'9px 14px',background:isActive?'#1e2538':'transparent',color:isActive?CI.red:'#6b7280',border:'none',borderBottom:isActive?`2px solid ${CI.red}`:'2px solid transparent',cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:600,fontSize:13,whiteSpace:'nowrap'}}>
-                {t.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* NAV — ย้ายขึ้นมาไว้บนสุดทั้งจอมือถือและจอกว้าง (มือถือใช้สไตล์ไอคอน+ข้อความเล็ก เลื่อนแนวนอนได้) */}
+      <div style={{display:'flex',background:'#0d1117',borderBottom:'1px solid #1e2538',overflowX:'auto',flexShrink:0}}>
+        {TABS.map(t => {
+          const isActive = tab===t.id
+          return compact ? (
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{flex:'0 0 auto',minWidth:52,padding:'7px 2px 5px',background:isActive?'#1a1f2e':'transparent',color:isActive?CI.red:'#4b5563',border:'none',borderBottom:isActive?`2px solid ${CI.red}`:'2px solid transparent',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+              <span style={{fontSize:18}}>{t.mLabel}</span>
+              <span style={{fontSize:7.5,fontFamily:'Barlow Condensed',fontWeight:600,whiteSpace:'nowrap'}}>{t.mText}</span>
+            </button>
+          ) : (
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{padding:'9px 14px',background:isActive?'#1e2538':'transparent',color:isActive?CI.red:'#6b7280',border:'none',borderBottom:isActive?`2px solid ${CI.red}`:'2px solid transparent',cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:600,fontSize:13,whiteSpace:'nowrap'}}>
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
 
       {/* CONTENT — scrollable */}
-      <div ref={contentRef} style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:compact?'10px 10px':'18px 20px',paddingBottom:compact?`calc(80px + env(safe-area-inset-bottom,0px))`:'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
+      <div ref={contentRef} style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:compact?'10px 10px':'18px 20px',paddingBottom:compact?'16px':'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
         {tab==='overview' && <Overview ctx={ctx}/>}
         {tab==='morning'  && <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr}/>}
         {tab==='mtd'      && <MTDTab ctx={ctx}/>}
@@ -848,23 +852,6 @@ export default function App() {
         {tab==='upload'   && <Upload ctx={ctx}/>}
         {tab==='settings' && <Settings ctx={ctx}/>}
       </div>
-
-      {/* MOBILE BOTTOM NAV — safe area bottom */}
-      {compact && (
-        <div style={{flexShrink:0,background:'#0d1117',borderTop:'1px solid #2d3548',display:'flex',overflowX:'auto',zIndex:100,paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
-          {TABS.map(t => {
-            const isA = tab===t.id
-            const clr = CI.red
-            return (
-              <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{flex:'0 0 auto',minWidth:52,padding:'7px 2px 5px',background:isA?'#1a1f2e':'transparent',color:isA?clr:'#4b5563',border:'none',borderTop:isA?`2px solid ${clr}`:'2px solid transparent',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-                <span style={{fontSize:18}}>{t.mLabel}</span>
-                <span style={{fontSize:7.5,fontFamily:'Barlow Condensed',fontWeight:600,whiteSpace:'nowrap'}}>{t.mText}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }

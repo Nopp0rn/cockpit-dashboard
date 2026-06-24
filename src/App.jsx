@@ -146,6 +146,8 @@ async function sha256Hex(text) {
   const buf = await crypto.subtle.digest('SHA-256', enc)
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('')
 }
+// รหัสกุญแจ (master key) — ต้องใส่ก่อนจึงจะเปลี่ยนรหัสผ่านแอปได้ (เก็บเป็น hash ไม่ใช่ตัวอักษรเปล่าๆ)
+const MASTER_KEY_HASH = '9542ebb0f6bcd4d194a7dcd55dba9f102491b7203921b91f3ae1da47ad1b2925'
 
 /* ── Entry field definitions ── */
 const FIELDS = [
@@ -406,15 +408,11 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
   return (
     <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:compact?'24px 16px':'40px 20px',position:'relative',overflow:'hidden'}}>
 
-      {/* มาสคอตยืนข้างการ์ด — แสดงเฉพาะจอกว้าง ไม่รก mobile */}
-      {!compact && (
-        <>
-          <img src="/icons/cockpit-boy.png" alt="" style={{position:'absolute',left:'3%',bottom:0,width:240,height:'auto',objectFit:'contain',pointerEvents:'none'}}
-               onError={e=>{e.target.style.display='none'}}/>
-          <img src="/icons/cockpit-girl.png" alt="" style={{position:'absolute',right:'3%',bottom:0,width:240,height:'auto',objectFit:'contain',transform:'scaleX(-1)',pointerEvents:'none'}}
-               onError={e=>{e.target.style.display='none'}}/>
-        </>
-      )}
+      {/* มาสคอตยืนข้างการ์ด — แสดงทุกขนาดจอ ปรับขนาดให้พอดีตามความกว้าง */}
+      <img src="/icons/cockpit-boy.png" alt="" style={{position:'absolute',left:compact?-6:'3%',bottom:0,width:compact?128:240,maxHeight:compact?'34vh':'70vh',height:'auto',objectFit:'contain',pointerEvents:'none',zIndex:0}}
+           onError={e=>{e.target.style.display='none'}}/>
+      <img src="/icons/cockpit-girl.png" alt="" style={{position:'absolute',right:compact?-6:'3%',bottom:0,width:compact?128:240,maxHeight:compact?'34vh':'70vh',height:'auto',objectFit:'contain',transform:'scaleX(-1)',pointerEvents:'none',zIndex:0}}
+           onError={e=>{e.target.style.display='none'}}/>
 
       {/* หัวเรื่องด้านบน */}
       <div style={{textAlign:'center',marginBottom:18,zIndex:1}}>
@@ -2899,7 +2897,23 @@ function Settings({ctx}) {
   const totalDP=dIM(form.year,form.month), daysLP=Math.max(1,totalDP-form.todayDay)
   const IS={width:'100%',boxSizing:'border-box',background:'#0d1117',border:'1px solid #2d3548',borderRadius:6,padding:'11px 10px',color:'#E2231A',fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:700,outline:'none',textAlign:'center'}
 
-  /* ── เปลี่ยนรหัสผ่าน ── */
+  /* ── เปลี่ยนรหัสผ่าน — ต้องใส่ "รหัสกุญแจ" ให้ถูกก่อนจึงแก้ได้ (เฉพาะนพพร) ── */
+  const [mkInput, setMkInput] = useState('')
+  const [mkOk, setMkOk]       = useState(false)
+  const [mkErr, setMkErr]     = useState('')
+  const [mkBusy, setMkBusy]   = useState(false)
+  const verifyMk = async () => {
+    setMkErr('')
+    if (!mkInput) return
+    setMkBusy(true)
+    try {
+      const h = await sha256Hex(mkInput)
+      setMkBusy(false)
+      if (h === MASTER_KEY_HASH) { setMkOk(true); setMkInput('') }
+      else { setMkErr('รหัสกุญแจไม่ถูกต้อง'); setMkInput('') }
+    } catch(e) { setMkBusy(false); setMkErr('เกิดข้อผิดพลาด: '+(e?.message||e)) }
+  }
+
   const [newPw, setNewPw]   = useState('')
   const [newPw2, setNewPw2] = useState('')
   const [pwErr, setPwErr]   = useState('')
@@ -2939,23 +2953,40 @@ function Settings({ctx}) {
             🚪 ออกจากระบบ
           </button>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:mobile?'1fr':'1fr 1fr',gap:10,marginBottom:10}}>
-          <div>
-            <div style={{fontSize:9,color:'#6b7280',marginBottom:4,fontFamily:'Barlow Condensed'}}>รหัสผ่านใหม่</div>
-            <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="อย่างน้อย 4 ตัวอักษร" style={pwInputSt}/>
-          </div>
-          <div>
-            <div style={{fontSize:9,color:'#6b7280',marginBottom:4,fontFamily:'Barlow Condensed'}}>ยืนยันรหัสผ่านใหม่</div>
-            <input type="password" value={newPw2} onChange={e=>setNewPw2(e.target.value)} placeholder="พิมพ์อีกครั้ง" style={pwInputSt}/>
-          </div>
-        </div>
-        {pwErr && <div style={{color:CI.red,fontSize:12,marginBottom:8,fontFamily:'Barlow Condensed',fontWeight:700}}>⚠️ {pwErr}</div>}
-        <button onClick={handlePwSave} disabled={pwBusy} style={{width:'100%',padding:11,background:pwSaved?'#1A7F3E':pwBusy?'#555':CI.red,color:'#fff',border:'none',borderRadius:6,cursor:pwBusy?'default':'pointer',fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,letterSpacing:1}}>
-          {pwSaved ? '✅ เปลี่ยนรหัสผ่านแล้ว — ทุกเครื่องอัพเดท!' : pwBusy ? 'กำลังบันทึก...' : '💾 บันทึกรหัสผ่านใหม่'}
-        </button>
-        <div style={{fontSize:10,color:'#6b7280',marginTop:8,lineHeight:1.5}}>
-          เปลี่ยนได้ตลอดเวลาจากหน้านี้ — ไม่ต้องแก้โค้ด ทุกเครื่องที่ใส่รหัสใหม่ครั้งถัดไปจะใช้รหัสนี้ทันที (เครื่องที่ล็อกอินอยู่แล้วจะไม่ถูกตัดออกจากระบบโดยอัตโนมัติ)
-        </div>
+        {!mkOk ? (
+          <>
+            <div style={{fontSize:11,color:'#9ca3af',marginBottom:8}}>🔑 ต้องใส่รหัสกุญแจก่อนจึงจะเปลี่ยนรหัสผ่านได้ (เฉพาะผู้ดูแลระบบ)</div>
+            <div style={{display:'flex',gap:8}}>
+              <input type="password" value={mkInput} onChange={e=>setMkInput(e.target.value)}
+                onKeyDown={e=>{if(e.key==='Enter') verifyMk()}}
+                placeholder="รหัสกุญแจ" style={{...pwInputSt,flex:1}}/>
+              <button onClick={verifyMk} disabled={mkBusy} style={{padding:'0 18px',background:mkBusy?'#555':CI.yellow,color:CI.black,border:'none',borderRadius:6,cursor:mkBusy?'default':'pointer',fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,whiteSpace:'nowrap'}}>
+                {mkBusy?'...':'ปลดล็อก'}
+              </button>
+            </div>
+            {mkErr && <div style={{color:CI.red,fontSize:12,marginTop:8,fontFamily:'Barlow Condensed',fontWeight:700}}>⚠️ {mkErr}</div>}
+          </>
+        ) : (
+          <>
+            <div style={{display:'grid',gridTemplateColumns:mobile?'1fr':'1fr 1fr',gap:10,marginBottom:10}}>
+              <div>
+                <div style={{fontSize:9,color:'#6b7280',marginBottom:4,fontFamily:'Barlow Condensed'}}>รหัสผ่านใหม่</div>
+                <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="อย่างน้อย 4 ตัวอักษร" style={pwInputSt}/>
+              </div>
+              <div>
+                <div style={{fontSize:9,color:'#6b7280',marginBottom:4,fontFamily:'Barlow Condensed'}}>ยืนยันรหัสผ่านใหม่</div>
+                <input type="password" value={newPw2} onChange={e=>setNewPw2(e.target.value)} placeholder="พิมพ์อีกครั้ง" style={pwInputSt}/>
+              </div>
+            </div>
+            {pwErr && <div style={{color:CI.red,fontSize:12,marginBottom:8,fontFamily:'Barlow Condensed',fontWeight:700}}>⚠️ {pwErr}</div>}
+            <button onClick={handlePwSave} disabled={pwBusy} style={{width:'100%',padding:11,background:pwSaved?'#1A7F3E':pwBusy?'#555':CI.red,color:'#fff',border:'none',borderRadius:6,cursor:pwBusy?'default':'pointer',fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,letterSpacing:1}}>
+              {pwSaved ? '✅ เปลี่ยนรหัสผ่านแล้ว — ทุกเครื่องอัพเดท!' : pwBusy ? 'กำลังบันทึก...' : '💾 บันทึกรหัสผ่านใหม่'}
+            </button>
+            <div style={{fontSize:10,color:'#6b7280',marginTop:8,lineHeight:1.5}}>
+              เปลี่ยนได้ตลอดเวลาจากหน้านี้ — ไม่ต้องแก้โค้ด ทุกเครื่องที่ใส่รหัสใหม่ครั้งถัดไปจะใช้รหัสนี้ทันที (เครื่องที่ล็อกอินอยู่แล้วจะไม่ถูกตัดออกจากระบบโดยอัตโนมัติ)
+            </div>
+          </>
+        )}
       </div>
 
       <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?20:26,color:'#6b7280',marginBottom:4}}>⚙️ ตั้งค่าเดือน</div>

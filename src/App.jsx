@@ -42,6 +42,19 @@ function useIsMobile() {
   return true
 }
 
+/* ── Viewport breakpoint hook (ใช้กับ "เปลือก" แอปเท่านั้น: เมนู/หัว/ระยะขอบ)
+   ไม่กระทบ layout ภายในของแต่ละการ์ด ที่ยังคงใช้ mobile=true เหมือนเดิม ── */
+function useViewportMobile(bp = 900) {
+  const [m, setM] = useState(typeof window !== 'undefined' ? window.innerWidth < bp : false)
+  useEffect(() => {
+    const on = () => setM(window.innerWidth < bp)
+    on()
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [bp])
+  return m
+}
+
 /* ════════════════════════════════════════════════════════
    STATIC DATA
 ════════════════════════════════════════════════════════ */
@@ -330,6 +343,7 @@ const TABS = [
 ════════════════════════════════════════════════════════ */
 export default function App() {
   const mobile = useIsMobile()
+  const compact = useViewportMobile()   // true เมื่อจอแคบ (มือถือ) · false บนจอกว้าง (PC/แท็บเล็ต)
   const [tab, setTab]   = useState('overview')
   const [selBr, setSelBr] = useState('ALL')
   const [ready, setReady] = useState(false)
@@ -627,18 +641,18 @@ export default function App() {
     <div style={{fontFamily:'Barlow,sans-serif',background:'#0d1117',height:'100dvh',display:'flex',flexDirection:'column',color:'#e5e7eb',overflow:'hidden'}}>
 
       {/* HEADER — safe area top */}
-      <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:`2px solid ${CI.yellow}`,padding:`calc(${mobile?'8px':'10px'} + env(safe-area-inset-top,0px)) ${mobile?'12px':'20px'} ${mobile?'8px':'10px'}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,zIndex:50}}>
-        <div style={{width:mobile?30:38,height:mobile?30:38,background:CI.yellow,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:mobile?16:20,flexShrink:0}}>🏁</div>
+      <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:`2px solid ${CI.yellow}`,padding:`calc(${compact?'8px':'10px'} + env(safe-area-inset-top,0px)) ${compact?'12px':'20px'} ${compact?'8px':'10px'}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,zIndex:50}}>
+        <div style={{width:compact?30:38,height:compact?30:38,background:CI.yellow,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:compact?16:20,flexShrink:0}}>🏁</div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?13:20,letterSpacing:mobile?1:3,color:CI.yellow,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>COCKPIT SALES INTELLIGENCE</div>
+          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?13:20,letterSpacing:compact?1:3,color:CI.yellow,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>COCKPIT SALES INTELLIGENCE</div>
           <div style={{fontSize:9,color:'#6b7280'}}>{DATE_LABEL} · เหลือ {DAYS_LEFT} วัน · 10 สาขา</div>
         </div>
         {/* บันทึกภาพหน้านี้ทั้งหมด */}
         <button onClick={captureScreen} disabled={capturing} title="บันทึกภาพหน้านี้ทั้งหมด"
           style={{display:'flex',alignItems:'center',gap:5,background:capturing?'#333':CI.yellow,
-                  color:CI.black,border:'none',borderRadius:8,padding:mobile?'6px 8px':'6px 12px',
-                  cursor:capturing?'default':'pointer',flexShrink:0,fontFamily:'Barlow Condensed',fontWeight:700,fontSize:mobile?11:12}}>
-          {capturing ? '⏳' : '📸'}{!mobile && <span>{capturing?'กำลังบันทึก...':'บันทึกภาพ'}</span>}
+                  color:CI.black,border:'none',borderRadius:8,padding:compact?'6px 8px':'6px 12px',
+                  cursor:capturing?'default':'pointer',flexShrink:0,fontFamily:'Barlow Condensed',fontWeight:700,fontSize:compact?11:12}}>
+          {capturing ? '⏳' : '📸'}{!compact && <span>{capturing?'กำลังบันทึก...':'บันทึกภาพ'}</span>}
         </button>
 
         {/* LIVE badge — เขียว=เชื่อมต่อ, แดง=หลุดการเชื่อมต่อ */}
@@ -653,7 +667,7 @@ export default function App() {
       {ConnBanner}
 
       {/* DESKTOP NAV */}
-      {!mobile && (
+      {!compact && (
         <div style={{display:'flex',background:'#0d1117',borderBottom:'1px solid #1e2538',overflowX:'auto',flexShrink:0}}>
           {TABS.map(t => {
             const isActive  = tab===t.id
@@ -668,7 +682,7 @@ export default function App() {
       )}
 
       {/* CONTENT — scrollable */}
-      <div ref={contentRef} style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:mobile?'10px 10px':'18px 20px',paddingBottom:mobile?`calc(80px + env(safe-area-inset-bottom,0px))`:'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
+      <div ref={contentRef} style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:compact?'10px 10px':'18px 20px',paddingBottom:compact?`calc(80px + env(safe-area-inset-bottom,0px))`:'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
         {tab==='overview' && <Overview ctx={ctx}/>}
         {tab==='morning'  && <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr}/>}
         {tab==='mtd'      && <MTDTab ctx={ctx}/>}
@@ -683,7 +697,7 @@ export default function App() {
       </div>
 
       {/* MOBILE BOTTOM NAV — safe area bottom */}
-      {mobile && (
+      {compact && (
         <div style={{flexShrink:0,background:'#0d1117',borderTop:'1px solid #2d3548',display:'flex',overflowX:'auto',zIndex:100,paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
           {TABS.map(t => {
             const isA = tab===t.id
@@ -804,99 +818,43 @@ function Overview({ctx}) {
         </div>
       </div>
 
-      {mobile ? (
-        /* Mobile: compact single-line-per-branch rows (เหมือน Morning Brief) ให้ 10 สาขาพอดีจอมากขึ้น */
-        <div style={{background:CI.black,borderRadius:10,overflow:'hidden'}}>
-          <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
-            📊 {(!selBr||selBr==='ALL') ? 'ภาพรวมทุกสาขา' : `สาขา ${visibleRows[0]?.id} ${visibleRows[0]?.short}`} — MTD 1-{TODAY_D} {MONTH_TH}
-          </div>
-          {visibleRows.map((r,i) => {
-            const p = P(r.ts, r.tgtSales)
-            const tp = r.tireAch
-            return (
-              <div key={r.id} style={{background:CI.white,padding:'7px 10px',borderTop:`2px solid ${CI.black}`}}>
-                <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR[i],marginBottom:3}}>{r.id} {r.short}</div>
+      {/* Branch cards — fluid grid: 1 col on phones, auto 2/3/4 cols as the screen widens */}
+      <div style={{marginBottom:8,fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:CI.red}}>
+        📊 {(!selBr||selBr==='ALL') ? 'ภาพรวมทุกสาขา' : `สาขา ${visibleRows[0]?.id} ${visibleRows[0]?.short}`} — MTD 1-{TODAY_D} {MONTH_TH} {cfg.year}
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:10}}>
+        {visibleRows.map((r,i) => {
+          const p = P(r.ts, r.tgtSales)
+          const tp = r.tireAch
+          return (
+            <div key={r.id} style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'9px 12px'}}>
+              <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR[i%READCLR.length],marginBottom:5}}>{r.id} {r.short}</div>
 
-                <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>💰 ยอดขาย</span>
-                  <GaugeBar value={p} height={6}/>
-                  <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:CI.red,fontWeight:800}}>{fM(r.ts)}</span>
-                    <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(p)}}/>
-                    <span style={{fontSize:11,fontWeight:800,color:statusColor(p),minWidth:30,textAlign:'right'}}>{p.toFixed(0)}%</span>
-                    <span style={{fontSize:9.5,color:'#999'}}>PY25 {r.vsPY25.toFixed(0)}%·PY24 {r.vsPY24.toFixed(0)}%</span>
-                  </span>
-                </div>
-
-                <div style={{display:'flex',alignItems:'center',gap:8,marginTop:3}}>
-                  <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>🏷️ ยาง</span>
-                  <GaugeBar value={tp} height={6}/>
-                  <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'#15181C',fontWeight:800}}>{r.m.tire} เส้น</span>
-                    <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(tp)}}/>
-                    <span style={{fontSize:11,fontWeight:800,color:statusColor(tp),minWidth:30,textAlign:'right'}}>{tp.toFixed(0)}%</span>
-                    <span style={{fontSize:9.5,color:'#999'}}>PY25 {r.tirePY25.toFixed(0)}%·PY24 {r.tirePY24.toFixed(0)}%</span>
-                  </span>
-                </div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>💰 ยอดขาย</span>
+                <GaugeBar value={p} height={6}/>
+                <span style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:CI.red,fontWeight:800}}>{fM(r.ts)}</span>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(p)}}/>
+                  <span style={{fontSize:11,fontWeight:800,color:statusColor(p),minWidth:30,textAlign:'right'}}>{p.toFixed(0)}%</span>
+                </span>
               </div>
-            )
-          })}
-        </div>
-      ) : (
-        /* Desktop: table with PY24+PY25 for both metrics */
-        <div style={{background:'#161b25',borderRadius:10,border:'1px solid #2d3548',overflow:'hidden'}}>
-          <div style={{padding:'11px 15px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,color:CI.red,borderBottom:'1px solid #2d3548'}}>
-            📊 {(!selBr||selBr==='ALL') ? 'ภาพรวมทุกสาขา' : `สาขา ${visibleRows[0]?.id} ${visibleRows[0]?.short}`} — MTD 1-{TODAY_D} {MONTH_TH} {cfg.year}
-          </div>
-          <div style={{overflowX:'auto'}}>
-            <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
-              <thead>
-                <tr style={{background:'#0d1117'}}>
-                  <th rowSpan={2} style={{padding:'6px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',borderBottom:'1px solid #1e2538',textAlign:'left',verticalAlign:'bottom'}}>สาขา</th>
-                  <th colSpan={5} style={{padding:'5px 8px',color:'#E2231A',fontFamily:'Barlow Condensed',borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548',textAlign:'center',fontSize:10}}>💰 ยอดขายรวม (฿)</th>
-                  <th colSpan={5} style={{padding:'5px 8px',color:'#FFFFFF',fontFamily:'Barlow Condensed',borderBottom:'1px solid #2d3548',borderLeft:'1px solid #2d3548',textAlign:'center',fontSize:10}}>🏷️ ยาง (เส้น)</th>
-                </tr>
-                <tr style={{background:'#0d1117'}}>
-                  {['2024','2025','2026','% เป้า','% PY25'].map(h=><th key={h} style={{padding:'5px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',textAlign:'right',borderLeft:h==='2024'?'1px solid #2d3548':'none'}}>{h}</th>)}
-                  {['2024','2025','2026','% เป้า','% PY25'].map(h=><th key={'t'+h} style={{padding:'5px 8px',color:'#6b7280',fontFamily:'Barlow Condensed',fontSize:10,borderBottom:'1px solid #1e2538',textAlign:'right',borderLeft:h==='2024'?'1px solid #2d3548':'none'}}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRows.map((r,i) => (
-                  <tr key={r.id} style={{borderBottom:'1px solid #1e2538',background:i%2===0?'transparent':'#131820'}}>
-                    <td style={{padding:'7px 8px',fontFamily:'Barlow Condensed',fontWeight:700,color:BCLR[i],fontSize:12,whiteSpace:'nowrap'}}>{r.id} {r.short}</td>
-                    {/* Sales */}
-                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{fM(Math.round(r.py24Sales))}</td>
-                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(r.py25Sales))}</td>
-                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#E2231A'}}>{fM(r.ts)}</td>
-                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(r.ts,r.tgtSales)} threshold={MTD_R*100}/></td>
-                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.vsPY25}/></td>
-                    {/* Tire */}
-                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #1e2538'}}>{Math.round(r.py24Tire)}</td>
-                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{Math.round(r.py25Tire)}</td>
-                    <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:'#FFFFFF'}}>{r.m.tire}</td>
-                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.tireAch} threshold={MTD_R*100}/></td>
-                    <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={r.tirePY25}/></td>
-                  </tr>
-                ))}
-                {/* Total row */}
-                <tr style={{background:'#1e2538',borderTop:'2px solid #E2231A'}}>
-                  <td style={{padding:'7px 8px',fontWeight:900,fontFamily:'Barlow Condensed',fontSize:13}}>รวมทุกสาขา</td>
-                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #2d3548'}}>{fM(Math.round(totPY24))}</td>
-                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{fM(Math.round(totPY25))}</td>
-                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#E2231A'}}>{fM(totS)}</td>
-                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totS,totT)} threshold={MTD_R*100}/></td>
-                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totS,totPY25)}/></td>
-                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#475569',borderLeft:'1px solid #2d3548'}}>{Math.round(totTirePY24)}</td>
-                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",color:'#94a3b8'}}>{Math.round(totTirePY25)}</td>
-                  <td style={{padding:'7px 8px',textAlign:'right',fontFamily:"'JetBrains Mono',monospace",fontWeight:900,color:'#FFFFFF'}}>{N(totTire)}</td>
-                  <td style={{padding:'7px 8px',textAlign:'center'}}><PBadge value={P(totTire,totTireT)} threshold={MTD_R*100}/></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+              <div style={{fontSize:9.5,color:'#999',textAlign:'right',marginTop:1}}>PY25 {r.vsPY25.toFixed(0)}% · PY24 {r.vsPY24.toFixed(0)}%</div>
+
+              <div style={{display:'flex',alignItems:'center',gap:8,marginTop:5}}>
+                <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>🏷️ ยาง</span>
+                <GaugeBar value={tp} height={6}/>
+                <span style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'#15181C',fontWeight:800}}>{r.m.tire} เส้น</span>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:statusColor(tp)}}/>
+                  <span style={{fontSize:11,fontWeight:800,color:statusColor(tp),minWidth:30,textAlign:'right'}}>{tp.toFixed(0)}%</span>
+                </span>
+              </div>
+              <div style={{fontSize:9.5,color:'#999',textAlign:'right',marginTop:1}}>PY25 {r.tirePY25.toFixed(0)}% · PY24 {r.tirePY24.toFixed(0)}%</div>
+            </div>
+          )
+        })}
+      </div>
       <MascotFooter compact={mobile}/>
       </div>
     </div>

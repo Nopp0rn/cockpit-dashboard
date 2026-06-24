@@ -794,7 +794,7 @@ export default function App() {
     <div style={{fontFamily:'Barlow,sans-serif',background:'#0d1117',height:'100dvh',display:'flex',flexDirection:'column',color:'#e5e7eb',overflow:'hidden'}}>
 
       {/* HEADER — safe area top */}
-      <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:`2px solid ${CI.yellow}`,padding:`calc(${compact?'8px':'10px'} + env(safe-area-inset-top,0px)) ${compact?'12px':'20px'} ${compact?'8px':'10px'}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,zIndex:50}}>
+      <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:`2px solid ${CI.yellow}`,padding:`calc(${compact?'12px':'10px'} + env(safe-area-inset-top,0px)) ${compact?'12px':'20px'} ${compact?'8px':'10px'}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,zIndex:50}}>
         <div style={{width:compact?30:38,height:compact?30:38,background:CI.yellow,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:compact?16:20,flexShrink:0}}>🏁</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?13:20,letterSpacing:compact?1:3,color:CI.yellow,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>COCKPIT SALES INTELLIGENCE</div>

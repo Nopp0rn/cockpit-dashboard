@@ -408,10 +408,10 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
   return (
     <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:compact?'24px 16px':'40px 20px',position:'relative',overflow:'hidden'}}>
 
-      {/* มาสคอตยืนข้างการ์ด — แสดงทุกขนาดจอ ปรับขนาดให้พอดีตามความกว้าง */}
-      <img src="/icons/cockpit-boy.png" alt="" style={{position:'absolute',left:compact?-6:'3%',bottom:0,width:compact?128:240,maxHeight:compact?'34vh':'70vh',height:'auto',objectFit:'contain',pointerEvents:'none',zIndex:0}}
+      {/* มาสคอตยืนข้างการ์ด — ตัดมาจากภาพตัวอย่างจริงที่ส่งมา ไม่ใช่ไอคอนทั่วไป */}
+      <img src="/icons/cockpit-boy-login.png" alt="" style={{position:'absolute',left:compact?-10:'2%',bottom:0,width:compact?138:250,maxHeight:compact?'38vh':'72vh',height:'auto',objectFit:'contain',objectPosition:'bottom',pointerEvents:'none',zIndex:0}}
            onError={e=>{e.target.style.display='none'}}/>
-      <img src="/icons/cockpit-girl.png" alt="" style={{position:'absolute',right:compact?-6:'3%',bottom:0,width:compact?128:240,maxHeight:compact?'34vh':'70vh',height:'auto',objectFit:'contain',transform:'scaleX(-1)',pointerEvents:'none',zIndex:0}}
+      <img src="/icons/cockpit-girl-login.png" alt="" style={{position:'absolute',right:compact?-10:'2%',bottom:0,width:compact?164:296,maxHeight:compact?'36vh':'68vh',height:'auto',objectFit:'contain',objectPosition:'bottom',pointerEvents:'none',zIndex:0}}
            onError={e=>{e.target.style.display='none'}}/>
 
       {/* หัวเรื่องด้านบน */}

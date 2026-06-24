@@ -173,6 +173,19 @@ function sumDaysUpTo(de, bid, toDay) {
   }
   return agg
 }
+// PY24/PY25 MTD จริง — รวมข้อมูลรายวันจริง (EXCEL_DS=ยอดขาย / EXCEL_DT=ยาง) ของเดือนปัจจุบัน วันที่ 1..toDay
+// (แทนที่วิธีเดิมที่ใช้ MAY_SALES/MAY_TIRE × MTD_R ซึ่งตรึงไว้ที่เดือนพฤษภาคมเดือนเดียว)
+function pyMTDSum(table, bid, yr, mo, toDay) {
+  const key = `${yr}-${String(mo).padStart(2,'0')}`
+  const sumOne = id => {
+    const days = table[id]?.[key] || {}
+    let s = 0
+    for (let d=1; d<=toDay; d++) s += (days[String(d)] || 0)
+    return s
+  }
+  if (bid === 'ALL') return BRANCHES.reduce((s,b) => s + sumOne(b.id), 0)
+  return sumOne(bid)
+}
 function calcTS(agg) {
   // 1️⃣ ถ้ากรอก "ยอดขายรวมวัน (฿)" โดยตรง ใช้ค่านั้น
   if ((agg.totalSales||0) > 0) return Number(agg.totalSales)
@@ -724,10 +737,10 @@ function Overview({ctx}) {
 
   const rows = BRANCHES.map((b,i) => {
     const t=TARGET[b.id]||SEED_T[b.id], m=getMTD(b.id), ts=getTS(b.id)
-    const py25Sales = (MAY_SALES[b.id]?.[2025]||0)*MTD_R
-    const py24Sales = (MAY_SALES[b.id]?.[2024]||0)*MTD_R
-    const py25Tire  = (MAY_TIRE[b.id]?.[2025]||0)*MTD_R
-    const py24Tire  = (MAY_TIRE[b.id]?.[2024]||0)*MTD_R
+    const py25Sales = pyMTDSum(EXCEL_DS, b.id, 2025, cfg.month, TODAY_D)
+    const py24Sales = pyMTDSum(EXCEL_DS, b.id, 2024, cfg.month, TODAY_D)
+    const py25Tire  = pyMTDSum(EXCEL_DT, b.id, 2025, cfg.month, TODAY_D)
+    const py24Tire  = pyMTDSum(EXCEL_DT, b.id, 2024, cfg.month, TODAY_D)
     return {
       ...b, t, m, ts, idx:i,
       tgtSales: t.sales,       // Full monthly target (not prorated)
@@ -874,9 +887,9 @@ function MTDTab({ctx}) {
     const t  = getT(b.id)
     const m  = getMTD(b.id)
     const ts = getTS(b.id)
-    const tire24 = (MAY_TIRE[b.id]?.[2024]||0)*MTD_R
-    const tire25 = (MAY_TIRE[b.id]?.[2025]||0)*MTD_R
-    const sale25 = (MAY_SALES[b.id]?.[2025]||0)*MTD_R
+    const tire24 = pyMTDSum(EXCEL_DT, b.id, 2024, cfg.month, TODAY_D)
+    const tire25 = pyMTDSum(EXCEL_DT, b.id, 2025, cfg.month, TODAY_D)
+    const sale25 = pyMTDSum(EXCEL_DS, b.id, 2025, cfg.month, TODAY_D)
     return {
       ...b, i, t, m, ts,
       tire24:Math.round(tire24), tire25:Math.round(tire25), tire26:m.tire,
@@ -908,10 +921,10 @@ function MTDTab({ctx}) {
   const t=getT(selBr), m=isAll?getAllMTD():getMTD(selBr)
   const ts=isAll?getAllTS():getTS(selBr)
   const h=getH(selBr)
-  const pyMTD =(MAY_SALES[selBr]?.[2025]||0)*MTD_R
-  const py2MTD=(MAY_SALES[selBr]?.[2024]||0)*MTD_R
-  const t25   =(MAY_TIRE[selBr]?.[2025]||0)*MTD_R
-  const t24   =(MAY_TIRE[selBr]?.[2024]||0)*MTD_R
+  const pyMTD =pyMTDSum(EXCEL_DS, selBr, 2025, cfg.month, TODAY_D)
+  const py2MTD=pyMTDSum(EXCEL_DS, selBr, 2024, cfg.month, TODAY_D)
+  const t25   =pyMTDSum(EXCEL_DT, selBr, 2025, cfg.month, TODAY_D)
+  const t24   =pyMTDSum(EXCEL_DT, selBr, 2024, cfg.month, TODAY_D)
 
   const [showMoYr,setShowMoYr]=useState({2023:false,2024:true,2025:true,2026:true})
   const mData=MONTHS_TH.map((mn,i)=>({month:mn,2023:h[2023]?.[i]??null,2024:h[2024]?.[i]??null,2025:h[2025]?.[i]??null,2026:h[2026]?.[i]??null}))

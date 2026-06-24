@@ -756,7 +756,7 @@ export default function App() {
 
 
 
-  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR,authHash,setAuthHash,logout}
+  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,compact,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR,authHash,setAuthHash,logout}
 
   /* ── Loading screen ── */
   if (!ready) return (
@@ -2041,15 +2041,15 @@ function ASP({ctx}) {
 
 /* ════ ENTRY — กรอกยอดรายวัน ════ */
 function Entry({ctx}) {
-  const {de,saveDay,delDay,getMTD,getTS,getT,MTD_R,TODAY_D,TOTAL_D,MONTH_TH,cfg,mobile} = ctx
+  const {de,saveDay,delDay,getMTD,getTS,getT,MTD_R,TODAY_D,TOTAL_D,MONTH_TH,cfg,compact} = ctx
   const [selBr, setSelBr] = useState('009')
   const [selDay, setSelDay] = useState(TODAY_D)
   const t=getT(selBr), row=de[selBr]?.[selDay]||EMPTY_ROW(), mtd=getMTD(selBr), ts=getTS(selBr)
   const filled=Object.keys(de[selBr]||{}).map(Number).sort((a,b)=>a-b)
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
+    <div style={{display:'flex',gap:16,flexDirection:compact?'column':'row'}}>
       {/* Branch sidebar (no ALL) */}
-      {mobile ? (
+      {compact ? (
         <div style={{marginBottom:0}}>
           <select value={selBr} onChange={e=>setSelBr(e.target.value)}
             style={{width:'100%',background:'#1e2538',border:'1px solid #E2231A',borderRadius:8,padding:'11px 14px',color:'#E2231A',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,outline:'none',marginBottom:10}}>
@@ -2066,14 +2066,14 @@ function Entry({ctx}) {
           ))}
         </div>
       )}
-      <div style={{flex:1}}>
-        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#E2231A',letterSpacing:2,marginBottom:10}}>✏️ กรอกยอดรายวัน — {BRANCHES.find(x=>x.id===selBr)?.name}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?16:20,color:'#E2231A',letterSpacing:2,marginBottom:10}}>✏️ กรอกยอดรายวัน — {BRANCHES.find(x=>x.id===selBr)?.name}</div>
         {/* Day picker */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
           <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:12,color:'#e5e7eb',marginBottom:8}}>📅 เลือกวัน — {MONTH_TH} {cfg.year}</div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:mobile?4:5}}>
+          <div style={{display:'flex',flexWrap:'wrap',gap:compact?4:5}}>
             {Array.from({length:TOTAL_D},(_,i)=>{const d=i+1,has=!!(de[selBr]?.[d]),isTdy=d===TODAY_D,isSel=d===selDay;return(
-              <button key={d} onClick={()=>setSelDay(d)} style={{width:mobile?33:36,height:mobile?33:36,borderRadius:6,border:isSel?'2px solid #E2231A':has?'1px solid #15181C':'1px solid #2d3548',background:isSel?'#E2231A':has?'#0d2a1a':'#0d1117',color:isSel?'#000':has?'#FFFFFF':d>TODAY_D?'#374151':'#e5e7eb',cursor:'pointer',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:mobile?12:13,position:'relative'}}>
+              <button key={d} onClick={()=>setSelDay(d)} style={{width:compact?33:36,height:compact?33:36,borderRadius:6,border:isSel?'2px solid #E2231A':has?'1px solid #15181C':'1px solid #2d3548',background:isSel?'#E2231A':has?'#0d2a1a':'#0d1117',color:isSel?'#000':has?'#FFFFFF':d>TODAY_D?'#374151':'#e5e7eb',cursor:'pointer',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:compact?12:13,position:'relative'}}>
                 {d}{isTdy&&<div style={{position:'absolute',top:1,right:2,width:4,height:4,borderRadius:'50%',background:isSel?'#000':'#E2231A'}}/>}
               </button>
             )})}
@@ -2090,7 +2090,7 @@ function Entry({ctx}) {
           <Card label="ยาง MTD" value={N(mtd.tire)+' เส้น'} sub={`เป้า ${Math.round(t.tire*MTD_R)}`} color="#15181C" small/>
           <Card label="Job Order" value={N(mtd.jobOrder)} sub={`เป้า ${Math.round(t.cc*MTD_R)}`} color="#15181C" small/>
         </div>
-        {/* Form */}
+        {/* Form — มือถือ: รายการคอลัมน์เดียวเหมือนเดิม / จอกว้าง: กล่องกรอกแบบกริด ลดความสูงรวม */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,overflow:'hidden',marginBottom:10}}>
           <div style={{padding:'10px 14px',background:'#0d1117',borderBottom:'1px solid #2d3548',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#E2231A'}}>
@@ -2104,20 +2104,20 @@ function Entry({ctx}) {
               {de[selBr]?.[selDay]&&<button onClick={()=>delDay(selBr,selDay)} style={{padding:'4px 10px',background:'#450a0a',border:'1px solid #E2231A',borderRadius:4,color:'#E2231A',cursor:'pointer',fontSize:11}}>🗑</button>}
             </div>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:mobile?'1fr':'1fr 1fr'}}>
+          <div style={{display:'grid',gridTemplateColumns:compact?'1fr':'repeat(auto-fill,minmax(190px,1fr))',gap:compact?0:1,padding:compact?0:1,background:compact?'transparent':'#1e2538'}}>
             {FIELDS.map((f,i)=>{
               const tV=f.tgt?(t[f.tgt]||0):0
               const isTotalSales = f.key==='totalSales'
               return(
-              <div key={f.key} style={{padding:'10px 12px',borderBottom:'1px solid #1e2538',borderRight:(!mobile&&i%2===0)?'1px solid #1e2538':'none',background:isTotalSales?'#1a1228':i%4<2?'transparent':'#0d1117',gridColumn:isTotalSales?'1 / -1':'auto'}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                  <label style={{fontSize:isTotalSales?14:12,fontWeight:700,color:isTotalSales?'#E2231A':'#9ca3af'}}>{isTotalSales?'💰 ':''}{f.label}</label>
+              <div key={f.key} style={{padding:compact?'10px 12px':'9px 10px',borderBottom:compact?'1px solid #1e2538':'none',background:isTotalSales?'#1a1228':'#161b25',gridColumn:isTotalSales?'1 / -1':'auto'}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4,flexWrap:'wrap',gap:2}}>
+                  <label style={{fontSize:isTotalSales?14:compact?12:11,fontWeight:700,color:isTotalSales?'#E2231A':'#9ca3af'}}>{isTotalSales?'💰 ':''}{f.label}</label>
                   {tV>0&&<span style={{fontSize:9,color:'#4b5563'}}>เป้า/วัน≈{Math.round(tV/TOTAL_D)}</span>}
                   {isTotalSales&&<span style={{fontSize:10,color:'#6b7280'}}>← กรอกตรงนี้ก่อน ถ้ามีตัวเลขรวม</span>}
                 </div>
                 <input type="number" inputMode="numeric" value={row[f.key]||''} placeholder={isTotalSales?"0":"0"}
                   onChange={e=>saveDay(selBr,selDay,f.key,e.target.value)}
-                  style={{width:'100%',boxSizing:'border-box',background:'#0d1117',border:isTotalSales?'2px solid #E2231A':'1px solid #2d3548',borderRadius:5,padding:mobile?'10px 12px':'7px 10px',color:'#E2231A',fontFamily:"'JetBrains Mono',monospace",fontSize:mobile?18:isTotalSales?18:15,fontWeight:700,outline:'none'}}/>
+                  style={{width:'100%',boxSizing:'border-box',background:'#0d1117',border:isTotalSales?'2px solid #E2231A':'1px solid #2d3548',borderRadius:5,padding:compact?'10px 12px':'7px 10px',color:'#E2231A',fontFamily:"'JetBrains Mono',monospace",fontSize:compact?18:isTotalSales?16:14,fontWeight:700,outline:'none'}}/>
               </div>
             )})}
           </div>

@@ -406,7 +406,7 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
   const inputSt = {flex:1,background:'transparent',border:'none',outline:'none',color:'#15181C',fontFamily:'Barlow Condensed',fontSize:15,padding:'12px 4px'}
 
   return (
-    <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:compact?'flex-start':'center',padding:compact?'calc(28px + env(safe-area-inset-top,0px)) 16px 0':'40px 20px',position:'relative',overflow:'hidden'}}>
+    <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:compact?'flex-start':'center',padding:compact?'max(64px, calc(16px + env(safe-area-inset-top,0px))) 16px 0':'40px 20px',position:'relative',overflow:'hidden'}}>
 
       {/* มาสคอตยืนคู่กันด้านล่าง — มือถือ: ใหญ่เต็มขอบจอ ชนกึ่งกลาง / จอกว้าง: ขนาดเดิม ขนาบการ์ด */}
       <img src="/icons/cockpit-boy-login.png" alt="" style={compact?{position:'absolute',left:0,bottom:0,width:'47vw',height:'auto',zIndex:0,pointerEvents:'none'}:{position:'absolute',left:'2%',bottom:'8%',width:200,height:'auto',zIndex:0,pointerEvents:'none'}}
@@ -794,7 +794,7 @@ export default function App() {
     <div style={{fontFamily:'Barlow,sans-serif',background:'#0d1117',height:'100dvh',display:'flex',flexDirection:'column',color:'#e5e7eb',overflow:'hidden'}}>
 
       {/* HEADER — safe area top */}
-      <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:`2px solid ${CI.yellow}`,padding:`calc(${compact?'12px':'10px'} + env(safe-area-inset-top,0px)) ${compact?'12px':'20px'} ${compact?'8px':'10px'}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,zIndex:50}}>
+      <div style={{background:'linear-gradient(90deg,#161b25,#0d1117)',borderBottom:`2px solid ${CI.yellow}`,padding:`${compact?'max(54px, calc(12px + env(safe-area-inset-top,0px)))':'10px'} ${compact?'12px':'20px'} ${compact?'8px':'10px'}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,zIndex:50}}>
         <div style={{width:compact?30:38,height:compact?30:38,background:CI.yellow,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:compact?16:20,flexShrink:0}}>🏁</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?13:20,letterSpacing:compact?1:3,color:CI.yellow,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>COCKPIT SALES INTELLIGENCE</div>

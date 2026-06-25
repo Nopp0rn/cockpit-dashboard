@@ -2042,25 +2042,38 @@ function ASP({ctx}) {
 /* ════ ENTRY — กรอกยอดรายวัน ════ */
 function Entry({ctx}) {
   const {de,saveDay,delDay,getMTD,getTS,getT,MTD_R,TODAY_D,TOTAL_D,MONTH_TH,cfg,compact} = ctx
-  const [selBr, setSelBr] = useState('009')
+  const [selBr, setSelBr] = useState(()=>{try{const s=localStorage.getItem('cp_entry_br');return BRANCHES.some(b=>b.id===s)?s:'009'}catch{return '009'}})
+  const [lockBr, setLockBr] = useState(()=>{try{return localStorage.getItem('cp_entry_lock')==='1'}catch{return false}})
   const [selDay, setSelDay] = useState(TODAY_D)
+  useEffect(()=>{try{localStorage.setItem('cp_entry_br',selBr)}catch{}},[selBr])
+  useEffect(()=>{try{localStorage.setItem('cp_entry_lock',lockBr?'1':'0')}catch{}},[lockBr])
   const t=getT(selBr), row=de[selBr]?.[selDay]||EMPTY_ROW(), mtd=getMTD(selBr), ts=getTS(selBr)
   const filled=Object.keys(de[selBr]||{}).map(Number).sort((a,b)=>a-b)
   return (
     <div style={{display:'flex',gap:16,flexDirection:compact?'column':'row'}}>
       {/* Branch sidebar (no ALL) */}
       {compact ? (
-        <div style={{marginBottom:0}}>
-          <select value={selBr} onChange={e=>setSelBr(e.target.value)}
-            style={{width:'100%',background:'#1e2538',border:'1px solid #E2231A',borderRadius:8,padding:'11px 14px',color:'#E2231A',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,outline:'none',marginBottom:10}}>
+        <div style={{display:'flex',gap:8,marginBottom:10}}>
+          <select value={selBr} disabled={lockBr} onChange={e=>setSelBr(e.target.value)}
+            style={{flex:1,minWidth:0,background:'#1e2538',border:`1px solid ${lockBr?CI.yellow:'#E2231A'}`,borderRadius:8,padding:'11px 14px',color:lockBr?CI.yellow:'#E2231A',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,outline:'none',opacity:lockBr?0.85:1,cursor:lockBr?'not-allowed':'pointer'}}>
             {BRANCHES.map(b=><option key={b.id} value={b.id}>{b.id} — {b.short}</option>)}
           </select>
+          <button onClick={()=>setLockBr(v=>!v)} title={lockBr?'ปลดล็อกสาขา':'ล็อกสาขา'}
+            style={{flexShrink:0,width:48,background:lockBr?CI.yellow:'transparent',border:`1px solid ${lockBr?CI.yellow:'#2d3548'}`,borderRadius:8,color:lockBr?CI.black:'#9ca3af',cursor:'pointer',fontSize:18,fontWeight:700}}>
+            {lockBr?'🔒':'🔓'}
+          </button>
         </div>
       ) : (
         <div style={{width:165,flexShrink:0}}>
-          <div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:6,fontFamily:'Barlow Condensed'}}>เลือกสาขา</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+            <div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>เลือกสาขา</div>
+            <button onClick={()=>setLockBr(v=>!v)} title={lockBr?'ปลดล็อกสาขา':'ล็อกสาขา'}
+              style={{background:lockBr?CI.yellow:'transparent',border:`1px solid ${lockBr?CI.yellow:'#2d3548'}`,borderRadius:5,color:lockBr?CI.black:'#9ca3af',cursor:'pointer',fontSize:13,padding:'2px 7px',lineHeight:1.2}}>
+              {lockBr?'🔒':'🔓'}
+            </button>
+          </div>
           {BRANCHES.map((b,i)=>(
-            <button key={b.id} onClick={()=>setSelBr(b.id)} style={{display:'block',width:'100%',textAlign:'left',padding:'7px 10px',marginBottom:3,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:600,fontFamily:'Barlow',background:selBr===b.id?'#1e2538':'transparent',border:selBr===b.id?`1px solid ${BCLR[i]}`:'1px solid transparent',color:selBr===b.id?BCLR[i]:'#9ca3af'}}>
+            <button key={b.id} onClick={()=>{if(!lockBr)setSelBr(b.id)}} style={{display:'block',width:'100%',textAlign:'left',padding:'7px 10px',marginBottom:3,borderRadius:6,cursor:lockBr&&selBr!==b.id?'not-allowed':'pointer',fontSize:12,fontWeight:600,fontFamily:'Barlow',background:selBr===b.id?'#1e2538':'transparent',border:selBr===b.id?`1px solid ${BCLR[i]}`:'1px solid transparent',color:selBr===b.id?BCLR[i]:'#9ca3af',opacity:lockBr&&selBr!==b.id?0.4:1}}>
               <span style={{fontSize:9,color:BCLR[i],marginRight:4}}>●</span><span style={{fontSize:9,color:'#4b5563',marginRight:3}}>{b.id}</span>{b.short}
             </button>
           ))}

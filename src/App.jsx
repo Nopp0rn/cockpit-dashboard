@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from './supabase.js'
 import * as XLSX from 'xlsx'
 import html2canvas from 'html2canvas'
@@ -1409,6 +1409,47 @@ function Daily({ctx}) {
   const modelAvgS=Object.values(dowAvgS).length?Object.values(dowAvgS).reduce((a,v)=>a+v,0)/Object.values(dowAvgS).length:tgtSalesD
   const modelAvgT=Object.values(dowAvgT).length?Object.values(dowAvgT).reduce((a,v)=>a+v,0)/Object.values(dowAvgT).length:tgtTireD
 
+  // ── Adaptive bias correction: backtest โมเดล MA7×DOW กับยอดจริงย้อนหลังทั้งหมด ──
+  // ปรับ 2 ชั้น: global (เทรนด์รวมต่อ scope) × dow[วันในสัปดาห์] (เผื่อ DOW 60%, sample<5 ไม่ปรับ)
+  function computeBias(scope, metric){
+    const getReal = metric==='sales' ? getRealSales : getRealTire
+    const getDow  = metric==='sales' ? getDowAvgS   : getDowAvgT
+    const ratios=[]
+    for(let y=2024; y<=cfg.year; y++){
+      const mEnd = (y===cfg.year) ? cfg.month : 12
+      for(let m=1; m<=mEnd; m++){
+        const dow=getDow(scope,m), dv=Object.values(dow)
+        const mAvg = dv.length ? dv.reduce((a,v)=>a+v,0)/dv.length : 0
+        if(mAvg<=0) continue
+        const arr=Array.from({length:31},(_,i)=>{const v=getReal(scope,y,m,i+1);return (v&&v>0)?v:null})
+        for(let d=1; d<=31; d++){
+          const act=arr[d-1]; if(act==null) continue
+          const prior=arr.slice(0,d-1).filter(v=>v!=null).slice(-7)   // out-of-sample: ใช้เฉพาะวันก่อนหน้า
+          if(prior.length<7) continue
+          const ma=prior.reduce((a,v)=>a+v,0)/7
+          const w=pyDOW(y,m,d)
+          const dr=(dow[String(w)]||mAvg)/mAvg
+          const fc=ma*dr
+          if(fc>0) ratios.push({r:act/fc, w})
+        }
+      }
+    }
+    const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v))
+    const med=a=>{const s=[...a].sort((x,y)=>x-y),n=s.length;return n?(n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2):1}
+    if(ratios.length<10) return {global:1, dow:[1,1,1,1,1,1,1]}
+    const global=clamp(med(ratios.map(o=>o.r)),0.7,1.4)
+    const dow=[]
+    for(let w=0;w<7;w++){
+      const rs=ratios.filter(o=>o.w===w).map(o=>o.r)
+      if(rs.length<5){dow[w]=1;continue}
+      const raw=clamp(med(rs)/global,0.85,1.18)
+      dow[w]=1+(raw-1)*0.6
+    }
+    return {global, dow}
+  }
+  const biasS=useMemo(()=>computeBias(selBr,'sales'),[selBr,cfg.month,cfg.year])
+  const biasT=useMemo(()=>computeBias(selBr,'tire'),[selBr,cfg.month,cfg.year])
+
   // known actual arrays (day 1..TOTAL_D) — วันที่ <= TODAY_D มีข้อมูลจริง, วันที่เกิน = null
   // ต้องขนาด TOTAL_D เพื่อให้ MA7 window rolling ถูกต้องตลอดเดือน
   const knownS=Array.from({length:TOTAL_D},(_,i)=>{
@@ -1431,13 +1472,14 @@ function Daily({ctx}) {
   // DOW ratio
   function dowRatioS(d){const b=dowAvgS[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgS;return modelAvgS>0?b/modelAvgS:1}
   function dowRatioT(d){const b=dowAvgT[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgT;return modelAvgT>0?b/modelAvgT:1}
-  // Forecast = MA7 × DOW ratio (fallback DOW avg เมื่อ < 7 วัน)
-  function fcstSalesDay(d){const ma=ma7(knownS,d);if(ma!=null&&ma>0)return Math.round(ma*dowRatioS(d));return Math.round(dowAvgS[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgS)}
-  function fcstTireDay(d){const ma=ma7(knownT,d);if(ma!=null&&ma>0)return Math.round(ma*dowRatioT(d));return Math.round(dowAvgT[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgT)}
+  // Forecast = MA7 × DOW ratio × bias correction (fallback DOW avg เมื่อ < 7 วัน)
+  function fcstSalesDay(d){const w=pyDOW(cfg.year,cfg.month,d),corr=biasS.global*(biasS.dow[w]||1);const ma=ma7(knownS,d);if(ma!=null&&ma>0)return Math.round(ma*dowRatioS(d)*corr);return Math.round((dowAvgS[String(w)]||modelAvgS)*corr)}
+  function fcstTireDay(d){const w=pyDOW(cfg.year,cfg.month,d),corr=biasT.global*(biasT.dow[w]||1);const ma=ma7(knownT,d);if(ma!=null&&ma>0)return Math.round(ma*dowRatioT(d)*corr);return Math.round((dowAvgT[String(w)]||modelAvgT)*corr)}
 
   // ── วันล่าสุดที่มีข้อมูลจริง → เทียบยอดจริง vs Forecast (out-of-sample) ของวันนั้น ──
-  let reportDay = 0
-  for(let d=TODAY_D; d>=1; d--){ if(knownS[d-1]!=null || knownT[d-1]!=null){ reportDay=d; break } }
+  // ── ล็อกไว้ที่ "วันนี้" (ตามที่ตั้งค่าไว้) เสมอ ดึงยอดจริงแบบ realtime มาเทียบ Forecast วันนี้ ──
+  // ถ้ายังไม่มีสาขาไหนกรอกข้อมูลของวันนี้ จะแสดง 0 ไปก่อน แล้วอัปเดตทันทีที่มีข้อมูลเข้ามา (Supabase realtime)
+  const reportDay = TODAY_D
   const actSalesD = reportDay>0 ? (knownS[reportDay-1]||0) : 0
   const actTireD  = reportDay>0 ? (knownT[reportDay-1]||0) : 0
   const fcSalesD  = reportDay>0 ? fcstSalesDay(reportDay) : 0

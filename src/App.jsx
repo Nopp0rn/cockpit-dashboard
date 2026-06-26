@@ -1435,6 +1435,16 @@ function Daily({ctx}) {
   function fcstSalesDay(d){const ma=ma7(knownS,d);if(ma!=null&&ma>0)return Math.round(ma*dowRatioS(d));return Math.round(dowAvgS[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgS)}
   function fcstTireDay(d){const ma=ma7(knownT,d);if(ma!=null&&ma>0)return Math.round(ma*dowRatioT(d));return Math.round(dowAvgT[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgT)}
 
+  // ── วันล่าสุดที่มีข้อมูลจริง → เทียบยอดจริง vs Forecast (out-of-sample) ของวันนั้น ──
+  let reportDay = 0
+  for(let d=TODAY_D; d>=1; d--){ if(knownS[d-1]!=null || knownT[d-1]!=null){ reportDay=d; break } }
+  const actSalesD = reportDay>0 ? (knownS[reportDay-1]||0) : 0
+  const actTireD  = reportDay>0 ? (knownT[reportDay-1]||0) : 0
+  const fcSalesD  = reportDay>0 ? fcstSalesDay(reportDay) : 0
+  const fcTireD   = reportDay>0 ? fcstTireDay(reportDay)  : 0
+  const salesVsFc = fcSalesD>0 ? P(actSalesD,fcSalesD) : 0
+  const tireVsFc  = fcTireD>0  ? P(actTireD,fcTireD)   : 0
+
   // ── Day-by-day chart data ─────────────────────────────────────
   const salesData = Array.from({length:TOTAL_D},(_,i)=>{
     const d=i+1, row={day:String(d)}
@@ -1495,6 +1505,29 @@ function Daily({ctx}) {
           </div>
 
         </div>
+
+        {reportDay>0 && (
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+          {/* ยอดขายจริง vs Forecast — วันล่าสุดที่มีข้อมูล */}
+          <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginBottom:2}}>
+              <span style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed',fontWeight:700}}>💰 ยอดขายวันที่ {reportDay} {MONTH_TH}</span>
+              <PctBadge v={salesVsFc}/>
+            </div>
+            <div style={{fontSize:20,fontWeight:800,color:CI.red,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(actSalesD)}</div>
+            <div style={{fontSize:10,color:'#888',marginTop:2}}>Forecast {fM(fcSalesD)} · {actSalesD>=fcSalesD?'+':'−'}{fM(Math.abs(actSalesD-fcSalesD))}</div>
+          </div>
+          {/* ยางจริง vs Forecast — วันล่าสุดที่มีข้อมูล */}
+          <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginBottom:2}}>
+              <span style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed',fontWeight:700}}>🏷️ ยางวันที่ {reportDay} {MONTH_TH}</span>
+              <PctBadge v={tireVsFc}/>
+            </div>
+            <div style={{fontSize:20,fontWeight:800,color:'#15181C',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(actTireD)} <span style={{fontSize:13}}>เส้น</span></div>
+            <div style={{fontSize:10,color:'#888',marginTop:2}}>Forecast {N(fcTireD)} เส้น · {actTireD>=fcTireD?'+':'−'}{N(Math.abs(actTireD-fcTireD))}</div>
+          </div>
+        </div>
+        )}
 
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
           <Card label="เฉลี่ย/วัน (ยอดขาย)"  value={fM(Math.round(avgSales))} color={CI.red} small/>

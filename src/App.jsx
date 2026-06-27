@@ -1552,21 +1552,41 @@ function Daily({ctx}) {
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
           {/* ยอดขายจริง vs Forecast — วันล่าสุดที่มีข้อมูล */}
           <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginBottom:2}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginBottom:4}}>
               <span style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed',fontWeight:700}}>💰 ยอดขายวันที่ {reportDay} {MONTH_TH}</span>
               <PctBadge v={salesVsFc}/>
             </div>
-            <div style={{fontSize:20,fontWeight:800,color:CI.red,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(actSalesD)}</div>
-            <div style={{fontSize:10,color:'#888',marginTop:2}}>Forecast {fM(fcSalesD)} · {actSalesD>=fcSalesD?'+':'−'}{fM(Math.abs(actSalesD-fcSalesD))}</div>
+            <div style={{display:'flex',alignItems:'flex-end',gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:9,color:'#999',fontFamily:'Barlow Condensed',fontWeight:700}}>จริง</div>
+                <div style={{fontSize:20,fontWeight:800,color:CI.red,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(actSalesD)}</div>
+              </div>
+              <div style={{width:1,alignSelf:'stretch',background:CI.line}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:9,color:'#999',fontFamily:'Barlow Condensed',fontWeight:700}}>Forecast</div>
+                <div style={{fontSize:20,fontWeight:800,color:'#555',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(fcSalesD)}</div>
+              </div>
+            </div>
+            <div style={{fontSize:10,color:'#888',marginTop:4,textAlign:'right'}}>{actSalesD>=fcSalesD?'+':'−'}{fM(Math.abs(actSalesD-fcSalesD))}</div>
           </div>
           {/* ยางจริง vs Forecast — วันล่าสุดที่มีข้อมูล */}
           <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginBottom:2}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,marginBottom:4}}>
               <span style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed',fontWeight:700}}>🏷️ ยางวันที่ {reportDay} {MONTH_TH}</span>
               <PctBadge v={tireVsFc}/>
             </div>
-            <div style={{fontSize:20,fontWeight:800,color:'#15181C',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(actTireD)} <span style={{fontSize:13}}>เส้น</span></div>
-            <div style={{fontSize:10,color:'#888',marginTop:2}}>Forecast {N(fcTireD)} เส้น · {actTireD>=fcTireD?'+':'−'}{N(Math.abs(actTireD-fcTireD))}</div>
+            <div style={{display:'flex',alignItems:'flex-end',gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:9,color:'#999',fontFamily:'Barlow Condensed',fontWeight:700}}>จริง</div>
+                <div style={{fontSize:20,fontWeight:800,color:'#15181C',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(actTireD)} <span style={{fontSize:13}}>เส้น</span></div>
+              </div>
+              <div style={{width:1,alignSelf:'stretch',background:CI.line}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:9,color:'#999',fontFamily:'Barlow Condensed',fontWeight:700}}>Forecast</div>
+                <div style={{fontSize:20,fontWeight:800,color:'#555',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(fcTireD)} <span style={{fontSize:13}}>เส้น</span></div>
+              </div>
+            </div>
+            <div style={{fontSize:10,color:'#888',marginTop:4,textAlign:'right'}}>{actTireD>=fcTireD?'+':'−'}{N(Math.abs(actTireD-fcTireD))}</div>
           </div>
         </div>
         )}

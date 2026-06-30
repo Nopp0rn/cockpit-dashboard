@@ -703,23 +703,27 @@ export default function App() {
       {/* CONNECTION ERROR BANNER */}
       {ConnBanner}
 
-      {/* DESKTOP NAV */}
-      {!compact && (
-        <div style={{display:'flex',background:'#0d1117',borderBottom:'1px solid #1e2538',overflowX:'auto',flexShrink:0}}>
-          {TABS.map(t => {
-            const isActive  = tab===t.id
-            return (
-              <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{padding:'9px 14px',background:isActive?'#1e2538':'transparent',color:isActive?CI.red:'#6b7280',border:'none',borderBottom:isActive?`2px solid ${CI.red}`:'2px solid transparent',cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:600,fontSize:13,whiteSpace:'nowrap'}}>
-                {t.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* NAV — อยู่ด้านบนเสมอ ทั้งมือถือและจอกว้าง (mobile ใช้ icon+label เล็ก, desktop ใช้ label เต็ม) */}
+      <div style={{display:'flex',background:'#0d1117',borderBottom:'1px solid #1e2538',overflowX:'auto',WebkitOverflowScrolling:'touch',flexShrink:0,zIndex:50}}>
+        {TABS.map(t => {
+          const isActive = tab===t.id
+          return compact ? (
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{flex:'0 0 auto',minWidth:52,padding:'7px 2px 5px',background:isActive?'#1a1f2e':'transparent',color:isActive?CI.red:'#4b5563',border:'none',borderBottom:isActive?`2px solid ${CI.red}`:'2px solid transparent',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+              <span style={{fontSize:18}}>{t.mLabel}</span>
+              <span style={{fontSize:7.5,fontFamily:'Barlow Condensed',fontWeight:600,whiteSpace:'nowrap'}}>{t.mText}</span>
+            </button>
+          ) : (
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{padding:'9px 14px',background:isActive?'#1e2538':'transparent',color:isActive?CI.red:'#6b7280',border:'none',borderBottom:isActive?`2px solid ${CI.red}`:'2px solid transparent',cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:600,fontSize:13,whiteSpace:'nowrap'}}>
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
 
       {/* CONTENT — scrollable */}
-      <div ref={contentRef} style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:compact?'10px 10px':'18px 20px',paddingBottom:compact?`calc(80px + env(safe-area-inset-bottom,0px))`:'18px',maxWidth:1440,margin:'0 auto',width:'100%'}}>
+      <div ref={contentRef} style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:compact?'10px 10px':'18px 20px',paddingBottom:`calc(${compact?'10px':'18px'} + env(safe-area-inset-bottom,0px))`,maxWidth:1440,margin:'0 auto',width:'100%'}}>
         {tab==='overview' && <Overview ctx={ctx}/>}
         {tab==='morning'  && <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr}/>}
         {tab==='mtd'      && <MTDTab ctx={ctx}/>}
@@ -732,23 +736,6 @@ export default function App() {
         {tab==='upload'   && <Upload ctx={ctx}/>}
         {tab==='settings' && <Settings ctx={ctx}/>}
       </div>
-
-      {/* MOBILE BOTTOM NAV — safe area bottom */}
-      {compact && (
-        <div style={{flexShrink:0,background:'#0d1117',borderTop:'1px solid #2d3548',display:'flex',overflowX:'auto',zIndex:100,paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
-          {TABS.map(t => {
-            const isA = tab===t.id
-            const clr = CI.red
-            return (
-              <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{flex:'0 0 auto',minWidth:52,padding:'7px 2px 5px',background:isA?'#1a1f2e':'transparent',color:isA?clr:'#4b5563',border:'none',borderTop:isA?`2px solid ${clr}`:'2px solid transparent',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-                <span style={{fontSize:18}}>{t.mLabel}</span>
-                <span style={{fontSize:7.5,fontFamily:'Barlow Condensed',fontWeight:600,whiteSpace:'nowrap'}}>{t.mText}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }

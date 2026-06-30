@@ -801,7 +801,10 @@ function Overview({ctx}) {
           <div>
             <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:.5,fontFamily:'Barlow Condensed'}}>ยอดขายรวม MTD</div>
             <div style={{fontSize:23,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(totS)}</div>
-            <div style={{fontSize:10,color:'#777'}}>เป้า {fM(Math.round(totT))}</div>
+            <div style={{display:'flex',alignItems:'baseline',gap:5,marginTop:2}}>
+              <span style={{fontSize:11,color:'#666',fontWeight:800,fontFamily:'Barlow Condensed'}}>เป้า</span>
+              <span style={{fontSize:23,fontWeight:900,color:CI.black,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{fM(Math.round(totT))}</span>
+            </div>
             <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
               <span style={{color:statusColor(P(totS,totT))}}>vsเป้า {P(totS,totT).toFixed(0)}%</span>
               <span style={{color:statusColor(P(totS,totPY25))}}>vsPY25 {P(totS,totPY25).toFixed(0)}%</span>
@@ -818,7 +821,10 @@ function Overview({ctx}) {
           <div>
             <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:.5,fontFamily:'Barlow Condensed'}}>ยางรวม MTD</div>
             <div style={{fontSize:23,fontWeight:900,color:'#15181C',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(totTire)} <span style={{fontSize:13}}>เส้น</span></div>
-            <div style={{fontSize:10,color:'#777'}}>เป้า {N(Math.round(totTireT))}</div>
+            <div style={{display:'flex',alignItems:'baseline',gap:5,marginTop:2}}>
+              <span style={{fontSize:11,color:'#666',fontWeight:800,fontFamily:'Barlow Condensed'}}>เป้า</span>
+              <span style={{fontSize:23,fontWeight:900,color:'#15181C',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{N(Math.round(totTireT))} <span style={{fontSize:13}}>เส้น</span></span>
+            </div>
             <div style={{display:'flex',gap:9,marginTop:5,flexWrap:'wrap',fontSize:10,fontWeight:700}}>
               <span style={{color:statusColor(P(totTire,totTireT))}}>vsเป้า {P(totTire,totTireT).toFixed(0)}%</span>
               <span style={{color:statusColor(P(totTire,totTirePY25))}}>vsPY25 {P(totTire,totTirePY25).toFixed(0)}%</span>

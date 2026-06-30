@@ -139,6 +139,8 @@ const N  = (n,d=0) => Number(n||0).toLocaleString('th-TH',{minimumFractionDigits
 const fM = (n) => n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':N(n)
 const P  = (a,b) => b?(a/b)*100:0
 const dIM = (y,m) => new Date(y,m,0).getDate()
+// ปัดจำนวนเส้นยางขึ้นเป็นทวีคูณของ 4 เสมอ (1-3→4, 5-7→8, 4→4, 8→8 ...)
+const ceilTo4 = (n) => n>0 ? Math.ceil(n/4)*4 : 0
 
 /* ── Entry field definitions ── */
 const FIELDS = [
@@ -213,11 +215,17 @@ function PBadge({value, threshold}) {
   return <span style={{background:c+'22',color:c,borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",whiteSpace:'nowrap'}}>{v.toFixed(1)}%</span>
 }
 
-function Card({label,value,sub,color=CI.red,small}) {
+function Card({label,value,sub,target,color=CI.red,small}) {
   return (
     <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
       <div style={{fontSize:9,color:'#777',textTransform:'uppercase',letterSpacing:1,marginBottom:2,fontFamily:'Barlow Condensed',fontWeight:700}}>{label}</div>
       <div style={{fontSize:small?16:20,fontWeight:800,color,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{value}</div>
+      {target!=null && (
+        <div style={{display:'flex',alignItems:'baseline',gap:4,marginTop:3}}>
+          <span style={{fontSize:small?10:11,color:'#666',fontWeight:800,fontFamily:'Barlow Condensed'}}>เป้า</span>
+          <span style={{fontSize:small?16:20,fontWeight:800,color:CI.black,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>{target}</span>
+        </div>
+      )}
       {sub&&<div style={{fontSize:10,color:'#888',marginTop:2}}>{sub}</div>}
     </div>
   )
@@ -1069,9 +1077,9 @@ function MTDTab({ctx}) {
           {selBr} — {BRANCHES.find(x=>x.id===selBr)?.name}
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-          <Card label="ยอดขาย MTD" value={fM(ts)} sub={`เป้า ${fM(Math.round(t.sales*MTD_R))}`}/>
+          <Card label="ยอดขาย MTD" value={fM(ts)} target={fM(Math.round(t.sales*MTD_R))}/>
           <Card label="% เทียบเป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={statusColor(P(ts,t.sales*MTD_R))}/>
-          <Card label="ยาง MTD" value={N(m.tire)+' เส้น'} sub={`เป้า ${N(Math.round(t.tire*MTD_R))}`} color="#15181C"/>
+          <Card label="ยาง MTD" value={N(m.tire)+' เส้น'} target={N(Math.round(t.tire*MTD_R))} color="#15181C"/>
           <Card label="% เทียบเป้ายาง" value={P(m.tire,t.tire*MTD_R).toFixed(1)+'%'} color={statusColor(P(m.tire,t.tire*MTD_R))}/>
         </div>
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
@@ -1365,7 +1373,7 @@ function Daily({ctx}) {
           <Card label="เฉลี่ย/วัน (ยอดขาย)"  value={fM(Math.round(avgSales))} color={CI.red} small/>
           <Card label="เป้า/วัน (ยอดขาย)"    value={fM(Math.round(tgtSalesD))} color="#555" small/>
           <Card label="เฉลี่ย/วัน (ยาง)"      value={N(Math.round(avgTire))+' เส้น'} color="#15181C" small/>
-          <Card label="ต้องทำ/วัน (ยอดเหลือ)" value={fM(Math.round(Math.max(0,t.sales-ts)/Math.max(1,DAYS_LEFT)))} color={CI.red} small/>
+          <Card label="เป้า/วัน (ยาง)"        value={ceilTo4(Math.round(tgtTireD))+' เส้น'} color="#15181C" small/>
         </div>
 
         {/* ── Sales chart ── */}
@@ -1975,10 +1983,10 @@ function Entry({ctx}) {
         </div>
         {/* MTD summary */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-          <Card label={`ยอด MTD (${filled.length}วัน)`} value={fM(ts)} sub={`เป้า ${fM(Math.round(t.sales*MTD_R))}`} small/>
+          <Card label={`ยอด MTD (${filled.length}วัน)`} value={fM(ts)} target={fM(Math.round(t.sales*MTD_R))} small/>
           <Card label="% เป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={statusColor(P(ts,t.sales*MTD_R))} small/>
-          <Card label="ยาง MTD" value={N(mtd.tire)+' เส้น'} sub={`เป้า ${Math.round(t.tire*MTD_R)}`} color="#15181C" small/>
-          <Card label="Job Order" value={N(mtd.jobOrder)} sub={`เป้า ${Math.round(t.cc*MTD_R)}`} color="#15181C" small/>
+          <Card label="ยาง MTD" value={N(mtd.tire)+' เส้น'} target={Math.round(t.tire*MTD_R)} color="#15181C" small/>
+          <Card label="Job Order" value={N(mtd.jobOrder)} target={Math.round(t.cc*MTD_R)} color="#15181C" small/>
         </div>
         {/* Form */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:10,overflow:'hidden',marginBottom:10}}>

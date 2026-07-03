@@ -600,11 +600,20 @@ export default function App() {
 
   const getH26 = (bid) => {
     // EXCEL_MS (ประวัติยอดขาย.xlsx) ก่อน HIST (Supabase) สำหรับทุกเดือนของปี 2026
+    // Fallback: sum deAll entries ของเดือนนั้น (กรณียังไม่ได้ upload Excel รายเดือน เช่น เดือนที่ผ่านมา)
     const getMonthSales26 = (b, i) => {
       const ex = EXCEL_MS[b]?.['2026']?.[String(i+1)]
       if (ex > 0) return Math.round(ex/1000)
       const v = HIST[b]?.[2026]?.[i]
-      return (v != null && v > 0) ? v : null
+      if (v != null && v > 0) return v
+      // fallback: sum deAll for this month
+      const mk = `2026-${i+1}`
+      const entries = deAll[b]?.[mk] || {}
+      const sum = Object.values(entries).reduce((s,row)=>{
+        const agg = Object.fromEntries(FIELDS.map(f=>[f.key,Number(row[f.key])||0]))
+        return s + calcTS(agg)
+      }, 0)
+      return sum > 0 ? Math.round(sum/1000) : null
     }
     const base = bid==='ALL'
       ? Array(12).fill(0).map((_,i)=>{
@@ -651,7 +660,7 @@ export default function App() {
 
 
 
-  const ctx = {selBr,setSelBr,de,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR}
+  const ctx = {selBr,setSelBr,de,deAll,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR}
 
   /* ── Loading screen ── */
   if (!ready) return (
@@ -1309,14 +1318,15 @@ function Daily({ctx}) {
   function fcstTireDay(d){const ma=ma7(knownT,d);if(ma!=null&&ma>0)return Math.round(ma*dowRatioT(d));return Math.round(dowAvgT[String(pyDOW(cfg.year,cfg.month,d))]||modelAvgT)}
 
   // ── PY estimate: เมื่อไม่มีข้อมูลรายวัน (EXCEL_DS ยังไม่อัพ) → ประมาณจากยอดรายเดือน × DOW ratio
+  // threshold: ยอดต้อง > 500K฿ / ยาง > 20 เส้น เพื่อกรองสาขาที่ยังไม่มีข้อมูลจริง (เช่น 143 ปี 2024/2025)
   function pyEstSales(yr, d) {
     const total = histSales(yr)
-    if (!total || total <= 0) return null
+    if (!total || total < 500000) return null
     return Math.round((total / TOTAL_D) * dowRatioS(d))
   }
   function pyEstTire(yr, d) {
     const total = histTire(yr)
-    if (!total || total <= 0) return null
+    if (!total || total < 20) return null
     return Math.round((total / TOTAL_D) * dowRatioT(d))
   }
 
@@ -1469,7 +1479,7 @@ function Daily({ctx}) {
 
 /* ════ MONTHLY ════ */
 function Monthly({ctx}) {
-  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS,histTireQ,histDailySales,uploadedMtAll} = ctx
+  const {selBr,setSelBr,getH,getMTD,getAllMTD,mobile,cfg,HIST,FIELDS,histTireQ,histDailySales,uploadedMtAll,deAll,calcTS,BRANCHES} = ctx
   const isAll=selBr==='ALL', h=getH(selBr)
   const [showSales, setShowSales] = useState({2023:false,2024:true,2025:true,2026:true})
   const [showTire,  setShowTire]  = useState({2024:true,2025:true,2026:true})
@@ -1492,9 +1502,23 @@ function Monthly({ctx}) {
   // Tire chart data — 2024, 2025, 2026
   // 2024/2025: from SEED_TIREQ
   // 2026: current month from de MTD, rest null
+  // ยาง 2026: ใช้ upload/EXCEL_MT ก่อน ถ้าไม่มีให้ sum deAll ของเดือนนั้น
+  const getDeMonthTire26 = (bid, mo) => {
+    const mk = `2026-${mo}`
+    if (bid === 'ALL') return BRANCHES.reduce((s,b)=>{
+      return s + Object.values(deAll[b.id]?.[mk]||{}).reduce((ss,r)=>ss+(Number(r.tire)||0), 0)
+    }, 0)
+    return Object.values(deAll[bid]?.[mk]||{}).reduce((s,r)=>s+(Number(r.tire)||0), 0)
+  }
   const mtd2026 = isAll ? getAllMTD() : getMTD(selBr)
   const tire2026 = Array(12).fill(null)
+  // current month: from de MTD
   if (mtd2026.tire > 0) tire2026[cfg.month-1] = mtd2026.tire
+  // past months of 2026: from deAll (กรณียังไม่ upload Data_sale_by_Store.xlsx รายเดือนล่าสุด)
+  for (let i = 0; i < cfg.month - 1; i++) {
+    const deT = getDeMonthTire26(isAll?'ALL':selBr, i+1)
+    if (deT > 0) tire2026[i] = deT
+  }
 
   // Use histTireQ from uploaded Data_sale_by_Store if available, else SEED_TIREQ
   const getTireQByMonth = (bid, yr, monthIdx) => {
@@ -1623,27 +1647,6 @@ function Monthly({ctx}) {
           </ResponsiveContainer>
         </div>
 
-        {/* Tire Sales Monthly chart - only when upload data available */}
-        {hasTireSalesData && (
-          <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:12}}>
-            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:CI.red,marginBottom:4}}>
-              💰 ยอดขายยาง รายเดือน (฿000)
-            </div>
-            <div style={{fontSize:9,color:'#6b7280',marginBottom:8}}>จาก ยอดขายยางรายวัน.xlsx ที่อัพโหลด (sum ทุกวัน)</div>
-            <ResponsiveContainer width="100%" height={mobile?170:200}>
-              <LineChart data={tireSalesData} margin={{top:4,right:4,left:0,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2d3548"/>
-                <XAxis dataKey="month" tick={{fill:'#6b7280',fontSize:8}}/>
-                <YAxis tick={{fill:'#6b7280',fontSize:8}} tickFormatter={v=>v?(v/1000).toFixed(1)+'M':'0'}/>
-                <Tooltip contentStyle={{background:'#1e2538',border:'1px solid #2d3548',fontSize:11}}/>
-                <Legend wrapperStyle={{fontSize:9}}/>
-                {tireSalesData.some(r=>r[2024]) && <Line type="monotone" dataKey={2024} stroke={YRCLR[2024]} strokeWidth={1.5} dot={false} connectNulls={false}/>}
-                {tireSalesData.some(r=>r[2025]) && <Line type="monotone" dataKey={2025} stroke={YRCLR[2025]} strokeWidth={2} dot={{r:2}} connectNulls={false}/>}
-                {tireSalesData.some(r=>r[2026]) && <Line type="monotone" dataKey={2026} stroke={YRCLR[2026]} strokeWidth={3} dot={{r:4,fill:YRCLR[2026]}} strokeDasharray={'6 3'} connectNulls={false}/>}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
         <MascotFooter compact={mobile}/>
       </div>
     </div>

@@ -2271,7 +2271,7 @@ function parseSalesData(wb) {
   const parsed   = []
 
   const COL_START = { 2024: 4, 2025: 17, 2026: 30 }
-  const MON_COUNT = { 2024: 12, 2025: 12, 2026: 5 }
+  const MON_COUNT = { 2024: 12, 2025: 12, 2026: 12 }  // อ่านครบ 12 เดือน เดือนที่ยังไม่มีข้อมูลจะได้ 0
   const TIRE_ROW  = 24
   const JOB_ROW   = 3
 
@@ -2311,8 +2311,13 @@ function parseSalesData(wb) {
       tireqOut[bid][yr] = tireq
     })
 
-    // Summary of latest month (tire only — sales ฿ มาจาก ประวัติยอดขาย.xlsx)
-    const latestCol = COL_START[2026] + MON_COUNT[2026] - 1  // May 2026
+    // หาเดือนล่าสุดที่มีข้อมูลจริงใน 2026 (ไม่ใช่ 0)
+    let lastNonZeroCol = COL_START[2026]
+    for (let m = 0; m < 12; m++) {
+      const col = COL_START[2026] + m
+      if (Number(rows[tireRowIdx]?.[col]) > 0) lastNonZeroCol = col
+    }
+    const latestCol = lastNonZeroCol
     parsed.push({
       bid,
       name: sn,

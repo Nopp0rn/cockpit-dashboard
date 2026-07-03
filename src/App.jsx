@@ -1389,6 +1389,47 @@ function Daily({ctx}) {
             fontFamily:'Barlow Condensed',fontWeight:700,fontSize:10}
   }
 
+  // ── Today's actual vs Forecast ───────────────────────────────
+  const todaySales    = knownS[TODAY_D-1] || 0   // actual today (0 = ยังไม่กรอก)
+  const todayTireEnt  = knownT[TODAY_D-1] || 0
+  const todayFcstS    = fcstSalesDay(TODAY_D)
+  const todayFcstT    = fcstTireDay(TODAY_D)
+  const todaySalesPct = todayFcstS > 0 ? (todaySales / todayFcstS) * 100 : 0
+  const todayTirePct  = todayFcstT > 0 ? (todayTireEnt / todayFcstT) * 100 : 0
+
+  const pctClr = (p) => p >= 100 ? '#16a34a' : p >= 90 ? '#b45309' : '#dc2626'
+  const pctBg  = (p) => p >= 100 ? '#dcfce7' : p >= 90 ? '#fef3c7' : '#fee2e2'
+
+  function TodayCard({icon,label,actual,fcst,pct,unit,color}) {
+    const diff = actual - fcst
+    return (
+      <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
+          <div style={{fontSize:9,color:'#666',fontFamily:'Barlow Condensed',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>{icon} ยอดขายวันที่ {TODAY_D} {label}</div>
+          <div style={{background:pctBg(pct),color:pctClr(pct),borderRadius:6,padding:'2px 6px',fontSize:10,fontWeight:800,fontFamily:'Barlow Condensed',whiteSpace:'nowrap'}}>{Math.round(pct)}%</div>
+        </div>
+        <div style={{display:'flex',gap:0,alignItems:'stretch'}}>
+          <div style={{flex:1,paddingRight:8}}>
+            <div style={{fontSize:9,color:'#888',marginBottom:2}}>จริง</div>
+            <div style={{fontSize:18,fontWeight:900,color,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>
+              {unit==='฿'?fM(actual):N(actual)}<span style={{fontSize:10}}>{unit!=='฿'?' เส้น':''}</span>
+            </div>
+          </div>
+          <div style={{width:1,background:CI.line,flexShrink:0}}/>
+          <div style={{flex:1,paddingLeft:8}}>
+            <div style={{fontSize:9,color:'#888',marginBottom:2}}>Forecast</div>
+            <div style={{fontSize:18,fontWeight:900,color:'#555',fontFamily:"'JetBrains Mono',monospace",lineHeight:1.1}}>
+              {unit==='฿'?fM(Math.round(fcst)):N(Math.round(fcst))}<span style={{fontSize:10}}>{unit!=='฿'?' เส้น':''}</span>
+            </div>
+          </div>
+        </div>
+        <div style={{fontSize:9,color:'#aaa',marginTop:4,textAlign:'right'}}>
+          {actual>0 ? `${diff>=0?'+':''}${unit==='฿'?fM(Math.round(diff)):N(Math.round(diff))}` : `−${unit==='฿'?fM(Math.round(fcst)):N(Math.round(fcst))}`}
+        </div>
+      </div>
+    )
+  }
+
   // ── JSX ────────────────────────────────────────────────────────
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
@@ -1401,14 +1442,22 @@ function Daily({ctx}) {
 
         </div>
 
+        {/* ── Today actual vs Forecast ── */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+          <TodayCard icon="💰" label={MONTH_TH+'.'}
+            actual={todaySales} fcst={todayFcstS} pct={todaySalesPct}
+            unit="฿" color={CI.red}/>
+          <TodayCard icon="🏷️" label={MONTH_TH+'.'}
+            actual={todayTireEnt} fcst={todayFcstT} pct={todayTirePct}
+            unit="เส้น" color="#15181C"/>
+        </div>
+
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
           <Card label="เฉลี่ย/วัน (ยอดขาย)"  value={fM(Math.round(avgSales))} color={CI.red} small/>
           <Card label="เป้า/วัน (ยอดขาย)"    value={fM(Math.round(tgtSalesD))} color="#555" small/>
           <Card label="เฉลี่ย/วัน (ยาง)"      value={N(Math.round(avgTire))+' เส้น'} color="#15181C" small/>
           <Card label="เป้า/วัน (ยาง)"        value={ceilTo4(Math.round(tgtTireD))+' เส้น'} color="#15181C" small/>
         </div>
-
-        {/* ── Sales chart ── */}
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,flexWrap:'wrap',gap:4}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.red}}>💰 ยอดขายรายวัน (฿) — วันที่ 1–{TODAY_D}</div>

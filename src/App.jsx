@@ -410,16 +410,10 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
   const lockSt  = {fontSize:18,marginRight:2,flexShrink:0}
 
   return (
-    <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',position:'relative',overflow:'hidden',paddingTop:`max(${compact?28:44}px, calc(16px + env(safe-area-inset-top,0px)))`,paddingBottom:compact?110:40,paddingLeft:20,paddingRight:20,boxSizing:'border-box'}}>
-
-      {/* มาสคอต — มุมล่างซ้าย/ขวา ของจอ */}
-      <img src="/icons/cockpit-boy-login.png" alt="" onError={e=>{e.target.style.display='none'}}
-        style={{position:'absolute',left:0,bottom:0,width:compact?'46vw':320,maxWidth:compact?230:320,height:'auto',pointerEvents:'none',zIndex:1}}/>
-      <img src="/icons/cockpit-girl-login.png" alt="" onError={e=>{e.target.style.display='none'}}
-        style={{position:'absolute',right:0,bottom:0,width:compact?'46vw':320,maxWidth:compact?230:320,height:'auto',pointerEvents:'none',zIndex:1}}/>
+    <div style={{background:CI.yellow,minHeight:'100dvh',display:'flex',flexDirection:'column',alignItems:'center',position:'relative',paddingTop:`max(${compact?28:44}px, calc(16px + env(safe-area-inset-top,0px)))`,paddingBottom:`max(20px, calc(20px + env(safe-area-inset-bottom,0px)))`,paddingLeft:20,paddingRight:20,boxSizing:'border-box'}}>
 
       {/* หัวเรื่อง — โลโก้ใหญ่ + ป้าย sale intelligence */}
-      <div style={{textAlign:'center',marginBottom:compact?20:28,zIndex:2}}>
+      <div style={{textAlign:'center',marginBottom:compact?20:28}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?34:52,color:CI.black,letterSpacing:2,lineHeight:1}}>COCKPIT</div>
         <div style={{display:'inline-block',marginTop:8,background:CI.black,borderRadius:8,padding:compact?'5px 16px':'7px 22px'}}>
           <span style={{fontFamily:'Barlow Condensed',fontStyle:'italic',fontWeight:800,fontSize:compact?15:20,color:CI.yellow}}>sale intelligence</span>
@@ -427,7 +421,7 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
       </div>
 
       {/* การ์ดเข้าสู่ระบบ */}
-      <div style={{width:'100%',maxWidth:360,background:CI.black,borderRadius:20,padding:compact?'26px 22px':'32px 28px',boxShadow:'0 16px 40px rgba(0,0,0,.35)',zIndex:2,textAlign:'center'}}>
+      <div style={{width:'100%',maxWidth:360,background:CI.black,borderRadius:20,padding:compact?'26px 22px':'32px 28px',boxShadow:'0 16px 40px rgba(0,0,0,.35)',textAlign:'center',flexShrink:0}}>
         <div style={{fontFamily:'Barlow Condensed',fontSize:15,color:'#e5e7eb'}}>ยินดีต้อนรับสู่</div>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:28,color:CI.yellow,letterSpacing:1,lineHeight:1.15,marginTop:4}}>COCKPIT</div>
         <div style={{fontFamily:'Barlow Condensed',fontStyle:'italic',fontWeight:700,fontSize:15,color:CI.yellow,marginBottom:16}}>sale intelligence</div>
@@ -461,7 +455,15 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
         </button>
       </div>
 
-      <div style={{marginTop:20,fontSize:11,color:'#5c5200',fontFamily:'Barlow Condensed',zIndex:2}}>COCKPIT SALES INTELLIGENCE © {new Date().getFullYear()}</div>
+      <div style={{marginTop:20,fontSize:11,color:'#5c5200',fontFamily:'Barlow Condensed'}}>COCKPIT SALES INTELLIGENCE © {new Date().getFullYear()}</div>
+
+      {/* มาสคอต — แถว in-flow ด้านล่างสุด (ไม่ใช้ absolute เพื่อไม่ให้ล้น/ถูกตัดตอนจอเตี้ยแนวนอน) */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',width:'calc(100% + 40px)',marginLeft:-20,marginRight:-20,marginTop:24,pointerEvents:'none'}}>
+        <img src="/icons/cockpit-boy-login.png" alt="" onError={e=>{e.target.style.display='none'}}
+          style={{width:compact?'42vw':280,maxWidth:compact?200:280,height:'auto',display:'block'}}/>
+        <img src="/icons/cockpit-girl-login.png" alt="" onError={e=>{e.target.style.display='none'}}
+          style={{width:compact?'42vw':280,maxWidth:compact?200:280,height:'auto',display:'block'}}/>
+      </div>
     </div>
   )
 }

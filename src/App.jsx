@@ -404,33 +404,48 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
     }
   }
 
-  const fieldSt = {display:'flex',alignItems:'center',background:'#fff',borderRadius:8,padding:'0 12px',border:err?`1px solid ${CI.red}`:'1px solid transparent'}
-  const inputSt = {flex:1,background:'transparent',border:'none',outline:'none',color:'#15181C',fontFamily:'Barlow Condensed',fontSize:15,padding:'12px 4px'}
-  const eyeSt   = {cursor:'pointer',fontSize:16,color:'#6b7280',userSelect:'none',padding:'0 2px'}
+  const fieldSt = {display:'flex',alignItems:'center',background:'#fff',borderRadius:12,padding:'0 16px',border:err?`1px solid ${CI.red}`:'1px solid transparent'}
+  const inputSt = {flex:1,background:'transparent',border:'none',outline:'none',color:'#15181C',fontFamily:'Barlow Condensed',fontSize:16,padding:'15px 8px'}
+  const eyeSt   = {cursor:'pointer',fontSize:18,userSelect:'none',padding:'0 2px'}
+  const lockSt  = {fontSize:18,marginRight:2,flexShrink:0}
 
   return (
-    <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:compact?'32px 20px 20px':'40px 20px',position:'relative',overflow:'hidden'}}>
-      <div style={{width:'100%',maxWidth:360,background:CI.black,borderRadius:16,padding:'28px 22px',boxShadow:'0 12px 32px rgba(0,0,0,.35)',zIndex:1}}>
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
-          <div style={{width:34,height:34,background:CI.yellow,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🏁</div>
-          <div>
-            <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:16,letterSpacing:2,color:CI.yellow}}>COCKPIT</div>
-            <div style={{fontSize:9,color:'#6b7280',letterSpacing:1}}>SALES INTELLIGENCE</div>
-          </div>
+    <div style={{background:CI.yellow,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',position:'relative',overflow:'hidden',paddingTop:`max(${compact?28:44}px, calc(16px + env(safe-area-inset-top,0px)))`,paddingBottom:compact?110:40,paddingLeft:20,paddingRight:20,boxSizing:'border-box'}}>
+
+      {/* มาสคอต — มุมล่างซ้าย/ขวา ของจอ */}
+      <img src="/icons/cockpit-boy-login.png" alt="" onError={e=>{e.target.style.display='none'}}
+        style={{position:'absolute',left:0,bottom:0,width:compact?'46vw':320,maxWidth:compact?230:320,height:'auto',pointerEvents:'none',zIndex:1}}/>
+      <img src="/icons/cockpit-girl-login.png" alt="" onError={e=>{e.target.style.display='none'}}
+        style={{position:'absolute',right:0,bottom:0,width:compact?'46vw':320,maxWidth:compact?230:320,height:'auto',pointerEvents:'none',zIndex:1}}/>
+
+      {/* หัวเรื่อง — โลโก้ใหญ่ + ป้าย sale intelligence */}
+      <div style={{textAlign:'center',marginBottom:compact?20:28,zIndex:2}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?34:52,color:CI.black,letterSpacing:2,lineHeight:1}}>COCKPIT</div>
+        <div style={{display:'inline-block',marginTop:8,background:CI.black,borderRadius:8,padding:compact?'5px 16px':'7px 22px'}}>
+          <span style={{fontFamily:'Barlow Condensed',fontStyle:'italic',fontWeight:800,fontSize:compact?15:20,color:CI.yellow}}>sale intelligence</span>
         </div>
-        <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#9ca3af',marginTop:14,marginBottom:16}}>
-          {isSetup ? '🔐 ตั้งรหัสผ่านเข้าระบบครั้งแรก' : '🔒 ใส่รหัสผ่านเพื่อเข้าใช้งาน'}
+      </div>
+
+      {/* การ์ดเข้าสู่ระบบ */}
+      <div style={{width:'100%',maxWidth:360,background:CI.black,borderRadius:20,padding:compact?'26px 22px':'32px 28px',boxShadow:'0 16px 40px rgba(0,0,0,.35)',zIndex:2,textAlign:'center'}}>
+        <div style={{fontFamily:'Barlow Condensed',fontSize:15,color:'#e5e7eb'}}>ยินดีต้อนรับสู่</div>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:28,color:CI.yellow,letterSpacing:1,lineHeight:1.15,marginTop:4}}>COCKPIT</div>
+        <div style={{fontFamily:'Barlow Condensed',fontStyle:'italic',fontWeight:700,fontSize:15,color:CI.yellow,marginBottom:16}}>sale intelligence</div>
+        <div style={{fontFamily:'Barlow Condensed',fontSize:14,color:'#e5e7eb',marginBottom:14}}>
+          {isSetup ? 'ตั้งรหัสผ่านเข้าระบบครั้งแรก' : 'กรุณาใส่รหัสผ่าน'}
         </div>
 
         <div style={fieldSt}>
+          <span style={lockSt}>🔒</span>
           <input type={show?'text':'password'} value={pw} onChange={e=>{setPw(e.target.value);setErr('')}}
             onKeyDown={e=>{if(e.key==='Enter'){ if(!isSetup) submit(); else if(pw2) submit() }}}
-            placeholder="รหัสผ่าน" autoFocus style={inputSt}/>
+            placeholder="Password" autoFocus style={inputSt}/>
           <span onClick={()=>setShow(s=>!s)} style={eyeSt}>{show?'🙈':'👁'}</span>
         </div>
 
         {isSetup && (
           <div style={{...fieldSt,marginTop:10}}>
+            <span style={lockSt}>🔒</span>
             <input type={show?'text':'password'} value={pw2} onChange={e=>{setPw2(e.target.value);setErr('')}}
               onKeyDown={e=>{if(e.key==='Enter') submit()}}
               placeholder="ยืนยันรหัสผ่านอีกครั้ง" style={inputSt}/>
@@ -440,13 +455,13 @@ function LockScreen({authHash, setAuthHash, onUnlock, compact}) {
         {err && <div style={{color:CI.red,fontSize:12,marginTop:10,fontFamily:'Barlow Condensed',fontWeight:600}}>⚠️ {err}</div>}
 
         <button onClick={submit} disabled={busy}
-          style={{width:'100%',marginTop:16,padding:'13px 0',background:busy?'#555':CI.yellow,color:CI.black,
-                  border:'none',borderRadius:8,cursor:busy?'default':'pointer',fontFamily:'Barlow Condensed',fontWeight:900,fontSize:16,letterSpacing:1}}>
+          style={{width:'100%',marginTop:18,padding:'15px 0',background:busy?'#555':CI.yellow,color:CI.black,
+                  border:'none',borderRadius:12,cursor:busy?'default':'pointer',fontFamily:'Barlow Condensed',fontWeight:900,fontSize:18,letterSpacing:1}}>
           {busy ? 'กำลังตรวจสอบ...' : (isSetup ? 'ตั้งรหัสผ่าน' : 'เข้าสู่ระบบ')}
         </button>
       </div>
 
-      <div style={{marginTop:16,fontSize:10,color:'#5c5200',fontFamily:'Barlow Condensed',zIndex:1}}>COCKPIT SALES INTELLIGENCE © {new Date().getFullYear()}</div>
+      <div style={{marginTop:20,fontSize:11,color:'#5c5200',fontFamily:'Barlow Condensed',zIndex:2}}>COCKPIT SALES INTELLIGENCE © {new Date().getFullYear()}</div>
     </div>
   )
 }

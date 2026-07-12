@@ -666,16 +666,42 @@ export default function App() {
     // Timeout 10s — แสดง app แต่ไม่โชว์ banner (ช้าไม่ใช่ error)
     const t = setTimeout(() => finish(false), 10000)
 
-    // Poll every 3 seconds to ensure all branches see the latest manual entries
-    // (fallback in case Realtime subscription misses updates)
-    const poll = setInterval(async () => {
+    /* ── Fallback polling (ลด egress) ──────────────────────────────────
+       เดิม: poll ทุก 3 วินาที ตลอดเวลา แม้แอปถูกพับไว้เบื้องหลัง
+             → ดึงก้อน cp_de (ข้อมูลรายวันทุกสาขา) ซ้ำ ~1,200 ครั้ง/ชม./เครื่อง
+             → egress พุ่งจนเกินโควต้า Supabase (Free Plan)
+       ใหม่: - Realtime subscription เป็นช่องทางหลักในการรับอัปเดต (push, ไม่กิน egress ซ้ำ)
+             - poll เป็นแค่ตาข่ายกันพลาด: ทุก 60 วินาที (ลดลง 20 เท่า)
+             - หยุด poll ทั้งหมดเมื่อแอปไม่ได้อยู่บนหน้าจอ (แท็บพับ/สลับแอป)
+             - พอกลับมาดูอีกครั้ง ดึงข้อมูลสดทันที 1 ครั้ง แล้วเริ่มจับเวลาใหม่
+       ผลลัพธ์: egress ลดลงหลายสิบเท่า แต่ผู้ใช้ยังเห็นข้อมูลล่าสุดเสมอ            */
+    const POLL_MS = 60000
+    let poll = null
+
+    const fetchDe = async () => {
       try {
         const fresh = await DB.get('cp_de')
         if (fresh != null) setDeAll(normalizeDe(fresh))
       } catch(e) { /* silent */ }
-    }, 3000)
+    }
 
-    return () => { clearTimeout(t); clearInterval(poll); supabase.removeChannel(ch) }
+    const startPoll = () => { if (!poll) poll = setInterval(fetchDe, POLL_MS) }
+    const stopPoll  = () => { if (poll) { clearInterval(poll); poll = null } }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') { fetchDe(); startPoll() }
+      else stopPoll()
+    }
+
+    if (document.visibilityState === 'visible') startPoll()
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      clearTimeout(t)
+      stopPoll()
+      document.removeEventListener('visibilitychange', onVisibility)
+      supabase.removeChannel(ch)
+    }
   }, [])
 
   /* ── Write helpers ── */

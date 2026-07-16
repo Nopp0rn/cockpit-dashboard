@@ -572,6 +572,12 @@ export default function App() {
 
   /* ── App state (synced via Supabase) ── */
   const [deAll, setDeAll]   = useState(() => Object.fromEntries(BRANCHES.map(b=>[b.id,{}])))
+  // deAllRef = snapshot ล่าสุดของ deAll ไว้เขียนขึ้น Supabase นอก state updater
+  // lastLocalEditRef = เวลาที่เครื่องนี้แก้ไขข้อมูลล่าสุด (กัน realtime/poll เขียนทับระหว่างพิมพ์ → ต้นเหตุ "กรอกยอดแล้วกระพริบ/ข้อมูลหาย")
+  // saveTimerRef = debounce timer สำหรับเขียน cp_de ขึ้น Supabase (เดิมเขียนทุกตัวอักษร → ก้อนใหญ่ชนกันเอง)
+  const deAllRef = useRef({})
+  const lastLocalEditRef = useRef(0)
+  const saveTimerRef = useRef(null)
   const [TARGET, setTARGET] = useState(SEED_T)
   const [HIST, setHIST]     = useState(SEED_H)
   const [cfg, setCfg]       = useState(DEFAULT_CFG)
@@ -650,7 +656,10 @@ export default function App() {
     const ch = DB.listen(payload => {
       const r = payload.new
       if (!r?.key) return                                        // null guard
-      if (r.key==='cp_de'   && r.value!=null) setDeAll(normalizeDe(r.value))
+      if (r.key==='cp_de'   && r.value!=null) {
+        // ข้ามการเขียนทับถ้าเพิ่งพิมพ์ในเครื่องนี้เมื่อไม่นาน — กัน echo/อัพเดตจากเครื่องอื่นมาชนกับตัวที่กำลังพิมพ์
+        if (Date.now() - lastLocalEditRef.current > EDIT_GRACE_MS) setDeAll(normalizeDe(r.value))
+      }
       if (r.key==='cp_tgt'  && r.value!=null) setTARGET(r.value)
       if (r.key==='cp_hist' && r.value!=null) setHIST(r.value)
       if (r.key==='cp_cfg'  && r.value!=null) setCfg(r.value)
@@ -676,39 +685,53 @@ export default function App() {
              - พอกลับมาดูอีกครั้ง ดึงข้อมูลสดทันที 1 ครั้ง แล้วเริ่มจับเวลาใหม่
        ผลลัพธ์: egress ลดลงหลายสิบเท่า แต่ผู้ใช้ยังเห็นข้อมูลล่าสุดเสมอ            */
     const POLL_MS = 60000
+    // ช่วงเวลาที่ "งด" ให้ realtime/poll เขียนทับ deAll หลังจากเครื่องนี้เพิ่งแก้ไขข้อมูล
+    // (กันปัญหากรอกยอดแล้วกระพริบ/ตัวเลขหาย เมื่อข้อมูลจากเครื่องอื่นหรือ echo ของตัวเองมาถึงไม่พร้อมกัน)
+    const EDIT_GRACE_MS = 2500
     let poll = null
 
     const fetchDe = async () => {
       try {
         const fresh = await DB.get('cp_de')
-        if (fresh != null) setDeAll(normalizeDe(fresh))
+        if (fresh != null && Date.now() - lastLocalEditRef.current > EDIT_GRACE_MS) setDeAll(normalizeDe(fresh))
       } catch(e) { /* silent */ }
     }
 
     const startPoll = () => { if (!poll) poll = setInterval(fetchDe, POLL_MS) }
     const stopPoll  = () => { if (poll) { clearInterval(poll); poll = null } }
 
+    // เขียนค่าที่ debounce ค้างอยู่ขึ้น Supabase ทันที (ก่อนแอปถูกพับ/ปิด กันข้อมูลที่พิมพ์ล่าสุดหาย)
+    const flushSave = () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+        DB.set('cp_de', deAllRef.current)
+      }
+    }
+
     const onVisibility = () => {
       if (document.visibilityState === 'visible') { fetchDe(); startPoll() }
-      else stopPoll()
+      else { stopPoll(); flushSave() }
     }
 
     if (document.visibilityState === 'visible') startPoll()
     document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', flushSave)
 
     return () => {
       clearTimeout(t)
       stopPoll()
+      flushSave()
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', flushSave)
       supabase.removeChannel(ch)
     }
   }, [])
 
   /* ── Write helpers ── */
-  // deAllRef holds the latest deAll state for DB.set outside state updater
-  const deAllRef = useRef({})
   const saveDay = useCallback((bid, day, field, val) => {
     const mk = deKey(cfg)
+    lastLocalEditRef.current = Date.now()
     setDeAll(prev => {
       const branch = prev[bid] || {}
       const month  = branch[mk] || {}
@@ -716,12 +739,19 @@ export default function App() {
       deAllRef.current = next
       return next
     })
-    // Save AFTER state update using a micro-task to avoid calling inside updater
-    setTimeout(() => DB.set('cp_de', deAllRef.current), 0)
+    // Debounce การเขียนขึ้น Supabase — เดิมเขียนทั้งก้อน cp_de ทุกตัวอักษรที่พิมพ์
+    // ทำให้การเขียนหลายครั้งรัว ๆ ชนกันเอง (มาไม่เรียงลำดับ) ค่าที่เพิ่งพิมพ์เลยถูกเขียนทับด้วยค่าเก่ากว่า → กระพริบ/ข้อมูลหาย
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      DB.set('cp_de', deAllRef.current)
+      saveTimerRef.current = null
+    }, 700)
   }, [cfg.year, cfg.month])
 
   const delDay = useCallback((bid, day) => {
     const mk = deKey(cfg)
+    lastLocalEditRef.current = Date.now()
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
     setDeAll(prev => {
       const branch = {...(prev[bid]||{})}
       const month  = {...(branch[mk]||{})}; delete month[day]

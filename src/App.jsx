@@ -12,7 +12,13 @@ import MorningBrief from './MorningBrief.jsx'
 
 /* ════════════════════════════════════════════════════════
    SUPABASE HELPERS
-   ใช้ตาราง app_data (key TEXT, value JSONB)
+   - app_data (key TEXT, value JSONB)         → ใช้กับค่า config/target/hist/status ที่แก้ไม่บ่อย
+   - daily_entries (branch_id, ym, day, data) → ใช้กับยอดกรอกรายวัน (คนละแถวต่อสาขา+วัน กันเขียนทับกัน)
+
+   เดิม cp_de เก็บทุกสาขา/ทุกเดือน/ทุกวันเป็น JSON ก้อนเดียวใน app_data
+   ปัญหา: ทุกสาขาเขียนคีย์เดียวกัน → ใครเซฟทีหลัง เขียนทับทั้งก้อน → ข้อมูลสาขาอื่นที่เพิ่งกรอกหายไปเงียบๆ
+   แก้โดยย้ายไปตาราง daily_entries ที่แยกเป็นคนละแถวต่อ (สาขา, เดือน, วัน)
+   → คนละแถวไม่ชนกัน, realtime อัพเดตทีละแถว ไม่ต้องเขียนทับข้อมูลทั้งระบบ
 ════════════════════════════════════════════════════════ */
 const DB = {
   get: async (key) => {
@@ -30,6 +36,37 @@ const DB = {
   listen: (onRow) => {
     return supabase.channel('cockpit_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_data' }, onRow)
+      .subscribe()
+  },
+
+  /* ── ยอดกรอกรายวัน: คนละแถวต่อ (สาขา, เดือน, วัน) ── */
+  getEntries: async () => {
+    const { data, error } = await supabase.from('daily_entries').select('branch_id,ym,day,data')
+    if (error) { console.error('[DB.getEntries] failed:', error.message); return null }
+    const out = {}
+    ;(data||[]).forEach(r => {
+      const b = out[r.branch_id] || (out[r.branch_id] = {})
+      const m = b[r.ym] || (b[r.ym] = {})
+      m[r.day] = r.data
+    })
+    return out
+  },
+  setEntry: async (bid, ym, day, data) => {
+    const { error } = await supabase.from('daily_entries').upsert(
+      { branch_id: bid, ym, day, data, updated_at: new Date().toISOString() },
+      { onConflict: 'branch_id,ym,day' }
+    )
+    if (error) console.error('[DB.setEntry] failed:', bid, ym, day, error.message)
+    return !error
+  },
+  deleteEntry: async (bid, ym, day) => {
+    const { error } = await supabase.from('daily_entries').delete().match({ branch_id: bid, ym, day })
+    if (error) console.error('[DB.deleteEntry] failed:', bid, ym, day, error.message)
+    return !error
+  },
+  listenEntries: (onRow) => {
+    return supabase.channel('cockpit_entries_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_entries' }, onRow)
       .subscribe()
   }
 }
@@ -179,20 +216,9 @@ const EMPTY_ROW = () => Object.fromEntries(FIELDS.map(f=>[f.key,0]))
    ส่วนยอดเดือนที่ผ่านมาให้ดึงจาก Excel (EXCEL_MS/getH26) แทน             */
 const deKey = (cfg) => `${cfg.year}-${cfg.month}`
 
-// แปลงข้อมูลที่โหลดมาให้เป็นรูปแบบ namespaced เสมอ
-// - รูปแบบใหม่ (key = "YYYY-M") → ใช้ตามเดิม
-// - รูปแบบเก่า flat (key = เลขวัน) → ทิ้ง (เริ่มใหม่ทุกเดือน ตามที่ตั้งใจ; Excel เป็นตัวจริง)
-function normalizeDe(raw) {
-  if (!raw || typeof raw !== 'object') return {}
-  const out = {}
-  for (const [bid, branch] of Object.entries(raw)) {
-    if (!branch || typeof branch !== 'object') { out[bid] = {}; continue }
-    const keys = Object.keys(branch)
-    const namespaced = keys.length === 0 || keys.every(k => /^\d{4}-\d{1,2}$/.test(k))
-    out[bid] = namespaced ? branch : {}   // flat เก่า → drop
-  }
-  return out
-}
+// หมายเหตุ: เดิมมีฟังก์ชัน normalizeDe() ไว้แปลงก้อน cp_de (JSON เดียวทั้งระบบ) ให้เป็นรูปแบบ namespaced
+// ตอนนี้ยอดกรอกรายวันย้ายไปเก็บในตาราง daily_entries (คนละแถวต่อสาขา+เดือน+วัน) ซึ่งมาในรูปแบบ namespaced อยู่แล้ว
+// จึงไม่จำเป็นต้องแปลงอีก (ดู DB.getEntries() ใน SUPABASE HELPERS ด้านบน)
 
 function sumDays(de, bid) {
   const agg = Object.fromEntries(FIELDS.map(f=>[f.key,0]))
@@ -572,12 +598,13 @@ export default function App() {
 
   /* ── App state (synced via Supabase) ── */
   const [deAll, setDeAll]   = useState(() => Object.fromEntries(BRANCHES.map(b=>[b.id,{}])))
-  // deAllRef = snapshot ล่าสุดของ deAll ไว้เขียนขึ้น Supabase นอก state updater
-  // lastLocalEditRef = เวลาที่เครื่องนี้แก้ไขข้อมูลล่าสุด (กัน realtime/poll เขียนทับระหว่างพิมพ์ → ต้นเหตุ "กรอกยอดแล้วกระพริบ/ข้อมูลหาย")
-  // saveTimerRef = debounce timer สำหรับเขียน cp_de ขึ้น Supabase (เดิมเขียนทุกตัวอักษร → ก้อนใหญ่ชนกันเอง)
+  // deAllRef        = snapshot ล่าสุดของ deAll ไว้อ่านนอก state updater (เขียนขึ้น Supabase / flush)
+  // lastLocalEditRef= เวลาที่เครื่องนี้แก้ไขข้อมูลล่าสุด (เผื่อ debug/log)
+  // saveTimersRef   = debounce timer แยกต่อแถว (สาขา+เดือน+วัน) → คนละแถวไม่บล็อกกัน, ใช้เช็คด้วยว่าแถวไหน "กำลังพิมพ์ค้างอยู่"
+  //                   เพื่อไม่ให้ realtime/poll เขียนทับแถวนั้นก่อนที่จะส่งขึ้น Supabase สำเร็จ
   const deAllRef = useRef({})
   const lastLocalEditRef = useRef(0)
-  const saveTimerRef = useRef(null)
+  const saveTimersRef = useRef(new Map())
   const [TARGET, setTARGET] = useState(SEED_T)
   const [HIST, setHIST]     = useState(SEED_H)
   const [cfg, setCfg]       = useState(DEFAULT_CFG)
@@ -624,15 +651,18 @@ export default function App() {
 
     ;(async () => {
       try {
-        const keys = ['cp_de','cp_tgt','cp_hist','cp_cfg','cp_fcst','cp_up','cp_hdsl','cp_hdtr','cp_tireq','cp_auth']
-        const { data: rows, error } = await supabase
-          .from('app_data').select('key,value').in('key', keys)
+        const keys = ['cp_tgt','cp_hist','cp_cfg','cp_fcst','cp_up','cp_hdsl','cp_hdtr','cp_tireq','cp_auth']
+        const [{ data: rows, error }, entries] = await Promise.all([
+          supabase.from('app_data').select('key,value').in('key', keys),
+          DB.getEntries()   // ยอดกรอกรายวัน — มาจากตาราง daily_entries (คนละแถวต่อสาขา+วัน)
+        ])
 
         if (error) throw error
 
+        if (entries) { setDeAll(entries); deAllRef.current = entries }
+
         if (rows) {
           rows.forEach(r => {
-            if (r.key==='cp_de')    setDeAll(normalizeDe(r.value))
             if (r.key==='cp_tgt')   setTARGET(r.value)
             if (r.key==='cp_hist')  setHIST(r.value)
             if (r.key==='cp_cfg')   setCfg(r.value)
@@ -652,14 +682,31 @@ export default function App() {
       }
     })()
 
-    /* Realtime subscription */
+    /* รับแถวที่เปลี่ยนแปลงจาก daily_entries ทีละแถว แล้ว merge เข้า state
+       (ไม่เขียนทับทั้งก้อนเหมือน cp_de เดิม — คนละสาขา/วัน ไม่กระทบกัน)          */
+    const applyEntryRow = (eventType, row) => {
+      if (!row?.branch_id) return
+      const { branch_id: bid, ym, day } = row
+      const k = `${bid}|${ym}|${day}`
+      // แถวนี้เพิ่งพิมพ์ในเครื่องนี้เองและยังไม่ได้ส่งขึ้น Supabase (debounce ค้างอยู่) → ข้าม
+      // กันไม่ให้ echo/อัพเดตที่มาไม่พร้อมกันเขียนทับค่าที่กำลังพิมพ์อยู่
+      if (saveTimersRef.current.has(k)) return
+      setDeAll(prev => {
+        const branch = {...(prev[bid]||{})}
+        const month  = {...(branch[ym]||{})}
+        if (eventType === 'DELETE') delete month[day]
+        else month[day] = row.data
+        branch[ym] = month
+        const next = {...prev, [bid]:branch}
+        deAllRef.current = next
+        return next
+      })
+    }
+
+    /* Realtime subscription — ค่า config/target/hist/status (ก้อนเดียว แก้ไม่บ่อย) */
     const ch = DB.listen(payload => {
       const r = payload.new
       if (!r?.key) return                                        // null guard
-      if (r.key==='cp_de'   && r.value!=null) {
-        // ข้ามการเขียนทับถ้าเพิ่งพิมพ์ในเครื่องนี้เมื่อไม่นาน — กัน echo/อัพเดตจากเครื่องอื่นมาชนกับตัวที่กำลังพิมพ์
-        if (Date.now() - lastLocalEditRef.current > EDIT_GRACE_MS) setDeAll(normalizeDe(r.value))
-      }
       if (r.key==='cp_tgt'  && r.value!=null) setTARGET(r.value)
       if (r.key==='cp_hist' && r.value!=null) setHIST(r.value)
       if (r.key==='cp_cfg'  && r.value!=null) setCfg(r.value)
@@ -670,6 +717,12 @@ export default function App() {
       if (r.key==='cp_umtal'&& r.value!=null) setUploadedMtAll(r.value)
       if (r.key==='cp_tireq'&& r.value!=null) setHistTireQ(r.value)
       if (r.key==='cp_auth' && r.value!=null) setAuthHash(r.value)
+    })
+
+    /* Realtime subscription — ยอดกรอกรายวัน (แยกช่องทาง เพราะคนละตาราง) */
+    const chEntries = DB.listenEntries(payload => {
+      const row = payload.eventType === 'DELETE' ? payload.old : payload.new
+      applyEntryRow(payload.eventType, row)
     })
 
     // Timeout 10s — แสดง app แต่ไม่โชว์ banner (ช้าไม่ใช่ error)
@@ -685,32 +738,47 @@ export default function App() {
              - พอกลับมาดูอีกครั้ง ดึงข้อมูลสดทันที 1 ครั้ง แล้วเริ่มจับเวลาใหม่
        ผลลัพธ์: egress ลดลงหลายสิบเท่า แต่ผู้ใช้ยังเห็นข้อมูลล่าสุดเสมอ            */
     const POLL_MS = 60000
-    // ช่วงเวลาที่ "งด" ให้ realtime/poll เขียนทับ deAll หลังจากเครื่องนี้เพิ่งแก้ไขข้อมูล
-    // (กันปัญหากรอกยอดแล้วกระพริบ/ตัวเลขหาย เมื่อข้อมูลจากเครื่องอื่นหรือ echo ของตัวเองมาถึงไม่พร้อมกัน)
-    const EDIT_GRACE_MS = 2500
     let poll = null
 
-    const fetchDe = async () => {
+    const fetchEntries = async () => {
       try {
-        const fresh = await DB.get('cp_de')
-        if (fresh != null && Date.now() - lastLocalEditRef.current > EDIT_GRACE_MS) setDeAll(normalizeDe(fresh))
+        const fresh = await DB.getEntries()
+        if (!fresh) return
+        // เอาแถวที่เพิ่งพิมพ์ในเครื่องนี้แต่ยังไม่ได้ส่งขึ้น Supabase (debounce ค้างอยู่) มาทับก้อนที่เพิ่งดึงมา
+        // กันไม่ให้ poll เขียนทับข้อมูลที่เพิ่งพิมพ์แต่ยังไม่ทันส่ง
+        saveTimersRef.current.forEach((_, k) => {
+          const [bid, ym, dayStr] = k.split('|')
+          const day = Number(dayStr)
+          const pendingRow = deAllRef.current[bid]?.[ym]?.[day]
+          if (pendingRow) {
+            const b = fresh[bid] || (fresh[bid] = {})
+            const m = b[ym] || (b[ym] = {})
+            m[day] = pendingRow
+          }
+        })
+        setDeAll(fresh)
+        deAllRef.current = fresh
       } catch(e) { /* silent */ }
     }
 
-    const startPoll = () => { if (!poll) poll = setInterval(fetchDe, POLL_MS) }
+    const startPoll = () => { if (!poll) poll = setInterval(fetchEntries, POLL_MS) }
     const stopPoll  = () => { if (poll) { clearInterval(poll); poll = null } }
 
-    // เขียนค่าที่ debounce ค้างอยู่ขึ้น Supabase ทันที (ก่อนแอปถูกพับ/ปิด กันข้อมูลที่พิมพ์ล่าสุดหาย)
+    // เขียนค่าที่ debounce ค้างอยู่ทุกแถวขึ้น Supabase ทันที (ก่อนแอปถูกพับ/ปิด กันข้อมูลที่พิมพ์ล่าสุดหาย)
     const flushSave = () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current)
-        saveTimerRef.current = null
-        DB.set('cp_de', deAllRef.current)
-      }
+      const timers = saveTimersRef.current
+      timers.forEach((tid, k) => {
+        clearTimeout(tid)
+        const [bid, ym, dayStr] = k.split('|')
+        const day = Number(dayStr)
+        const rowData = deAllRef.current[bid]?.[ym]?.[day]
+        if (rowData) DB.setEntry(bid, ym, day, rowData)
+      })
+      timers.clear()
     }
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') { fetchDe(); startPoll() }
+      if (document.visibilityState === 'visible') { fetchEntries(); startPoll() }
       else { stopPoll(); flushSave() }
     }
 
@@ -725,33 +793,42 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', flushSave)
       supabase.removeChannel(ch)
+      supabase.removeChannel(chEntries)
     }
   }, [])
 
-  /* ── Write helpers ── */
+  /* ── Write helpers ──
+     บันทึกทีละแถว (สาขา+เดือน+วัน) ไม่ใช่ก้อน cp_de เดียวทั้งระบบ
+     → สองสาขากรอกพร้อมกันได้โดยไม่เขียนทับกัน (คนละแถวใน daily_entries)          */
   const saveDay = useCallback((bid, day, field, val) => {
     const mk = deKey(cfg)
     lastLocalEditRef.current = Date.now()
+    let dayData
     setDeAll(prev => {
       const branch = prev[bid] || {}
       const month  = branch[mk] || {}
-      const next = {...prev, [bid]:{...branch, [mk]:{...month, [day]:{...(month[day]||EMPTY_ROW()), [field]:val}}}}
+      dayData = {...(month[day]||EMPTY_ROW()), [field]:val}
+      const next = {...prev, [bid]:{...branch, [mk]:{...month, [day]:dayData}}}
       deAllRef.current = next
       return next
     })
-    // Debounce การเขียนขึ้น Supabase — เดิมเขียนทั้งก้อน cp_de ทุกตัวอักษรที่พิมพ์
-    // ทำให้การเขียนหลายครั้งรัว ๆ ชนกันเอง (มาไม่เรียงลำดับ) ค่าที่เพิ่งพิมพ์เลยถูกเขียนทับด้วยค่าเก่ากว่า → กระพริบ/ข้อมูลหาย
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      DB.set('cp_de', deAllRef.current)
-      saveTimerRef.current = null
-    }, 700)
+    // Debounce เขียนเฉพาะแถวนี้ (สาขา+เดือน+วัน) ขึ้น Supabase — เดิมเขียนทั้งก้อน cp_de ทุกตัวอักษรที่พิมพ์
+    // ทำให้เขียนรัวๆ ชนกันเอง (มาไม่เรียงลำดับ) ค่าที่เพิ่งพิมพ์ถูกเขียนทับด้วยค่าเก่ากว่า → กระพริบ/ข้อมูลหาย
+    const k = `${bid}|${mk}|${day}`
+    const timers = saveTimersRef.current
+    if (timers.has(k)) clearTimeout(timers.get(k))
+    timers.set(k, setTimeout(() => {
+      timers.delete(k)
+      DB.setEntry(bid, mk, day, dayData)
+    }, 700))
   }, [cfg.year, cfg.month])
 
   const delDay = useCallback((bid, day) => {
     const mk = deKey(cfg)
     lastLocalEditRef.current = Date.now()
-    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
+    const k = `${bid}|${mk}|${day}`
+    const timers = saveTimersRef.current
+    if (timers.has(k)) { clearTimeout(timers.get(k)); timers.delete(k) }
     setDeAll(prev => {
       const branch = {...(prev[bid]||{})}
       const month  = {...(branch[mk]||{})}; delete month[day]
@@ -760,7 +837,7 @@ export default function App() {
       deAllRef.current = next
       return next
     })
-    setTimeout(() => DB.set('cp_de', deAllRef.current), 0)
+    DB.deleteEntry(bid, mk, day)
   }, [cfg.year, cfg.month])
 
   const saveCfg = (next) => { setCfg(next); DB.set('cp_cfg', next) }

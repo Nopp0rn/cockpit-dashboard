@@ -572,13 +572,33 @@ export default function App() {
         windowWidth: fullWidth,
         windowHeight: fullHeight,
       })
-      const link = document.createElement('a')
       const stamp = new Date().toISOString().slice(0,10)
-      link.download = `cockpit-${tab}-${stamp}.jpg`
-      link.href = canvas.toDataURL('image/jpeg', 0.92)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
+      const filename = `cockpit-${tab}-${stamp}.jpg`
+
+      // แปลง canvas → blob (toBlob เป็น callback-based, ห่อเป็น Promise เพื่อ await ได้)
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+      if (!blob) throw new Error('สร้างไฟล์ภาพไม่สำเร็จ')
+      const file = new File([blob], filename, { type: 'image/jpeg' })
+
+      // ต้นเหตุ "กดบันทึกหน้าจอไม่ได้": iOS Safari/PWA ไม่รองรับ <a download> — กดแล้วไม่มีอะไรเกิดขึ้นเลย
+      // ใช้ Web Share API แทน เปิด share sheet ให้กด "บันทึกรูปภาพ" ได้ตรงๆ (รองรับทั้ง iOS/Android)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: filename })
+        } catch (shareErr) {
+          if (shareErr?.name !== 'AbortError') throw shareErr   // AbortError = ผู้ใช้กดยกเลิก share sheet เอง ไม่ใช่ error
+        }
+      } else {
+        // Fallback สำหรับเบราว์เซอร์ที่ไม่รองรับ Web Share API (เช่น เดสก์ท็อป) — <a download> ใช้ได้ปกติ
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.download = filename
+        link.href = url
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
     } catch (err) {
       alert('บันทึกภาพไม่สำเร็จ: ' + (err?.message || err))
     } finally {

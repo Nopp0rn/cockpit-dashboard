@@ -72,6 +72,15 @@ const DB = {
 }
 
 /* ── Mobile hook ── */
+// ตรวจว่าเป็น iOS จริงๆ หรือไม่ (iPhone/iPad/iPod) — ใช้ตัดสินใจว่าจะใช้ Web Share API หรือ <a download>
+// iPad บน iOS 13+ รายงาน UA เป็น "Macintosh" เหมือน Mac จริง แต่ Mac ไม่มี touch → เช็ค maxTouchPoints แยกด้วย
+function isIOSDevice() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  const isIPadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1
+  return /iPhone|iPad|iPod/.test(ua) || isIPadOS
+}
+
 function useIsMobile() {
   // บังคับใช้ layout เดียวกันทุกแพลตฟอร์ม/ทุก orientation เสมอ
   // (iOS แนวตั้ง-แนวนอน, Android แนวตั้ง-แนวนอน, website, PC) — ไม่สลับ layout ตามขนาดจออีกต่อไป
@@ -580,16 +589,17 @@ export default function App() {
       if (!blob) throw new Error('สร้างไฟล์ภาพไม่สำเร็จ')
       const file = new File([blob], filename, { type: 'image/jpeg' })
 
-      // ต้นเหตุ "กดบันทึกหน้าจอไม่ได้": iOS Safari/PWA ไม่รองรับ <a download> — กดแล้วไม่มีอะไรเกิดขึ้นเลย
-      // ใช้ Web Share API แทน เปิด share sheet ให้กด "บันทึกรูปภาพ" ได้ตรงๆ (รองรับทั้ง iOS/Android)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      // ต้นเหตุ "กดบันทึกหน้าจอไม่ได้" (มือถือ): iOS Safari/PWA ไม่รองรับ <a download> — กดแล้วไม่มีอะไรเกิดขึ้นเลย
+      // ใช้ Web Share API เฉพาะ iOS เท่านั้น (เปิด share sheet ให้กด "บันทึกรูปภาพ")
+      // ส่วนเดสก์ท็อป (Windows/Mac) และ Android ใช้ <a download> ตามเดิม — ดาวน์โหลดตรงเข้าเครื่องทันที
+      // ไม่งั้นจะเจอปัญหาใหม่: Windows ก็มี Web Share API เหมือนกัน แต่ share dialog ไม่มีตัวเลือก "บันทึกไฟล์" ตรงๆ
+      if (isIOSDevice() && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: filename })
         } catch (shareErr) {
           if (shareErr?.name !== 'AbortError') throw shareErr   // AbortError = ผู้ใช้กดยกเลิก share sheet เอง ไม่ใช่ error
         }
       } else {
-        // Fallback สำหรับเบราว์เซอร์ที่ไม่รองรับ Web Share API (เช่น เดสก์ท็อป) — <a download> ใช้ได้ปกติ
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.download = filename

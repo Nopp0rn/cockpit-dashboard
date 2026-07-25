@@ -1267,13 +1267,13 @@ function ReservationTab({ctx}) {
   const READCLR2 = ['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
 
   // ยอดจริง (Cockpit MTD) ต่อสาขา + เป้าเต็มเดือน (ไม่ prorate ตามวัน — ตรงกับที่ TireTrack ใช้)
-  const perBranch = BRANCHES.map(b => {
+  const perBranch = BRANCHES.map((b,idx) => {
     const actual   = getMTD(b.id).tire
     const reserved = reservedByBranch[b.id].qty
     const total    = actual + reserved
     const target   = getT(b.id).tire
     const pct      = target>0 ? total/target*100 : 0
-    return {...b, actual, reserved, resCount:reservedByBranch[b.id].count, total, target, pct}
+    return {...b, idx, actual, reserved, resCount:reservedByBranch[b.id].count, total, target, pct}
   })
 
   const isAll = !selBr || selBr==='ALL'
@@ -1340,11 +1340,11 @@ function ReservationTab({ctx}) {
           <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
             📊 ยอดจองแยกตามสาขา — {MONTH_TH} {cfg.year}
           </div>
-          {perBranch.map((r,i) => {
+          {perBranch.filter(r => isAll || r.id===selBr).map((r,i) => {
             const gap = Math.max(0, r.target - r.total)
             return (
               <div key={r.id} style={{background:CI.white,padding:'9px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,cursor:'pointer'}} onClick={()=>setSelBr(r.id)}>
-                <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[i],marginBottom:6}}>{r.id} {r.short}</div>
+                <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[r.idx],marginBottom:6}}>{r.id} {r.short}</div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6}}>
                   <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center'}}>
                     <div style={{fontSize:9,color:'#666',fontWeight:700,marginBottom:1}}>⏳ รอเข้ารับ</div>

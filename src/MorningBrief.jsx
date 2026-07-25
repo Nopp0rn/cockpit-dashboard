@@ -5,7 +5,8 @@
 //  รองรับ "🌐 รวมทุกสาขา" โดยรวมยอดจาก de/getT('ALL') เอง (ไม่พึ่ง getAllMTD/getAllTS
 //  เพราะต้องตัดยอด MTD ที่ REPORT_D เอง ไม่ใช่ TODAY_D ของแอป — ดู buildBriefData ด้านล่าง)
 // ════════════════════════════════════════════════════════════════════
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { ttSupabase } from './supabase.js'
 
 const CI = {
   yellow: '#FFEB00', black: '#15181C', red: '#E2231A',
@@ -28,13 +29,53 @@ const ACTION_TIPS = {
 }
 const fallbackTip = 'เร่งติดตามและกระตุ้นยอดให้ถึงเป้า'
 
+// ── ยอดจองยางจากแอป TireTrack (คนละโปรเจกต์ Supabase) ──
+// แยกออกมาเป็น hook ของตัวเองต่างหาก ไม่ยุ่งกับ buildBriefData เลย
+// เพื่อให้ตัวเลขยอดขาย/เป้าเดิมทั้งหมดไม่กระทบแม้แต่นิดเดียว ถ้าดึงไม่ได้ก็แค่ไม่โชว์การ์ดนี้
+function useReservedTires(cfg) {
+  const [byBranch, setByBranch] = useState(null)   // null = ยังโหลด/ล้มเหลว
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        const { data, error } = await ttSupabase.from('tt_reservations').select('branch,qty,qty2,status,service_date')
+        if (error) throw error
+        const mm = String(cfg.month).padStart(2, '0')
+        const start = `${cfg.year}-${mm}-01`
+        const next  = cfg.month === 12 ? `${cfg.year + 1}-01-01` : `${cfg.year}-${String(cfg.month + 1).padStart(2, '0')}-01`
+        const agg = {}
+        ;(data || []).forEach(r => {
+          if (r.status === 'arrived') return           // ที่รับแล้วนับอยู่ในยอดจริงแล้ว กันนับซ้ำ
+          if (!r.service_date || r.service_date < start || r.service_date >= next) return
+          if (!agg[r.branch]) agg[r.branch] = { qty: 0, count: 0 }
+          agg[r.branch].qty += (Number(r.qty) || 0) + (Number(r.qty2) || 0)
+          agg[r.branch].count += 1
+        })
+        if (alive) setByBranch(agg)
+      } catch (e) {
+        if (alive) setByBranch(null)
+      }
+    }
+    load()
+    const t = setInterval(load, 60000)
+    return () => { alive = false; clearInterval(t) }
+  }, [cfg.year, cfg.month])
+  return byBranch
+}
+
 const F_DISP = "'Barlow Condensed', 'Arial Narrow', sans-serif"
 const F_NUM  = "'JetBrains Mono', 'Roboto Mono', monospace"
 const F_BODY = "'Barlow', system-ui, -apple-system, sans-serif"
 
 const pct  = (a, b) => (b > 0 ? (a / b) * 100 : 0)
 const num  = n => (n == null ? '—' : Math.round(n).toLocaleString('en-US'))
-const kFmt = n => (n == null ? '—' : Math.round(n).toLocaleString('en-US'))  // แสดงเต็มจำนวน ไม่ย่อ K/M
+const kFmt = n => {
+  if (n == null) return '—'
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 ? 2 : 1).replace(/\.0$/, '') + 'M'
+  if (abs >= 1000) return Math.round(n / 1000) + 'K'
+  return Math.round(n).toLocaleString('en-US')
+}
 
 // ── คำนวณ ยอดจริง + เป้าวันแบบ dynamic ของ "วันที่ day" — สูตรเดียวกับ Tracker tab ──
 function dailyStatsFor(day, ids, de, FIELDS, sumDaysUpTo, calcTS, t, TOTAL_D) {
@@ -263,6 +304,18 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
 
   const b = useMemo(() => buildBriefData(bid, ctx), [bid, ctx])
 
+  // ── ยอดจองยาง (แยกจากยอดขายจริงโดยสิ้นเชิง — ไม่แตะค่าใดๆ ใน b) ──
+  const resByBranch = useReservedTires(ctx.cfg)
+  const res = useMemo(() => {
+    if (!resByBranch) return null
+    const pick = bid === 'ALL'
+      ? Object.values(resByBranch).reduce((a, r) => ({ qty: a.qty + r.qty, count: a.count + r.count }), { qty: 0, count: 0 })
+      : (resByBranch[bid] || { qty: 0, count: 0 })
+    const withRes = b.mtd.tires + pick.qty                      // ยอดจริง MTD + ยอดจองที่ยังไม่มารับ
+    const tgt     = b.month.tiresTarget                          // เป้ายางเต็มเดือน (ค่าเดิม ไม่แก้)
+    return { ...pick, withRes, tgt, p: pct(withRes, tgt), gap: Math.max(0, Math.round(tgt - withRes)) }
+  }, [resByBranch, bid, b])
+
   const mtdSalesP = pct(b.mtd.sales, b.mtd.salesTarget)
   const mtdTireP  = pct(b.mtd.tires, b.mtd.tiresTarget)
   const yesterdaySP = pct(b.yesterday.sales, b.yesterday.salesTarget)
@@ -378,6 +431,23 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
                 </div>
               </div>
             </div>
+            {res && (
+            <div style={cardBox}>
+              <CardTitle bg="#B45309">🛞 ยางจอง (TireTrack)</CardTitle>
+              <div style={{ marginTop: 7 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>รอเข้ารับเดือนนี้</div>
+                <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color: '#B45309', lineHeight: 1 }}>
+                  {num(res.qty)} เส้น
+                </div>
+                <div style={{ fontSize: 10, color: '#888', fontWeight: 700 }}>{num(res.count)} ราย</div>
+              </div>
+              <Divider/>
+              <MetricBar label="ยางรวมจอง เทียบเป้าเดือน"
+                         big={`${num(res.withRes)} เส้น`}
+                         sub={res.gap > 0 ? `ขาดอีก ${num(res.gap)} เส้น (เป้า ${num(res.tgt)})` : `✅ ถึงเป้าแล้ว (เป้า ${num(res.tgt)})`}
+                         p={res.p}/>
+            </div>
+            )}
           </div>
           )}
 

@@ -1223,7 +1223,7 @@ function Overview({ctx}) {
 
 /* ════ จองยาง — ดึงจากแอป TireTrack (project แยก, cross-project read-only) ════ */
 function ReservationTab({ctx}) {
-  const {mobile, cfg, selBr, setSelBr, MONTH_TH} = ctx
+  const {mobile, cfg, selBr, setSelBr, MONTH_TH, getMTD, getAllMTD, getT} = ctx
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(false)
@@ -1253,27 +1253,45 @@ function ReservationTab({ctx}) {
   const nextMonth  = cfg.month===12 ? `${cfg.year+1}-01-01` : `${cfg.year}-${String(cfg.month+1).padStart(2,'0')}-01`
   const inMonth = rows.filter(r => r.service_date && r.service_date >= monthStart && r.service_date < nextMonth)
 
-  const byBranch = {}
-  BRANCHES.forEach(b => { byBranch[b.id] = {qty:0, count:0, upcoming:0, arrived:0} })
+  // ยอดจอง = เฉพาะที่ "ยังไม่มารับ" (status ≠ arrived) — ที่รับแล้วนับรวมอยู่ในยอดจริง (Cockpit) แล้ว กันนับซ้ำ
+  const reservedByBranch = {}
+  BRANCHES.forEach(b => { reservedByBranch[b.id] = {qty:0, count:0} })
   inMonth.forEach(r => {
-    const agg = byBranch[r.branch]
+    if (r.status === 'arrived') return
+    const agg = reservedByBranch[r.branch]
     if (!agg) return
-    const q = (Number(r.qty)||0) + (Number(r.qty2)||0)
-    agg.qty += q
+    agg.qty += (Number(r.qty)||0) + (Number(r.qty2)||0)
     agg.count += 1
-    if (r.status==='arrived') agg.arrived += q
-    else agg.upcoming += q
   })
-
-  const totQty      = Object.values(byBranch).reduce((s,r)=>s+r.qty,0)
-  const totCount     = Object.values(byBranch).reduce((s,r)=>s+r.count,0)
-  const totUpcoming = Object.values(byBranch).reduce((s,r)=>s+r.upcoming,0)
-  const totArrived  = Object.values(byBranch).reduce((s,r)=>s+r.arrived,0)
 
   const READCLR2 = ['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
 
+  // ยอดจริง (Cockpit MTD) ต่อสาขา + เป้าเต็มเดือน (ไม่ prorate ตามวัน — ตรงกับที่ TireTrack ใช้)
+  const perBranch = BRANCHES.map(b => {
+    const actual   = getMTD(b.id).tire
+    const reserved = reservedByBranch[b.id].qty
+    const total    = actual + reserved
+    const target   = getT(b.id).tire
+    const pct      = target>0 ? total/target*100 : 0
+    return {...b, actual, reserved, resCount:reservedByBranch[b.id].count, total, target, pct}
+  })
+
+  const isAll = !selBr || selBr==='ALL'
+  const actualSel   = isAll ? getAllMTD().tire : getMTD(selBr).tire
+  const reservedSel = isAll
+    ? Object.values(reservedByBranch).reduce((s,r)=>s+r.qty,0)
+    : reservedByBranch[selBr]?.qty || 0
+  const resCountSel = isAll
+    ? Object.values(reservedByBranch).reduce((s,r)=>s+r.count,0)
+    : reservedByBranch[selBr]?.count || 0
+  const totalSel  = actualSel + reservedSel
+  const targetSel = getT(isAll ? 'ALL' : selBr).tire
+  const pctSel    = targetSel>0 ? totalSel/targetSel*100 : 0
+  const pctCol    = statusColor(pctSel)
+
   const branchList = inMonth
     .filter(r => selBr && selBr!=='ALL' ? r.branch===selBr : false)
+    .filter(r => r.status !== 'arrived')   // แสดงเฉพาะรอเข้ารับ — ที่รับแล้วนับรวมในยอดจริงแล้ว ไม่ต้องโชว์ซ้ำในรายการนี้
     .sort((a,b)=> (a.service_date||'').localeCompare(b.service_date||''))
 
   if (loading) return <div style={{padding:30,textAlign:'center',color:'#94a3b8',fontFamily:'Barlow Condensed'}}>กำลังโหลดยอดจองยาง...</div>
@@ -1283,54 +1301,55 @@ function ReservationTab({ctx}) {
       <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?14:18,color:CI.red,marginBottom:3}}>
-          🛞 ยอดจองยาง — {MONTH_TH} {cfg.year} (จากแอป TireTrack)
+          🛞 ยอดจองยาง — {MONTH_TH} {cfg.year} {isAll?'(ทุกสาขา)':`(${BRANCHES.find(x=>x.id===selBr)?.name})`}
         </div>
 
         {err && (
           <div style={{background:'#2a0d0d',border:'1px solid #E2231A',borderRadius:8,padding:'8px 12px',marginBottom:10,fontSize:12,color:'#FFB199'}}>
-            ⚠️ ดึงข้อมูลจากแอปจองยางไม่สำเร็จ — ลองใหม่อัตโนมัติทุก 60 วิ
+            ⚠️ ดึงข้อมูลจองจากแอปจองยางไม่สำเร็จ — ยอดจริงยังถูกต้อง (มาจาก Cockpit เอง) ลองใหม่อัตโนมัติทุก 60 วิ
           </div>
         )}
 
-        {/* รวมทุกสาขา — กล่องสรุป */}
+        {/* กล่องสรุป 3 ช่อง: ยอดยางรวม (จริง+จอง) / รอเข้าใช้บริการ / % เทียบเป้า */}
         <div style={{background:'#FFF7D6',border:`2px solid ${CI.red}`,borderRadius:10,padding:'10px 10px 12px',marginBottom:12}}>
           <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:14,color:CI.black,marginBottom:8,textAlign:'center'}}>
-            🌐 รวมทุกสาขา — จองเดือนนี้
+            🌐 {isAll?'รวมทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name} — {MONTH_TH} {cfg.year}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
             <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
-              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🛞 จองทั้งหมด</div>
-              <div style={{fontSize:22,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{N(totQty)}</div>
-              <div style={{fontSize:10,color:'#999',fontWeight:700}}>เส้น ({N(totCount)} ราย)</div>
+              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🛞 ยอดยางรวม</div>
+              <div style={{fontSize:22,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{N(totalSel)}</div>
+              <div style={{fontSize:9.5,color:'#999',fontWeight:700}}>เส้น (จริง {N(actualSel)} + จอง {N(reservedSel)})</div>
             </div>
             <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
-              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>⏳ รอเข้ารับ</div>
-              <div style={{fontSize:22,fontWeight:900,color:'#B45309',fontFamily:"'JetBrains Mono',monospace"}}>{N(totUpcoming)}</div>
-              <div style={{fontSize:10,color:'#999',fontWeight:700}}>เส้น</div>
+              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>⏳ รอเข้าใช้บริการ</div>
+              <div style={{fontSize:22,fontWeight:900,color:'#B45309',fontFamily:"'JetBrains Mono',monospace"}}>{N(reservedSel)}</div>
+              <div style={{fontSize:10,color:'#999',fontWeight:700}}>เส้น ({N(resCountSel)} ราย)</div>
             </div>
             <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
-              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>✅ รับแล้ว</div>
-              <div style={{fontSize:22,fontWeight:900,color:'#047857',fontFamily:"'JetBrains Mono',monospace"}}>{N(totArrived)}</div>
-              <div style={{fontSize:10,color:'#999',fontWeight:700}}>เส้น</div>
+              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🎯 เทียบเป้า</div>
+              <SemiGauge value={pctSel} color={pctCol} size={74}/>
+              <div style={{fontSize:17,fontWeight:900,color:pctCol,marginTop:1}}>{pctSel.toFixed(1)}%</div>
+              <div style={{fontSize:9.5,color:'#999',fontWeight:700}}>เป้า {N(targetSel)} เส้น/เดือน</div>
             </div>
           </div>
         </div>
 
-        {/* แยกตามสาขา */}
+        {/* แยกตามสาขา — ⏳ รอเข้ารับ / 🛞 ยอดขายรวมยอดจอง / 📉 ขาดอีกกี่เส้นถึงเป้า */}
         <div style={{background:CI.black,borderRadius:10,overflow:'hidden',marginBottom:12}}>
           <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
             📊 ยอดจองแยกตามสาขา — {MONTH_TH} {cfg.year}
           </div>
-          {BRANCHES.map((b,i) => {
-            const r = byBranch[b.id]
+          {perBranch.map((r,i) => {
+            const gap = Math.max(0, r.target - r.total)
             return (
-              <div key={b.id} style={{background:CI.white,padding:'7px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,cursor:'pointer'}} onClick={()=>setSelBr(b.id)}>
+              <div key={r.id} style={{background:CI.white,padding:'9px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,cursor:'pointer'}} onClick={()=>setSelBr(r.id)}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6}}>
-                  <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[i]}}>{b.id} {b.short}</span>
-                  <span style={{display:'flex',alignItems:'center',gap:10}}>
-                    <span style={{fontSize:11,color:'#B45309',fontWeight:700}}>⏳ {N(r.upcoming)}</span>
-                    <span style={{fontSize:11,color:'#047857',fontWeight:700}}>✅ {N(r.arrived)}</span>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:CI.red,fontWeight:900}}>{N(r.qty)} เส้น</span>
+                  <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[i]}}>{r.id} {r.short}</span>
+                  <span style={{display:'flex',alignItems:'center',gap:12}}>
+                    <span style={{fontSize:12,color:'#B45309',fontWeight:700}}>⏳ {N(r.reserved)}</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:CI.red,fontWeight:900}}>{N(r.total)} เส้น</span>
+                    <span style={{fontSize:12,fontWeight:700,color:gap>0?'#B91C1C':'#047857'}}>{gap>0?`📉 ขาด ${N(gap)}`:'✅ ถึงเป้า'}</span>
                   </span>
                 </div>
               </div>
@@ -1338,14 +1357,14 @@ function ReservationTab({ctx}) {
           })}
         </div>
 
-        {/* รายการจองรายบุคคล — เฉพาะสาขาที่เลือก */}
-        {selBr && selBr!=='ALL' && (
+        {/* รายการจองรายบุคคล (เฉพาะรอเข้ารับ) — เฉพาะสาขาที่เลือก */}
+        {!isAll && (
           <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
             <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#FFFFFF',marginBottom:8}}>
-              📋 รายการจอง — {BRANCHES.find(x=>x.id===selBr)?.name} ({branchList.length} ราย)
+              📋 รายการจองที่รอเข้ารับ — {BRANCHES.find(x=>x.id===selBr)?.name} ({branchList.length} ราย)
             </div>
             {branchList.length===0 ? (
-              <div style={{textAlign:'center',color:'#6b7280',fontSize:12,padding:16}}>ยังไม่มีรายการจองเดือนนี้</div>
+              <div style={{textAlign:'center',color:'#6b7280',fontSize:12,padding:16}}>ไม่มีรายการรอเข้ารับเดือนนี้</div>
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:6,maxHeight:400,overflowY:'auto'}}>
                 {branchList.map(r => (
@@ -1354,9 +1373,7 @@ function ReservationTab({ctx}) {
                       <div style={{fontSize:12,fontWeight:700,color:'#fff'}}>{r.customer_name||'—'}</div>
                       <div style={{fontSize:10.5,color:'#94a3b8'}}>{r.service_date} · {r.brand} {r.model} {r.size} ×{r.qty}{r.brand2?` + ${r.brand2} ${r.model2} ${r.size2} ×${r.qty2}`:''}</div>
                     </div>
-                    <span style={{fontSize:10.5,fontWeight:800,color:r.status==='arrived'?'#047857':'#B45309',flexShrink:0}}>
-                      {r.status==='arrived'?'✅ รับแล้ว':'⏳ รอเข้ารับ'}
-                    </span>
+                    <span style={{fontSize:10.5,fontWeight:800,color:'#B45309',flexShrink:0}}>⏳ รอเข้ารับ</span>
                   </div>
                 ))}
               </div>

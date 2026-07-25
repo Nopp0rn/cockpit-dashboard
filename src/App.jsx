@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { supabase } from './supabase.js'
+import { supabase, ttSupabase } from './supabase.js'
 import * as XLSX from 'xlsx'
 import html2canvas from 'html2canvas'
 import {
@@ -512,6 +512,7 @@ const TABS = [
   {id:'overview', label:'🏠 ภาพรวม',   mLabel:'🏠', mText:'หน้าหลัก'},
   {id:'morning',  label:'☀️ Morning',   mLabel:'☀️', mText:'Morning'},
   {id:'mtd',      label:'📊 MTD',        mLabel:'📊', mText:'MTD'},
+  {id:'reserve',  label:'🛞 จองยาง',     mLabel:'🛞', mText:'จองยาง'},
   {id:'products', label:'🛍 สินค้า',    mLabel:'🛍', mText:'สินค้า'},
   {id:'daily',    label:'📅 รายวัน',    mLabel:'📅', mText:'รายวัน'},
   {id:'monthly',  label:'📈 รายเดือน',  mLabel:'📈', mText:'รายเดือน'},
@@ -1055,6 +1056,7 @@ export default function App() {
         {tab==='overview' && <Overview ctx={ctx}/>}
         {tab==='morning'  && <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr}/>}
         {tab==='mtd'      && <MTDTab ctx={ctx}/>}
+        {tab==='reserve'  && <ReservationTab ctx={ctx}/>}
         {tab==='products' && <Products ctx={ctx}/>}
         {tab==='daily'    && <Daily ctx={ctx}/>}
         {tab==='monthly'  && <Monthly ctx={ctx}/>}
@@ -1219,6 +1221,155 @@ function Overview({ctx}) {
   )
 }
 
+/* ════ จองยาง — ดึงจากแอป TireTrack (project แยก, cross-project read-only) ════ */
+function ReservationTab({ctx}) {
+  const {mobile, cfg, selBr, setSelBr, MONTH_TH} = ctx
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        const { data, error } = await ttSupabase.from('tt_reservations')
+          .select('id,branch,qty,qty2,status,service_date,customer_name,brand,model,size,brand2,model2,size2')
+        if (error) throw error
+        if (alive) { setRows(data||[]); setErr(false) }
+      } catch(e) {
+        if (alive) setErr(true)
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }
+    load()
+    // poll ทุก 60 วิ — ไม่ subscribe realtime ข้าม project เพื่อไม่เพิ่ม egress ให้โปรเจกต์ TireTrack
+    const t = setInterval(load, 60000)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
+
+  const mm = String(cfg.month).padStart(2,'0')
+  const monthStart = `${cfg.year}-${mm}-01`
+  const nextMonth  = cfg.month===12 ? `${cfg.year+1}-01-01` : `${cfg.year}-${String(cfg.month+1).padStart(2,'0')}-01`
+  const inMonth = rows.filter(r => r.service_date && r.service_date >= monthStart && r.service_date < nextMonth)
+
+  const byBranch = {}
+  BRANCHES.forEach(b => { byBranch[b.id] = {qty:0, count:0, upcoming:0, arrived:0} })
+  inMonth.forEach(r => {
+    const agg = byBranch[r.branch]
+    if (!agg) return
+    const q = (Number(r.qty)||0) + (Number(r.qty2)||0)
+    agg.qty += q
+    agg.count += 1
+    if (r.status==='arrived') agg.arrived += q
+    else agg.upcoming += q
+  })
+
+  const totQty      = Object.values(byBranch).reduce((s,r)=>s+r.qty,0)
+  const totCount     = Object.values(byBranch).reduce((s,r)=>s+r.count,0)
+  const totUpcoming = Object.values(byBranch).reduce((s,r)=>s+r.upcoming,0)
+  const totArrived  = Object.values(byBranch).reduce((s,r)=>s+r.arrived,0)
+
+  const READCLR2 = ['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
+
+  const branchList = inMonth
+    .filter(r => selBr && selBr!=='ALL' ? r.branch===selBr : false)
+    .sort((a,b)=> (a.service_date||'').localeCompare(b.service_date||''))
+
+  if (loading) return <div style={{padding:30,textAlign:'center',color:'#94a3b8',fontFamily:'Barlow Condensed'}}>กำลังโหลดยอดจองยาง...</div>
+
+  return (
+    <div style={{display:'flex',gap:14,flexDirection:mobile?'column':'row'}}>
+      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?14:18,color:CI.red,marginBottom:3}}>
+          🛞 ยอดจองยาง — {MONTH_TH} {cfg.year} (จากแอป TireTrack)
+        </div>
+
+        {err && (
+          <div style={{background:'#2a0d0d',border:'1px solid #E2231A',borderRadius:8,padding:'8px 12px',marginBottom:10,fontSize:12,color:'#FFB199'}}>
+            ⚠️ ดึงข้อมูลจากแอปจองยางไม่สำเร็จ — ลองใหม่อัตโนมัติทุก 60 วิ
+          </div>
+        )}
+
+        {/* รวมทุกสาขา — กล่องสรุป */}
+        <div style={{background:'#FFF7D6',border:`2px solid ${CI.red}`,borderRadius:10,padding:'10px 10px 12px',marginBottom:12}}>
+          <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:14,color:CI.black,marginBottom:8,textAlign:'center'}}>
+            🌐 รวมทุกสาขา — จองเดือนนี้
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+            <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
+              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🛞 จองทั้งหมด</div>
+              <div style={{fontSize:22,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{N(totQty)}</div>
+              <div style={{fontSize:10,color:'#999',fontWeight:700}}>เส้น ({N(totCount)} ราย)</div>
+            </div>
+            <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
+              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>⏳ รอเข้ารับ</div>
+              <div style={{fontSize:22,fontWeight:900,color:'#B45309',fontFamily:"'JetBrains Mono',monospace"}}>{N(totUpcoming)}</div>
+              <div style={{fontSize:10,color:'#999',fontWeight:700}}>เส้น</div>
+            </div>
+            <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
+              <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>✅ รับแล้ว</div>
+              <div style={{fontSize:22,fontWeight:900,color:'#047857',fontFamily:"'JetBrains Mono',monospace"}}>{N(totArrived)}</div>
+              <div style={{fontSize:10,color:'#999',fontWeight:700}}>เส้น</div>
+            </div>
+          </div>
+        </div>
+
+        {/* แยกตามสาขา */}
+        <div style={{background:CI.black,borderRadius:10,overflow:'hidden',marginBottom:12}}>
+          <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
+            📊 ยอดจองแยกตามสาขา — {MONTH_TH} {cfg.year}
+          </div>
+          {BRANCHES.map((b,i) => {
+            const r = byBranch[b.id]
+            return (
+              <div key={b.id} style={{background:CI.white,padding:'7px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,cursor:'pointer'}} onClick={()=>setSelBr(b.id)}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6}}>
+                  <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[i]}}>{b.id} {b.short}</span>
+                  <span style={{display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{fontSize:11,color:'#B45309',fontWeight:700}}>⏳ {N(r.upcoming)}</span>
+                    <span style={{fontSize:11,color:'#047857',fontWeight:700}}>✅ {N(r.arrived)}</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:CI.red,fontWeight:900}}>{N(r.qty)} เส้น</span>
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* รายการจองรายบุคคล — เฉพาะสาขาที่เลือก */}
+        {selBr && selBr!=='ALL' && (
+          <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12}}>
+            <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:'#FFFFFF',marginBottom:8}}>
+              📋 รายการจอง — {BRANCHES.find(x=>x.id===selBr)?.name} ({branchList.length} ราย)
+            </div>
+            {branchList.length===0 ? (
+              <div style={{textAlign:'center',color:'#6b7280',fontSize:12,padding:16}}>ยังไม่มีรายการจองเดือนนี้</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:6,maxHeight:400,overflowY:'auto'}}>
+                {branchList.map(r => (
+                  <div key={r.id} style={{background:'#1e2538',borderRadius:6,padding:'7px 10px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:'#fff'}}>{r.customer_name||'—'}</div>
+                      <div style={{fontSize:10.5,color:'#94a3b8'}}>{r.service_date} · {r.brand} {r.model} {r.size} ×{r.qty}{r.brand2?` + ${r.brand2} ${r.model2} ${r.size2} ×${r.qty2}`:''}</div>
+                    </div>
+                    <span style={{fontSize:10.5,fontWeight:800,color:r.status==='arrived'?'#047857':'#B45309',flexShrink:0}}>
+                      {r.status==='arrived'?'✅ รับแล้ว':'⏳ รอเข้ารับ'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <MascotFooter compact={mobile}/>
+      </div>
+    </div>
+  )
+}
+
 /* ════ MTD ════ */
 function MTDTab({ctx}) {
   const {selBr,setSelBr,getMTD,getTS,getAllMTD,getAllTS,getT,getH,de,
@@ -1292,6 +1443,37 @@ function MTDTab({ctx}) {
           ⚡ เป้า MTD = เป้ารายเดือน × ({TODAY_D} ÷ {TOTAL_D}) คำนวณตามวันปฏิบัติการ
         </div>
 
+        {/* ── รวมทุกสาขา — กล่อง + เกจครึ่งวงกลม, ยอดเป็นเลขเต็มจำนวน (ย้ายขึ้นบนสุดตามที่ขอ) ── */}
+        {(() => {
+          const salePct = P(totSale26,totSaleTgt)
+          const tirePct = P(totTire26,totTireTgt)
+          const sCol = statusColor(salePct)
+          const tCol = statusColor(tirePct)
+          return (
+            <div style={{background:'#FFF7D6',border:`2px solid ${CI.red}`,borderRadius:10,padding:'10px 10px 12px',marginBottom:12}}>
+              <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:14,color:CI.black,marginBottom:8,textAlign:'center'}}>
+                🌐 รวมทุกสาขา — MTD 1-{TODAY_D} {MONTH_TH} {cfg.year}
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
+                  <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>💰 ยอดขาย</div>
+                  <SemiGauge value={salePct} color={sCol} size={88}/>
+                  <div style={{fontSize:20,fontWeight:900,color:sCol,marginTop:1}}>{salePct.toFixed(0)}%</div>
+                  <div style={{fontSize:15,fontWeight:900,color:CI.red,marginTop:4,fontFamily:"'JetBrains Mono',monospace"}}>{N(totSale26)}</div>
+                  <div style={{fontSize:10,color:'#999',fontWeight:700,marginTop:1}}>เป้า {N(totSaleTgt)}</div>
+                </div>
+                <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
+                  <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🏷️ ยาง</div>
+                  <SemiGauge value={tirePct} color={tCol} size={88}/>
+                  <div style={{fontSize:20,fontWeight:900,color:tCol,marginTop:1}}>{tirePct.toFixed(0)}%</div>
+                  <div style={{fontSize:15,fontWeight:900,color:'#222',marginTop:4,fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire26)} เส้น</div>
+                  <div style={{fontSize:10,color:'#999',fontWeight:700,marginTop:1}}>เป้า {N(totTireTgt)} เส้น</div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* ── Summary: compact rows สไตล์เดียวกับหน้าหลัก/Tracker/สินค้า ── */}
         <div style={{background:CI.black,borderRadius:10,overflow:'hidden',marginBottom:12}}>
           <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
@@ -1324,28 +1506,8 @@ function MTDTab({ctx}) {
               </div>
             </div>
           ))}
-
-          {/* รวมทุกสาขา */}
-          <div style={{background:'#FFF7D6',padding:'8px 10px',borderTop:`2px solid ${CI.red}`}}>
-            <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:13,color:CI.black,marginBottom:3}}>รวมทุกสาขา</div>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>💰 ยอดขาย</span>
-              <GaugeBar value={P(totSale26,totSaleTgt)} height={6}/>
-              <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:CI.red,fontWeight:900}}>{fM(totSale26)}</span>
-                <span style={{fontSize:11,fontWeight:900,color:statusColor(P(totSale26,totSaleTgt))}}>{P(totSale26,totSaleTgt).toFixed(0)}%</span>
-              </span>
-            </div>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginTop:3}}>
-              <span style={{fontSize:10.5,color:'#666',fontWeight:700,flexShrink:0,width:58}}>🏷️ ยาง</span>
-              <GaugeBar value={P(totTire26,totTireTgt)} height={6}/>
-              <span style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',justifyContent:'flex-end',flexShrink:0}}>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:'#222',fontWeight:900}}>{N(totTire26)} เส้น</span>
-                <span style={{fontSize:11,fontWeight:900,color:statusColor(P(totTire26,totTireTgt))}}>{P(totTire26,totTireTgt).toFixed(0)}%</span>
-              </span>
-            </div>
-          </div>
         </div>
+
 
         {/* ── Bar charts ── */}
         <div style={{display:'grid',gridTemplateColumns:mobile?'1fr':'1fr 1fr',gap:12}}>

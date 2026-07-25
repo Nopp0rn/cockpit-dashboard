@@ -16,3 +16,13 @@ const SUPABASE_URL = 'https://rslxffftnpmzyzssxqql.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_DxaxdqMUjtIsW9TwhUHlyw_OTnhNT9y'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+// ════════════════════════════════════════════════════════
+//  TireTrack (แอปจองยาง) — project แยกต่างหาก (yigveyqcfzkxjzsrlger)
+//  ใช้ client อ่านอย่างเดียว (read-only) เพื่อดึงยอดจองยางมาโชว์ในแท็บ "จองยาง"
+//  key นี้คือ anon key เดียวกับที่แอปจองยางใช้เชื่อมต่อโปรเจกต์ตัวเอง (public, อ่านได้ผ่าน RLS อยู่แล้ว)
+// ════════════════════════════════════════════════════════
+const TT_URL = 'https://yigveyqcfzkxjzsrlger.supabase.co'
+const TT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZ3ZleXFjZnpreGp6c3JsZ2VyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMjYzMjUsImV4cCI6MjA5NDYwMjMyNX0.5fkhW2ITHwuF2KCLcbY9Eo2E6-eTnuk8B-vTVSMRXbQ'
+
+export const ttSupabase = createClient(TT_URL, TT_KEY, { auth: { persistSession: false } })

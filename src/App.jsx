@@ -1335,7 +1335,7 @@ function ReservationTab({ctx}) {
           </div>
         </div>
 
-        {/* แยกตามสาขา — ⏳ รอเข้ารับ / 🛞 ยอดขายรวมยอดจอง / 📉 ขาดอีกกี่เส้นถึงเป้า */}
+        {/* แยกตามสาขา — แยกเป็นกล่องชัดเจนต่อค่า: ⏳ รอเข้ารับ / 🛞 ยอดรวม(จริง+จอง) / 🎯 เทียบเป้า */}
         <div style={{background:CI.black,borderRadius:10,overflow:'hidden',marginBottom:12}}>
           <div style={{padding:'8px 10px',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,color:CI.white}}>
             📊 ยอดจองแยกตามสาขา — {MONTH_TH} {cfg.year}
@@ -1344,13 +1344,20 @@ function ReservationTab({ctx}) {
             const gap = Math.max(0, r.target - r.total)
             return (
               <div key={r.id} style={{background:CI.white,padding:'9px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,cursor:'pointer'}} onClick={()=>setSelBr(r.id)}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6}}>
-                  <span style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[i]}}>{r.id} {r.short}</span>
-                  <span style={{display:'flex',alignItems:'center',gap:12}}>
-                    <span style={{fontSize:12,color:'#B45309',fontWeight:700}}>⏳ {N(r.reserved)}</span>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:CI.red,fontWeight:900}}>{N(r.total)} เส้น</span>
-                    <span style={{fontSize:12,fontWeight:700,color:gap>0?'#B91C1C':'#047857'}}>{gap>0?`📉 ขาด ${N(gap)}`:'✅ ถึงเป้า'}</span>
-                  </span>
+                <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[i],marginBottom:6}}>{r.id} {r.short}</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6}}>
+                  <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center'}}>
+                    <div style={{fontSize:9,color:'#666',fontWeight:700,marginBottom:1}}>⏳ รอเข้ารับ</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:800,color:'#B45309'}}>{N(r.reserved)}</div>
+                  </div>
+                  <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center'}}>
+                    <div style={{fontSize:9,color:'#666',fontWeight:700,marginBottom:1}}>🛞 ยอดรวม</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:800,color:CI.red}}>{N(r.total)}</div>
+                  </div>
+                  <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center'}}>
+                    <div style={{fontSize:9,color:'#666',fontWeight:700,marginBottom:1}}>{gap>0?'📉 ขาดอีก':'🎯 เทียบเป้า'}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:800,color:gap>0?'#B91C1C':'#047857'}}>{gap>0?N(gap):'✅ ถึงเป้า'}</div>
+                  </div>
                 </div>
               </div>
             )

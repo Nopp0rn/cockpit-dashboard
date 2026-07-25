@@ -234,6 +234,68 @@ function sumDays(de, bid) {
   Object.values(de[bid]||{}).forEach(r => FIELDS.forEach(f => { agg[f.key] += parseFloat(r[f.key])||0 }))
   return agg
 }
+
+// ── Forecast ยอดวันนี้: MA7 × DOW ratio (โมเดลเดียวกับแท็บ Tracker, MAE ~24 เส้น/วัน) ──
+// ยกมาไว้ระดับโมดูลเพื่อให้ Morning Brief เรียกใช้ได้ผ่าน ctx โดยไม่ต้องเขียนโมเดลซ้ำ
+function pyDOWm(yr,mo,day){const j=new Date(yr,mo-1,day).getDay();return j===0?6:j-1}
+function todayForecast(bid, {de, cfg, TODAY_D, TOTAL_D, histDailySales, histDailyTire}) {
+  const isAll = bid==='ALL'
+  const sm = String(cfg.month)
+  // DOW average จาก Excel: ใช้ของเดือนนั้นก่อน ถ้าไม่มีค่อย fallback เป็นค่าเฉลี่ยรวม (_G)
+  const dowAvgOf = (TBL, TBL_G) => {
+    if (isAll) {
+      const a={}
+      BRANCHES.forEach(b=>{
+        const src = (TBL[b.id]?.[sm] && Object.keys(TBL[b.id][sm]).length>0) ? TBL[b.id][sm] : (TBL_G[b.id]||{})
+        Object.entries(src).forEach(([k,v])=>{a[k]=(a[k]||0)+v})
+      })
+      return a
+    }
+    const m = TBL[bid]?.[sm]
+    return (m && Object.keys(m).length>0) ? m : (TBL_G[bid]||{})
+  }
+  const dowAvgS = dowAvgOf(EXCEL_DOWS, EXCEL_DOWS_G)
+  const dowAvgT = dowAvgOf(EXCEL_DOWT, EXCEL_DOWT_G)
+  const avgOf = o => { const v=Object.values(o); return v.length ? v.reduce((a,x)=>a+x,0)/v.length : 0 }
+  const modelAvgS = avgOf(dowAvgS), modelAvgT = avgOf(dowAvgT)
+
+  const realSales = (day) => {
+    const key=`${cfg.year}-${String(cfg.month).padStart(2,'0')}`, d=String(day)
+    if(isAll){let s=0;BRANCHES.forEach(b=>{s+=(EXCEL_DS[b.id]?.[key]?.[d]||histDailySales[b.id]?.[key]?.[d]||0)});return s>0?s:null}
+    return EXCEL_DS[bid]?.[key]?.[d]||histDailySales[bid]?.[key]?.[d]||null
+  }
+  const realTire = (day) => {
+    const key=`${cfg.year}-${String(cfg.month).padStart(2,'0')}`, d=String(day)
+    if(isAll){let s=0;BRANCHES.forEach(b=>{s+=(EXCEL_DT[b.id]?.[key]?.[d]||histDailyTire[b.id]?.[key]?.[d]||0)});return s>0?s:null}
+    return EXCEL_DT[bid]?.[key]?.[d]||histDailyTire[bid]?.[key]?.[d]||null
+  }
+
+  // known actuals วัน 1..TOTAL_D (วันที่ยังไม่ถึง = null) — ต้องยาว TOTAL_D เพื่อให้ MA7 rolling ถูกต้อง
+  const knownS = Array.from({length:TOTAL_D},(_,i)=>{
+    const d=i+1
+    if(d>TODAY_D) return null
+    if(!isAll){const dr=de[bid]?.[d];if(dr){const v=calcTS(Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0])));if(v>0)return v}}
+    else{const tot=BRANCHES.reduce((s,b)=>{const dr=de[b.id]?.[d];return s+(dr?calcTS(Object.fromEntries(FIELDS.map(f=>[f.key,Number(dr[f.key])||0]))):0)},0);if(tot>0)return tot}
+    const hv=realSales(d);return hv&&hv>0?hv:null
+  })
+  const knownT = Array.from({length:TOTAL_D},(_,i)=>{
+    const d=i+1
+    if(d>TODAY_D) return null
+    if(!isAll){const v=Number(de[bid]?.[d]?.tire)||0;if(v>0)return v}
+    else{const tot=BRANCHES.reduce((s,b)=>s+(Number(de[b.id]?.[d]?.tire)||0),0);if(tot>0)return tot}
+    const hv=realTire(d);return hv&&hv>0?hv:null
+  })
+
+  // MA7 = ค่าเฉลี่ย 7 ค่าล่าสุดที่ไม่ null จาก "ทุกวันก่อนวัน d" (ไม่ใช่ตัดตำแหน่งตายตัว)
+  const ma7 = (arr,d) => {const all=arr.slice(0,d-1).filter(v=>v!=null);const w=all.slice(-7);return w.length>0?w.reduce((a,v)=>a+v,0)/w.length:null}
+  const ratio = (avgTbl, modelAvg, d) => {const b=avgTbl[String(pyDOWm(cfg.year,cfg.month,d))]||modelAvg;return modelAvg>0?b/modelAvg:1}
+  const one = (arr, avgTbl, modelAvg, d) => {
+    const ma = ma7(arr,d)
+    if (ma!=null && ma>0) return Math.round(ma*ratio(avgTbl,modelAvg,d))
+    return Math.round(avgTbl[String(pyDOWm(cfg.year,cfg.month,d))]||modelAvg)
+  }
+  return { sales: one(knownS,dowAvgS,modelAvgS,TODAY_D), tire: one(knownT,dowAvgT,modelAvgT,TODAY_D) }
+}
 // Sum days 1..toDay only (for dynamic daily target calculation)
 function sumDaysUpTo(de, bid, toDay) {
   const agg = Object.fromEntries(FIELDS.map(f=>[f.key,0]))
@@ -969,7 +1031,9 @@ export default function App() {
 
 
 
-  const ctx = {selBr,setSelBr,de,deAll,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR,authHash,setAuthHash,logout}
+  const getTodayFcst = (bid) => todayForecast(bid, {de, cfg, TODAY_D, TOTAL_D, histDailySales, histDailyTire})
+
+  const ctx = {selBr,setSelBr,de,deAll,saveDay,delDay,getMTD,getTS,getAllMTD,getAllTS,getT,getH,TARGET,HIST,fcst,upStat,setUpStat,setTARGET,setHIST,cfg,saveCfg,TODAY_D,TOTAL_D,DAYS_LEFT,MTD_R,MONTH_TH,DATE_LABEL,mobile,FIELDS,histDailySales,setHistDailySales,histDailyTire,setHistDailyTire,histTireQ,setHistTireQ,uploadedMtAll,setUploadedMtAll,sumDaysUpTo,calcTS,BRANCHES,BCLR,authHash,setAuthHash,logout,getTodayFcst}
 
   /* ── Loading screen ── */
   if (!ready) return (

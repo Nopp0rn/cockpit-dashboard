@@ -304,6 +304,11 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
 
   const b = useMemo(() => buildBriefData(bid, ctx), [bid, ctx])
 
+  // ── Forecast ยอดวันนี้ (โมเดล MA7 × DOW เดียวกับแท็บ Tracker) ──
+  const fc = useMemo(() => {
+    try { return ctx.getTodayFcst ? ctx.getTodayFcst(bid) : null } catch (e) { return null }
+  }, [bid, ctx])
+
   // ── ยอดจองยาง (แยกจากยอดขายจริงโดยสิ้นเชิง — ไม่แตะค่าใดๆ ใน b) ──
   const resByBranch = useReservedTires(ctx.cfg)
   const res = useMemo(() => {
@@ -446,6 +451,31 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
                          big={`${num(res.withRes)} เส้น`}
                          sub={res.gap > 0 ? `ขาดอีก ${num(res.gap)} เส้น (เป้า ${num(res.tgt)})` : `✅ ถึงเป้าแล้ว (เป้า ${num(res.tgt)})`}
                          p={res.p}/>
+            </div>
+            )}
+
+            {fc && (
+            <div style={cardBox}>
+              <CardTitle bg="#6D28D9">🔮 คาดการณ์วันนี้ ({b.planDateLabel})</CardTitle>
+              <div style={{ marginTop: 7 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>ยอดขายที่คาดว่าจะทำได้</div>
+                <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color: '#6D28D9', lineHeight: 1 }}>
+                  {kFmt(fc.sales)}
+                </div>
+                <div style={{ fontSize: 10, color: '#888', fontWeight: 700 }}>
+                  ต้องทำวันนี้ {kFmt(b.tomorrow.salesTarget)} · {Math.round(pct(fc.sales, b.tomorrow.salesTarget))}%
+                </div>
+              </div>
+              <Divider/>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>ยางที่คาดว่าจะทำได้</div>
+                <div style={{ fontFamily: F_DISP, fontWeight: 900, fontSize: 24, color: '#6D28D9', lineHeight: 1 }}>
+                  {num(fc.tire)} เส้น
+                </div>
+                <div style={{ fontSize: 10, color: '#888', fontWeight: 700 }}>
+                  ต้องทำวันนี้ {num(b.tomorrow.tiresTarget)} เส้น · {Math.round(pct(fc.tire, b.tomorrow.tiresTarget))}%
+                </div>
+              </div>
             </div>
             )}
           </div>

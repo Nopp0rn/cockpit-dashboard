@@ -38,11 +38,14 @@ function useReservedTires(cfg) {
     let alive = true
     const load = async () => {
       try {
-        const { data, error } = await ttSupabase.from('tt_reservations').select('branch,qty,qty2,status,service_date')
-        if (error) throw error
+        // ลด egress: ให้ Postgres กรองเดือนปัจจุบัน + ตัดรายการที่รับแล้วออกตั้งแต่ต้นทาง
         const mm = String(cfg.month).padStart(2, '0')
         const start = `${cfg.year}-${mm}-01`
         const next  = cfg.month === 12 ? `${cfg.year + 1}-01-01` : `${cfg.year}-${String(cfg.month + 1).padStart(2, '0')}-01`
+        const { data, error } = await ttSupabase.from('tt_reservations')
+          .select('branch,qty,qty2,status,service_date')
+          .gte('service_date', start).lt('service_date', next).neq('status', 'arrived')
+        if (error) throw error
         const agg = {}
         ;(data || []).forEach(r => {
           if (r.status === 'arrived') return           // ที่รับแล้วนับอยู่ในยอดจริงแล้ว กันนับซ้ำ
@@ -57,7 +60,7 @@ function useReservedTires(cfg) {
       }
     }
     load()
-    const t = setInterval(load, 60000)
+    const t = setInterval(() => { if (!document.hidden) load() }, 300000)  // 5 นาที และหยุดเมื่อแอปถูกพับ
     return () => { alive = false; clearInterval(t) }
   }, [cfg.year, cfg.month])
   return byBranch

@@ -40,16 +40,22 @@ const DB = {
   },
 
   /* ── ยอดกรอกรายวัน: คนละแถวต่อ (สาขา, เดือน, วัน) ── */
-  getEntries: async () => {
-    const { data, error } = await supabase.from('daily_entries').select('branch_id,ym,day,data')
+  // since = ISO timestamp: ถ้าส่งมา จะดึงเฉพาะแถวที่แก้ไขหลังเวลานั้น (ประหยัด egress ตอน poll)
+  // คืน { out, maxUpdated } — out คือ {branch:{ym:{day:data}}}
+  getEntries: async (since = null) => {
+    let q = supabase.from('daily_entries').select('branch_id,ym,day,data,updated_at')
+    if (since) q = q.gt('updated_at', since)
+    const { data, error } = await q
     if (error) { console.error('[DB.getEntries] failed:', error.message); return null }
     const out = {}
+    let maxUpdated = since
     ;(data||[]).forEach(r => {
       const b = out[r.branch_id] || (out[r.branch_id] = {})
       const m = b[r.ym] || (b[r.ym] = {})
       m[r.day] = r.data
+      if (r.updated_at && (!maxUpdated || r.updated_at > maxUpdated)) maxUpdated = r.updated_at
     })
-    return out
+    return { out, maxUpdated, count: (data||[]).length }
   },
   setEntry: async (bid, ym, day, data) => {
     const { error } = await supabase.from('daily_entries').upsert(
@@ -696,6 +702,8 @@ export default function App() {
   // saveTimersRef   = debounce timer แยกต่อแถว (สาขา+เดือน+วัน) → คนละแถวไม่บล็อกกัน, ใช้เช็คด้วยว่าแถวไหน "กำลังพิมพ์ค้างอยู่"
   //                   เพื่อไม่ให้ realtime/poll เขียนทับแถวนั้นก่อนที่จะส่งขึ้น Supabase สำเร็จ
   const deAllRef = useRef({})
+  // updated_at ล่าสุดที่ดึงมาได้ — ใช้ให้ poll ดึงเฉพาะแถวที่เปลี่ยน (ลด egress)
+  const lastEntrySyncRef = useRef(null)
   const lastLocalEditRef = useRef(0)
   const saveTimersRef = useRef(new Map())
   const [TARGET, setTARGET] = useState(SEED_T)
@@ -752,7 +760,7 @@ export default function App() {
 
         if (error) throw error
 
-        if (entries) { setDeAll(entries); deAllRef.current = entries }
+        if (entries) { setDeAll(entries.out); deAllRef.current = entries.out; lastEntrySyncRef.current = entries.maxUpdated }
 
         if (rows) {
           rows.forEach(r => {
@@ -833,10 +841,31 @@ export default function App() {
     const POLL_MS = 60000
     let poll = null
 
-    const fetchEntries = async () => {
+    // full=true บังคับโหลดใหม่ทั้งหมด (ตอนเปิดแอป/กลับมาที่หน้าจอ) เพื่อ reconcile แถวที่ถูกลบ
+    // ปกติ poll จะดึงเฉพาะแถวที่ updated_at ใหม่กว่ารอบก่อน — ถ้าไม่มีใครกรอกอะไร payload แทบเป็นศูนย์
+    const fetchEntries = async (full = false) => {
       try {
-        const fresh = await DB.getEntries()
-        if (!fresh) return
+        const since = full ? null : lastEntrySyncRef.current
+        const res = await DB.getEntries(since)
+        if (!res) return
+        if (res.maxUpdated) lastEntrySyncRef.current = res.maxUpdated
+        if (since && res.count === 0) return          // ไม่มีอะไรเปลี่ยน ไม่ต้องแตะ state
+        // incremental: เอาของใหม่ merge ทับก้อนเดิม / full: ใช้ก้อนใหม่ทั้งหมด
+        let fresh
+        if (since) {
+          fresh = {}
+          const base = deAllRef.current
+          Object.keys(base).forEach(b => { fresh[b] = {}; Object.keys(base[b]).forEach(ym => { fresh[b][ym] = {...base[b][ym]} }) })
+          Object.entries(res.out).forEach(([b, months]) => {
+            const bb = fresh[b] || (fresh[b] = {})
+            Object.entries(months).forEach(([ym, days]) => {
+              const mm = bb[ym] || (bb[ym] = {})
+              Object.entries(days).forEach(([d, v]) => { mm[d] = v })
+            })
+          })
+        } else {
+          fresh = res.out
+        }
         // เอาแถวที่เพิ่งพิมพ์ในเครื่องนี้แต่ยังไม่ได้ส่งขึ้น Supabase (debounce ค้างอยู่) มาทับก้อนที่เพิ่งดึงมา
         // กันไม่ให้ poll เขียนทับข้อมูลที่เพิ่งพิมพ์แต่ยังไม่ทันส่ง
         saveTimersRef.current.forEach((_, k) => {
@@ -871,7 +900,7 @@ export default function App() {
     }
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') { fetchEntries(); startPoll() }
+      if (document.visibilityState === 'visible') { fetchEntries(true); startPoll() }
       else { stopPoll(); flushSave() }
     }
 
@@ -1296,8 +1325,13 @@ function ReservationTab({ctx}) {
     let alive = true
     const load = async () => {
       try {
+        // ลด egress: กรองเดือนปัจจุบันที่ฝั่ง Postgres แทนที่จะดึงทุกรายการย้อนหลังมากรองเอง
+        const mmq = String(cfg.month).padStart(2,'0')
+        const startQ = `${cfg.year}-${mmq}-01`
+        const nextQ  = cfg.month===12 ? `${cfg.year+1}-01-01` : `${cfg.year}-${String(cfg.month+1).padStart(2,'0')}-01`
         const { data, error } = await ttSupabase.from('tt_reservations')
           .select('id,branch,qty,qty2,status,service_date,customer_name,brand,model,size,brand2,model2,size2')
+          .gte('service_date', startQ).lt('service_date', nextQ)
         if (error) throw error
         if (alive) { setRows(data||[]); setErr(false) }
       } catch(e) {
@@ -1308,9 +1342,9 @@ function ReservationTab({ctx}) {
     }
     load()
     // poll ทุก 60 วิ — ไม่ subscribe realtime ข้าม project เพื่อไม่เพิ่ม egress ให้โปรเจกต์ TireTrack
-    const t = setInterval(load, 60000)
+    const t = setInterval(() => { if (!document.hidden) load() }, 300000)  // 5 นาที และหยุดเมื่อแอปถูกพับ
     return () => { alive = false; clearInterval(t) }
-  }, [])
+  }, [cfg.year, cfg.month])
 
   const mm = String(cfg.month).padStart(2,'0')
   const monthStart = `${cfg.year}-${mm}-01`

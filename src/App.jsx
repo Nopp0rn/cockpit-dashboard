@@ -900,9 +900,26 @@ export default function App() {
     }
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') { fetchEntries(true); startPoll() }
+      if (document.visibilityState === 'visible') { lastActivity = Date.now(); fetchEntries(true); startPoll() }
       else { stopPoll(); flushSave() }
     }
+
+    // ── กันโควตา Supabase บานปลาย ──
+    // เครื่องที่สาขามักเปิดแอปค้างทั้งวันโดยไม่มีคนแตะ ซึ่งนับเป็น "visible" จึง poll ไปเรื่อยๆ ทั้งวัน
+    // ตัดทิ้งโดยหยุด poll หลังไม่มีการใช้งาน 30 นาที — ข้อมูลสดยังมาทาง Realtime (websocket) ตามปกติ
+    // พอมีคนแตะจอ/พิมพ์/เลื่อน จะกลับมา poll ทันทีพร้อมดึงข้อมูลสดรอบนึง
+    const IDLE_MS = 30 * 60 * 1000
+    let lastActivity = Date.now()
+    const idleCheck = setInterval(() => {
+      if (Date.now() - lastActivity > IDLE_MS) stopPoll()
+    }, 60000)
+    const onActivity = () => {
+      const wasIdle = Date.now() - lastActivity > IDLE_MS
+      lastActivity = Date.now()
+      if (wasIdle && document.visibilityState === 'visible') { fetchEntries(true); startPoll() }
+    }
+    ;['pointerdown','keydown','wheel','touchstart'].forEach(ev =>
+      window.addEventListener(ev, onActivity, { passive: true }))
 
     if (document.visibilityState === 'visible') startPoll()
     document.addEventListener('visibilitychange', onVisibility)
@@ -912,6 +929,9 @@ export default function App() {
       clearTimeout(t)
       stopPoll()
       flushSave()
+      clearInterval(idleCheck)
+      ;['pointerdown','keydown','wheel','touchstart'].forEach(ev =>
+        window.removeEventListener(ev, onActivity))
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', flushSave)
       supabase.removeChannel(ch)

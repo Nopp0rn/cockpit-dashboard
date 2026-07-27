@@ -1464,15 +1464,17 @@ function ReservationTab({ctx}) {
               <div key={r.id} style={{background:CI.white,padding:'9px 10px',borderTop:i===0?'none':`1px solid ${CI.line}`,cursor:'pointer'}} onClick={()=>setSelBr(r.id)}>
                 <div style={{fontFamily:'Barlow Condensed',fontWeight:800,fontSize:13,color:READCLR2[r.idx],marginBottom:6}}>{r.id} {r.short}</div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6}}>
-                  <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center'}}>
+                  <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
                     <div style={{fontSize:9,color:'#666',fontWeight:700,marginBottom:1}}>⏳ รอเข้ารับ</div>
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:800,color:'#B45309'}}>{N(r.reserved)}</div>
                   </div>
                   <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center'}}>
                     <div style={{fontSize:9,color:'#666',fontWeight:700,marginBottom:1}}>🛞 ยอดรวม</div>
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:800,color:CI.red}}>{N(r.total)}</div>
+                    <SemiGauge value={r.pct} color={statusColor(r.pct)} size={52}/>
+                    <div style={{fontSize:11,fontWeight:800,color:statusColor(r.pct),marginTop:-1}}>{r.pct.toFixed(1)}%</div>
                   </div>
-                  <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center'}}>
+                  <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
                     <div style={{fontSize:9,color:'#666',fontWeight:700,marginBottom:1}}>{gap>0?'📉 ขาดอีก':'🎯 เทียบเป้า'}</div>
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:800,color:gap>0?'#B91C1C':'#047857'}}>{gap>0?N(gap):'✅ ถึงเป้า'}</div>
                   </div>

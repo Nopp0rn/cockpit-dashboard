@@ -179,7 +179,11 @@ function Mascot({ src, flip = false, size = 90 }) {
   const [err, setErr] = useState(false)
   if (src && !err) {
     return <img src={src} alt="" onError={() => setErr(true)}
-      style={{ width: size, height: 'auto', objectFit: 'contain', transform: flip ? 'scaleX(-1)' : 'none' }}/>
+      style={{
+        width: size, maxWidth: '24%', minWidth: 44,   // ย่อตามจอแคบได้ ไม่ดันให้ footer ตัดบรรทัด
+        height: 'auto', objectFit: 'contain', flexShrink: 1,
+        transform: flip ? 'scaleX(-1)' : 'none',
+      }}/>
   }
   return (
     <svg width={size} height={size * 1.25} viewBox="0 0 120 150" style={{ transform: flip ? 'scaleX(-1)' : 'none' }}>
@@ -576,9 +580,12 @@ export default function MorningBrief({ ctx, selBr, setSelBr,
         </div>
 
         {/* FOOTER + mascots */}
-        <div style={{ background: CI.yellow, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 10px', flexWrap: 'wrap' }}>
+        {/* 2026-07-31: เดิมตั้ง flexWrap:'wrap' พอจอ Android แคบกว่าความกว้างรวม
+            (รูป 80 + ข้อความ + รูป 80) footer จะตัดบรรทัด ทำให้รูปหล่นไปเรียงแนวตั้ง
+            แก้เป็นห้ามตัดบรรทัด แล้วให้รูปกับข้อความย่อตามจอแทน */}
+        <div style={{ background: CI.yellow, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 8px', flexWrap: 'nowrap', gap: 6 }}>
           <Mascot src={mascotSrc} size={80}/>
-          <div style={{ textAlign: 'center', paddingBottom: 10 }}>
+          <div style={{ textAlign: 'center', paddingBottom: 10, flex: '1 1 auto', minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 11, color: CI.red, fontStyle: 'italic' }}>
               รักษามาตรฐานที่ดีต่อเนื่อง! ปิดจุดอ่อน เพิ่มจุดแข็ง
             </div>

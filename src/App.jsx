@@ -364,11 +364,14 @@ function AchBadge({pct}) {
 /* ── Mascot footer — แบนเนอร์ปิดท้ายหน้า ใช้ร่วมกันได้ทุกแท็บ (รูปจาก /icons/) ── */
 function MascotFooter({ compact }) {
   return (
+    /* 2026-07-31: กันรูปมาสคอตหล่นเรียงแนวตั้งบนจอแคบ (Android)
+       ห้ามตัดบรรทัด แล้วให้รูปกับข้อความย่อตามความกว้างจอแทน */
     <div style={{background:CI.yellow,borderRadius:10,marginTop:12,display:'flex',alignItems:'flex-end',
-                 justifyContent:'space-between',padding:'0 10px',overflow:'hidden'}}>
-      <img src="/icons/cockpit-boy.png" alt="" style={{width:compact?60:80,height:'auto',objectFit:'contain'}}
+                 justifyContent:'space-between',padding:'0 8px',overflow:'hidden',flexWrap:'nowrap',gap:6}}>
+      <img src="/icons/cockpit-boy.png" alt=""
+           style={{width:compact?60:80,maxWidth:'24%',minWidth:40,height:'auto',objectFit:'contain',flexShrink:1}}
            onError={e=>{e.target.style.display='none'}}/>
-      <div style={{textAlign:'center',paddingBottom:compact?8:12}}>
+      <div style={{textAlign:'center',paddingBottom:compact?8:12,flex:'1 1 auto',minWidth:0}}>
         <div style={{fontWeight:700,fontSize:compact?10:11,color:CI.red,fontStyle:'italic'}}>
           รักษามาตรฐานที่ดีต่อเนื่อง! ปิดจุดอ่อน เพิ่มจุดแข็ง
         </div>
@@ -376,7 +379,8 @@ function MascotFooter({ compact }) {
           COCKPIT <span style={{color:CI.red}}>100%</span>
         </div>
       </div>
-      <img src="/icons/cockpit-girl.png" alt="" style={{width:compact?60:80,height:'auto',objectFit:'contain',transform:'scaleX(-1)'}}
+      <img src="/icons/cockpit-girl.png" alt=""
+           style={{width:compact?60:80,maxWidth:'24%',minWidth:40,height:'auto',objectFit:'contain',flexShrink:1,transform:'scaleX(-1)'}}
            onError={e=>{e.target.style.display='none'}}/>
     </div>
   )

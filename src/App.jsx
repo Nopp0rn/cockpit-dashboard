@@ -121,6 +121,69 @@ const EXCEL_DOWT={"003":{"1":{"0":12.69,"1":12.75,"2":13.15,"3":10.43,"4":12.64,
 const EXCEL_DOWT_G={"003":{"0":11.03,"1":10.67,"2":11.33,"3":10.97,"4":10.76,"5":16.66,"6":16.8},"009":{"0":12.26,"1":11.65,"2":10.44,"3":13.09,"4":11.12,"5":17.05,"6":13.86},"010":{"0":13.01,"1":12.84,"2":12.55,"3":12.32,"4":12.04,"5":16.68,"6":14.01},"012":{"0":14.68,"1":12.16,"2":13.21,"3":11.58,"4":14.29,"5":15.0,"6":14.96},"014":{"0":12.81,"1":11.45,"2":11.47,"3":13.88,"4":13.97,"5":18.43,"6":14.57},"048":{"0":7.97,"1":8.56,"2":8.64,"3":8.33,"4":9.8,"5":11.47,"6":8.91},"050":{"0":12.17,"1":10.48,"2":10.77,"3":10.31,"4":13.83,"5":17.37,"6":12.84},"096":{"0":9.99,"1":9.04,"2":8.1,"3":7.85,"4":10.26,"5":12.49,"6":10.1},"107":{"0":7.71,"1":7.72,"2":7.82,"3":8.44,"4":9.52,"5":8.96,"6":9.76},"143":{"0":6.4,"1":8.0,"2":5.8,"3":18.4,"4":6.86,"5":14.0,"6":13.33}}
 const EXCEL_DOWS_G={"003":{"0":77766.47,"1":73812.74,"2":75006.29,"3":76079.91,"4":73449.67,"5":116830.9,"6":120979.6},"009":{"0":62340.28,"1":59518.24,"2":56717.64,"3":63970.19,"4":60021.52,"5":92157.84,"6":71572.75},"010":{"0":74053.64,"1":68873.53,"2":70187.57,"3":69785.48,"4":68204.02,"5":96131.03,"6":74420.09},"012":{"0":75032.6,"1":65756.79,"2":70254.59,"3":62076.68,"4":73706.85,"5":83638.2,"6":75718.55},"014":{"0":66381.47,"1":64236.21,"2":63625.74,"3":76688.72,"4":75169.37,"5":89951.51,"6":70337.4},"048":{"0":38913.62,"1":38801.64,"2":45275.51,"3":40518.37,"4":45643.17,"5":61402.15,"6":46057.91},"050":{"0":52935.55,"1":44867.54,"2":47777.54,"3":43073.26,"4":59554.97,"5":75648.74,"6":55649.11},"096":{"0":54636.01,"1":46678.06,"2":42495.82,"3":37439.94,"4":50686.96,"5":65853.8,"6":50719.65},"107":{"0":45828.22,"1":40321.69,"2":41992.88,"3":44345.74,"4":51980.71,"5":52976.85,"6":51064.26},"143":{"0":18702.14,"1":17375.23,"2":13327.93,"3":44482.71,"4":20729.61,"5":44565.42,"6":52122.15}}
 
+/* ── เวอร์ชันแอป ──────────────────────────────────────────────
+   แก้เลขนี้ทุกครั้งที่ปล่อยของใหม่ แล้วเครื่องที่เปิดค้างจะรู้เองว่ามีของใหม่
+   BUILD_ID = hash ที่ Vite ใส่ในชื่อไฟล์ตอน build — ใช้ยืนยันว่าเครื่องนี้รันบิลด์ไหน */
+const APP_VERSION = "v2.0"
+
+/* ปุ่มอัปเดตด้วยมือ — สำหรับคนที่ล้าง cache เองไม่เป็น แตะที่ป้ายเวอร์ชันแล้วเรียกฟังก์ชันนี้ */
+async function forceUpdate() {
+  if (!window.confirm("โหลดแอปเวอร์ชันล่าสุดใหม่?\n(ข้อมูลที่บันทึกไว้แล้วไม่หาย)")) return
+  try {
+    if (window.caches) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map(k => caches.delete(k)))
+    }
+  } catch {}
+  try { sessionStorage.removeItem("cps_ver_reloads") } catch {}
+  location.replace(location.href.split("?")[0] + "?_u=" + Date.now())
+}
+
+/* ── ตรวจว่ามีบิลด์ใหม่บนเซิร์ฟเวอร์หรือยัง แล้วโหลดใหม่อัตโนมัติ ──
+   เครื่องที่เปิดแอปค้างไว้จะรันโค้ดเก่าในหน่วยความจำตลอด deploy แล้วไม่มีผล
+   จนกว่าจะมีคนปิด-เปิดเอง ตัวนี้ทำให้ทุกเครื่องได้ของใหม่เองภายใน 10 นาที
+   Vite ใส่ hash ในชื่อไฟล์ JS ทุกครั้งที่ build จึงเทียบชื่อไฟล์เอาได้ */
+;(function () {
+  const FLAG = "cps_ver_reloads"
+  async function checkForNewBuild() {
+    try {
+      let tries = 0
+      try { tries = parseInt(sessionStorage.getItem(FLAG) || "0") || 0 } catch {}
+      if (tries >= 2) return                       // กันลูป: ลองแล้ว 2 ครั้งพอ
+      const current = document.querySelector('script[type="module"]')?.getAttribute("src")
+      if (!current) return
+      const ctrl = new AbortController()
+      const to = setTimeout(() => ctrl.abort(), 3000)   // เน็ตช้าต้องไม่ค้าง
+      const res = await fetch("/index.html?_cb=" + Date.now(), { cache: "no-store", signal: ctrl.signal })
+      clearTimeout(to)
+      const html = await res.text()
+      const m = html.match(/<script[^>]+type="module"[^>]+src="([^"]+)"/)
+      if (m && m[1] !== current) {
+        try { sessionStorage.setItem(FLAG, String(tries + 1)) } catch {}
+        try {
+          if (window.caches) {
+            const keys = await caches.keys()
+            await Promise.all(keys.map(k => caches.delete(k)))
+          }
+        } catch {}
+        location.reload()
+        return
+      }
+      try { sessionStorage.removeItem(FLAG) } catch {}
+    } catch { /* ออฟไลน์/เช็คไม่ได้ — ใช้ของเดิมต่อได้ปกติ */ }
+  }
+  checkForNewBuild()
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForNewBuild() })
+  setInterval(checkForNewBuild, 600000)
+})()
+function getBuildId() {
+  try {
+    const src = document.querySelector('script[type="module"]')?.getAttribute("src") || ""
+    const m = src.match(/index-([A-Za-z0-9_-]+)\.js/)
+    return m ? m[1] : "dev"
+  } catch { return "dev" }
+}
+
 const BRANCHES = [
   { id:'003', name:'Cockpit Srinakarin',         short:'ศรีนครินทร์'   },
   { id:'009', name:'Cockpit Nakorn Ratchasima',  short:'นครราชสีมา'   },
@@ -1129,6 +1192,12 @@ export default function App() {
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:compact?13:20,letterSpacing:compact?1:3,color:CI.yellow,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>COCKPIT SALES INTELLIGENCE</div>
           <div style={{fontSize:9,color:'#6b7280'}}>{DATE_LABEL} · เหลือ {DAYS_LEFT} วัน · 10 สาขา</div>
+          <div style={{fontSize:8.5,color:'#6b7280',fontFamily:"'JetBrains Mono',monospace",marginTop:1,cursor:'pointer',userSelect:'none'}}
+               title="แตะเพื่อโหลดเวอร์ชันล่าสุด"
+               onClick={forceUpdate}>
+            <span style={{color:CI.yellow,opacity:.85,fontWeight:700}}>{APP_VERSION}</span>
+            {' · '}{getBuildId()}{' · '}<span style={{opacity:.9}}>🔄 แตะเพื่ออัปเดต</span>
+          </div>
         </div>
         {/* บันทึกภาพหน้านี้ทั้งหมด */}
         <button onClick={captureScreen} disabled={capturing} title="บันทึกภาพหน้านี้ทั้งหมด"

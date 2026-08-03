@@ -3325,7 +3325,9 @@ function Upload({ ctx }) {
     setUpStat,
     setTARGET,
     setHIST,
+    histDailySales,      // ต้องใช้ค่าปัจจุบันเพื่อรวมกับข้อมูลใหม่ก่อนเขียนฐานข้อมูล
     setHistDailySales,
+    histDailyTire,
     setHistDailyTire,
     setHistTireQ,
     setUploadedMtAll,
@@ -3438,7 +3440,11 @@ function Upload({ ctx }) {
         const bc = Object.keys(parsed).length
         if (bc > 0) {
           const sum1 = summarizeDaily(parsed, 'ยอดขายรายวัน')
-          setHistDailySales(prev => { const n={...prev}; Object.entries(parsed).forEach(([b,mo])=>{n[b]={...(n[b]||{}),...mo}}); DB.set('cp_hdsl',n); return n })
+          // รวมข้อมูลเดิม+ใหม่ก่อน แล้วค่อยเขียนฐานข้อมูลนอกฟังก์ชันอัปเดตหน้าจอ
+          // (React เรียกฟังก์ชันอัปเดตซ้ำได้ ถ้าเขียน DB ข้างในจะยิงซ้ำและจับ error ไม่ได้)
+          const mergedDS = (() => { const n={...histDailySales}; Object.entries(parsed).forEach(([b,mo])=>{n[b]={...(n[b]||{}),...mo}}); return n })()
+          setHistDailySales(mergedDS)
+          await DB.set('cp_hdsl', mergedDS)
           detail = { branches: sum1.gotIds.length, total: BRANCHES.length, months: sum1.months, full: sum1.ok }
           showLater(sum1.msg)
           console.log('Daily sales OK:', bc, 'branches', td, 'days', Object.keys(parsed))
@@ -3456,7 +3462,9 @@ function Upload({ ctx }) {
         const bc = Object.keys(parsed).length
         if (bc > 0) {
           const sum2 = summarizeDaily(parsed, 'ยอดขายยางรายวัน')
-          setHistDailyTire(prev => { const n={...prev}; Object.entries(parsed).forEach(([b,mo])=>{n[b]={...(n[b]||{}),...mo}}); DB.set('cp_hdtr',n); return n })
+          const mergedDT = (() => { const n={...histDailyTire}; Object.entries(parsed).forEach(([b,mo])=>{n[b]={...(n[b]||{}),...mo}}); return n })()
+          setHistDailyTire(mergedDT)
+          await DB.set('cp_hdtr', mergedDT)
           detail = { branches: sum2.gotIds.length, total: BRANCHES.length, months: sum2.months, full: sum2.ok }
           showLater(sum2.msg)
           console.log('Daily tire OK:', bc, 'branches', td, 'days')
@@ -3488,16 +3496,23 @@ function Upload({ ctx }) {
 
       console.error(e)
 
+      /* 2026-08-03: เดิมตอนเกิด error บันทึกแค่ในหน้าจอ ไม่เขียนลงฐานข้อมูล
+         ทำให้หน้าจอขึ้นแดงแต่ฐานข้อมูลยังเป็นสีเขียวของรอบเก่า — ตรวจสาเหตุไม่ได้เลย
+         จึงเก็บข้อความผิดพลาดไว้ด้วย เพื่อให้เห็นบนการ์ดและตรวจย้อนหลังได้ */
       const ns = {
         ...upStat,
         [key]: {
           name: file.name,
+          time: new Date().toLocaleTimeString('th-TH'),
           ok: false,
-          err: e.message
+          err: String(e?.message || e)
         }
       }
 
       setUpStat(ns)
+      try { DB.set('cp_up', ns) } catch {}
+      showLater('❌ อ่านไฟล์ไม่สำเร็จ\n\n' + String(e?.message || e) +
+                '\n\nกรุณาส่งข้อความนี้ให้ผู้ดูแลระบบ')
     }
   }
 
@@ -3584,6 +3599,11 @@ function Upload({ ctx }) {
                   {st.ok ? '✅' : '❌'} {st.name}
                   {st.time && <span style={{opacity:.75,marginLeft:6}}>· {st.time}</span>}
                   {/* สรุปผลการอ่านไฟล์ — ดูได้เลยว่าได้ครบกี่สาขา เดือนอะไรบ้าง */}
+                  {st.err && (
+                    <div style={{marginTop:3,fontSize:9.5,fontWeight:600,color:'#FFB199',wordBreak:'break-word'}}>
+                      สาเหตุ: {st.err}
+                    </div>
+                  )}
                   {st.detail && (
                     <div style={{marginTop:3,fontSize:9.5,fontWeight:600,
                                  color: st.detail.full ? '#8ee6b0' : '#FFC53D'}}>

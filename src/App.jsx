@@ -2981,6 +2981,38 @@ function parseSalesData(wb) {
 
   const COL_START = { 2024: 4, 2025: 17, 2026: 30 }
   const MON_COUNT = { 2024: 12, 2025: 12, 2026: 12 }  // อ่านครบ 12 เดือน เดือนที่ยังไม่มีข้อมูลจะได้ 0
+
+  /* 2026-08-03 (แก้บั๊กยอดยางเดือนที่ยังไม่เกิด):
+     เดิมเดาตำแหน่งคอลัมน์ตายตัว (2026 เริ่มที่คอลัมน์ 30 แล้วอ่านรวด 12 ช่อง)
+     แต่ไฟล์จริงมีเฉพาะเดือนที่ผ่านมาแล้วต่อด้วยคอลัมน์ "Total"
+     เช่นปี 2026 มี ม.ค.–ส.ค. แล้ว Total อยู่คอลัมน์ถัดไป → ถูกอ่านเป็น "ก.ย."
+     ทำให้กราฟขึ้นยอด ก.ย. = ผลรวมทั้งปี (24,976 เส้น) ทั้งที่ยังไม่ถึงเดือนนั้น
+     แก้เป็นอ่านหัวตารางจริง (แถวปี + แถวชื่อเดือน) แล้วจับคู่คอลัมน์ตามชื่อเดือน
+     ข้ามคอลัมน์ Total ทิ้ง — รองรับทุกจำนวนเดือนโดยไม่ต้องแก้โค้ดอีก */
+  const MON_NAMES = ['january','february','march','april','may','june',
+                     'july','august','september','october','november','december']
+  function buildMonthCols(rows) {
+    const yrRow = rows[0] || [], moRow = rows[1] || []
+    const map = {}          // { 2024: {0:col, 1:col, ...}, ... }
+    let curYr = null
+    const width = Math.max(yrRow.length, moRow.length)
+    for (let c = 0; c < width; c++) {
+      const yv = yrRow[c]
+      if (yv != null && String(yv).trim() !== '') {
+        const y = parseInt(String(yv).trim(), 10)
+        if (y >= 2020 && y <= 2040) curYr = y
+      }
+      const mv = moRow[c]
+      if (!curYr || mv == null) continue
+      const mn = String(mv).trim().toLowerCase()
+      if (mn === 'total' || mn === '') continue      // ← ข้ามคอลัมน์ Total
+      const mi = MON_NAMES.indexOf(mn)
+      if (mi < 0) continue
+      if (!map[curYr]) map[curYr] = {}
+      map[curYr][mi] = c
+    }
+    return map
+  }
   const TIRE_ROW  = 24
   const JOB_ROW   = 3
 
@@ -3007,23 +3039,25 @@ function parseSalesData(wb) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1 })
     const tireRowIdx = findTireRow(rows)
 
+    const colMap = buildMonthCols(rows)
     tireqOut[bid] = {}
     ;[2024, 2025, 2026].forEach(yr => {
-      const start  = COL_START[yr]
-      const months = MON_COUNT[yr]
-      const tireq  = []
-      for (let m = 0; m < months; m++) {
-        const col = start + m
-        tireq.push(Number(rows[tireRowIdx]?.[col]) || 0)
+      const cols  = colMap[yr] || {}
+      const hasHeader = Object.keys(cols).length > 0
+      const tireq = []
+      for (let m = 0; m < 12; m++) {
+        // ใช้ตำแหน่งจากหัวตารางจริง ถ้าอ่านหัวตารางไม่ได้ค่อยถอยไปใช้วิธีเดิม
+        const col = hasHeader ? cols[m] : (COL_START[yr] + m)
+        tireq.push(col == null ? 0 : (Number(rows[tireRowIdx]?.[col]) || 0))
       }
-      while (tireq.length < 12) tireq.push(null)
       tireqOut[bid][yr] = tireq
     })
 
     // หาเดือนล่าสุดที่มีข้อมูลจริงใน 2026 (ไม่ใช่ 0)
-    let lastNonZeroCol = COL_START[2026]
+    const cols26 = colMap[2026] || {}
+    let lastNonZeroCol = cols26[0] != null ? cols26[0] : COL_START[2026]
     for (let m = 0; m < 12; m++) {
-      const col = COL_START[2026] + m
+      const col = cols26[m] != null ? cols26[m] : (COL_START[2026] + m)
       if (Number(rows[tireRowIdx]?.[col]) > 0) lastNonZeroCol = col
     }
     const latestCol = lastNonZeroCol
@@ -3325,12 +3359,14 @@ function Upload({ ctx }) {
       /* ─────────────────────────────────────────────
          DAILY SALES — ยอดขายรายวัน.xlsx
       ───────────────────────────────────────────── */
+      let detail = null   // สรุปผลการอ่าน (สาขา/เดือน) เก็บไว้โชว์บนการ์ด
       if (key === 'daily') {
         const parsed = parseDailyFile(wb, 'ยอดขายรายวัน', true)
         const bc = Object.keys(parsed).length
         if (bc > 0) {
           const sum1 = summarizeDaily(parsed, 'ยอดขายรายวัน')
           setHistDailySales(prev => { const n={...prev}; Object.entries(parsed).forEach(([b,mo])=>{n[b]={...(n[b]||{}),...mo}}); DB.set('cp_hdsl',n); return n })
+          detail = { branches: sum1.gotIds.length, total: BRANCHES.length, months: sum1.months, full: sum1.ok }
           alert(sum1.msg)
           console.log('Daily sales OK:', bc, 'branches', td, 'days', Object.keys(parsed))
         } else {
@@ -3348,6 +3384,7 @@ function Upload({ ctx }) {
         if (bc > 0) {
           const sum2 = summarizeDaily(parsed, 'ยอดขายยางรายวัน')
           setHistDailyTire(prev => { const n={...prev}; Object.entries(parsed).forEach(([b,mo])=>{n[b]={...(n[b]||{}),...mo}}); DB.set('cp_hdtr',n); return n })
+          detail = { branches: sum2.gotIds.length, total: BRANCHES.length, months: sum2.months, full: sum2.ok }
           alert(sum2.msg)
           console.log('Daily tire OK:', bc, 'branches', td, 'days')
         } else {
@@ -3365,7 +3402,8 @@ function Upload({ ctx }) {
         [key]: {
           name: file.name,
           time: new Date().toLocaleTimeString('th-TH'),
-          ok: true
+          ok: true,
+          ...(detail ? { detail } : {})
         }
       }
 
@@ -3471,6 +3509,16 @@ function Upload({ ctx }) {
                   borderRadius:4
                 }}>
                   {st.ok ? '✅' : '❌'} {st.name}
+                  {st.time && <span style={{opacity:.75,marginLeft:6}}>· {st.time}</span>}
+                  {/* สรุปผลการอ่านไฟล์ — ดูได้เลยว่าได้ครบกี่สาขา เดือนอะไรบ้าง */}
+                  {st.detail && (
+                    <div style={{marginTop:3,fontSize:9.5,fontWeight:600,
+                                 color: st.detail.full ? '#8ee6b0' : '#FFC53D'}}>
+                      {st.detail.full ? '✔' : '⚠'} {st.detail.branches}/{st.detail.total} สาขา
+                      {st.detail.months?.length ? ` · ${st.detail.months.join(', ')}` : ''}
+                      {!st.detail.full && ' — ข้อมูลไม่ครบ กรุณา export ใหม่'}
+                    </div>
+                  )}
                 </div>
               )}
 

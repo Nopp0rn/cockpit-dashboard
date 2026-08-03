@@ -3447,7 +3447,7 @@ function Upload({ ctx }) {
           await DB.set('cp_hdsl', mergedDS)
           detail = { branches: sum1.gotIds.length, total: BRANCHES.length, months: sum1.months, full: sum1.ok }
           showLater(sum1.msg)
-          console.log('Daily sales OK:', bc, 'branches', td, 'days', Object.keys(parsed))
+          console.log('Daily sales OK:', sum1.gotIds.length, 'branches', sum1.months)
         } else {
           showLater('⚠️ ยอดขายรายวัน: ไม่พบข้อมูล\nSheets: ' + wb.SheetNames.join(', '))
           console.warn('parseDailyFile empty. Sheets:', wb.SheetNames)
@@ -3467,7 +3467,7 @@ function Upload({ ctx }) {
           await DB.set('cp_hdtr', mergedDT)
           detail = { branches: sum2.gotIds.length, total: BRANCHES.length, months: sum2.months, full: sum2.ok }
           showLater(sum2.msg)
-          console.log('Daily tire OK:', bc, 'branches', td, 'days')
+          console.log('Daily tire OK:', sum2.gotIds.length, 'branches', sum2.months)
         } else {
           showLater('⚠️ ยอดขายยางรายวัน: ไม่พบข้อมูล\nSheets: ' + wb.SheetNames.join(', '))
           console.warn('parseDailyFile(tire) empty. Sheets:', wb.SheetNames)

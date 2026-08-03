@@ -2832,6 +2832,10 @@ const DAILY_BID_MAP = {
 
 /* สรุปผลการอ่านไฟล์รายวัน — บอกให้ชัดว่าได้สาขาไหน เดือนอะไร และขาดสาขาใดบ้าง
    เพื่อให้ผู้ใช้ตรวจได้เองทันทีตอนอัปโหลด ไม่ต้องรอไปเจอตัวเลขผิดในกราฟทีหลัง */
+/* แสดงกล่องข้อความหลังจอวาดเสร็จ — alert() เป็นแบบบล็อก
+   ถ้าเรียกทันทีจะค้างก่อนที่การ์ดสถานะจะเปลี่ยนสี ทำให้ดูเหมือนอัปโหลดไม่สำเร็จ */
+function showLater(msg) { setTimeout(() => alert(msg), 60) }
+
 function summarizeDaily(parsed, label) {
   const gotIds = Object.keys(parsed).filter(b => Object.keys(parsed[b] || {}).length > 0)
   const missing = BRANCHES.map(b => b.id).filter(id => !gotIds.includes(id))
@@ -3436,10 +3440,10 @@ function Upload({ ctx }) {
           const sum1 = summarizeDaily(parsed, 'ยอดขายรายวัน')
           setHistDailySales(prev => { const n={...prev}; Object.entries(parsed).forEach(([b,mo])=>{n[b]={...(n[b]||{}),...mo}}); DB.set('cp_hdsl',n); return n })
           detail = { branches: sum1.gotIds.length, total: BRANCHES.length, months: sum1.months, full: sum1.ok }
-          alert(sum1.msg)
+          showLater(sum1.msg)
           console.log('Daily sales OK:', bc, 'branches', td, 'days', Object.keys(parsed))
         } else {
-          alert('⚠️ ยอดขายรายวัน: ไม่พบข้อมูล\nSheets: ' + wb.SheetNames.join(', '))
+          showLater('⚠️ ยอดขายรายวัน: ไม่พบข้อมูล\nSheets: ' + wb.SheetNames.join(', '))
           console.warn('parseDailyFile empty. Sheets:', wb.SheetNames)
         }
       }
@@ -3454,10 +3458,10 @@ function Upload({ ctx }) {
           const sum2 = summarizeDaily(parsed, 'ยอดขายยางรายวัน')
           setHistDailyTire(prev => { const n={...prev}; Object.entries(parsed).forEach(([b,mo])=>{n[b]={...(n[b]||{}),...mo}}); DB.set('cp_hdtr',n); return n })
           detail = { branches: sum2.gotIds.length, total: BRANCHES.length, months: sum2.months, full: sum2.ok }
-          alert(sum2.msg)
+          showLater(sum2.msg)
           console.log('Daily tire OK:', bc, 'branches', td, 'days')
         } else {
-          alert('⚠️ ยอดขายยางรายวัน: ไม่พบข้อมูล\nSheets: ' + wb.SheetNames.join(', '))
+          showLater('⚠️ ยอดขายยางรายวัน: ไม่พบข้อมูล\nSheets: ' + wb.SheetNames.join(', '))
           console.warn('parseDailyFile(tire) empty. Sheets:', wb.SheetNames)
         }
       }

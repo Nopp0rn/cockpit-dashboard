@@ -474,8 +474,18 @@ function SemiGauge({ value, size=88, strokeWidth=10, color, trackColor='#E3E3DE'
   const [xv,yv] = pt(angleV)
   const bgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`
   const fgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${xv} ${yv}`
+  /* 2026-08-08: ตอนกดบันทึกภาพ เกจครึ่งวงกลมออกมาไม่ครบ (เห็นแค่เสี้ยวเดียว)
+     สาเหตุ: html2canvas แปลง SVG เป็นรูปภาพก่อนวาด ถ้าไม่ระบุ xmlns และ viewBox
+     ตัวแปลงจะเดาขนาดเอง ทำให้ภาพถูกย่อ/ตัดผิดตำแหน่ง
+     (เกจวงกลมเล็กที่ใช้ <circle> ออกมาครบ เพราะรูปทรงง่ายกว่า)
+     แก้โดยระบุ xmlns + viewBox ให้ตรงกับขนาดจริง */
+  const vbH = size/2 + strokeWidth/2 + 2
   return (
-    <svg width={size} height={size/2+strokeWidth/2+2} style={{display:'block',margin:'0 auto'}}>
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width={size} height={vbH}
+         viewBox={`0 0 ${size} ${vbH}`}
+         preserveAspectRatio="xMidYMid meet"
+         style={{display:'block',margin:'0 auto',overflow:'visible'}}>
       <path d={bgPath} fill="none" stroke={trackColor} strokeWidth={strokeWidth} strokeLinecap="round"/>
       {v>0 && <path d={fgPath} fill="none" stroke={c} strokeWidth={strokeWidth} strokeLinecap="round"/>}
     </svg>
@@ -496,7 +506,9 @@ function Ring({ value, size=62, stroke=8, color }) {
   const r = (size - stroke) / 2
   const circ = 2 * Math.PI * r
   return (
-    <svg width={size} height={size} style={{display:'block',transform:'rotate(-90deg)'}}>
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size}
+         viewBox={`0 0 ${size} ${size}`}
+         style={{display:'block',transform:'rotate(-90deg)'}}>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E3E3DE" strokeWidth={stroke}/>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={c} strokeWidth={stroke}
               strokeDasharray={`${(v/100)*circ} ${circ}`} strokeLinecap="round"/>
@@ -716,6 +728,18 @@ export default function App() {
         height: fullHeight,
         windowWidth: fullWidth,
         windowHeight: fullHeight,
+        // 2026-08-08: บังคับให้ SVG ทุกตัวมี xmlns + ขนาดชัดเจนก่อนแปลงเป็นรูป
+        //   html2canvas จะ clone หน้าจอก่อนวาด ถ้า SVG ไม่มี xmlns ตอน serialize
+        //   จะโหลดเป็นรูปไม่ได้ ทำให้เกจหายหรือวาดไม่ครบ
+        onclone: (doc) => {
+          doc.querySelectorAll('svg').forEach(sv => {
+            if (!sv.getAttribute('xmlns')) sv.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+            const w = sv.getAttribute('width'), h = sv.getAttribute('height')
+            if (w && h && !sv.getAttribute('viewBox')) {
+              sv.setAttribute('viewBox', `0 0 ${parseFloat(w)} ${parseFloat(h)}`)
+            }
+          })
+        },
       })
       const stamp = new Date().toISOString().slice(0,10)
       const filename = `cockpit-${tab}-${stamp}.jpg`

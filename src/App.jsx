@@ -461,33 +461,33 @@ function GaugeBar({ value, height=8 }) {
 
 /* ── Gauge ครึ่งวงกลม — เทียบเป้าแบบสปีดมิเตอร์ ใช้ร่วมกันได้ทุกแท็บ ── */
 function SemiGauge({ value, size=88, strokeWidth=10, color, trackColor='#E3E3DE' }) {
+  /* 2026-08-08 (แก้รอบสอง): เดิมวาดด้วยเส้นโค้ง <path> ซึ่งตอนกดบันทึกภาพ
+     ตัวแปลง SVG→รูป วาดออกมาไม่ครบ (เหลือแค่เสี้ยวเดียว) แม้ใส่ viewBox แล้วก็ตาม
+     เปลี่ยนมาใช้ <circle> + เส้นประ แบบเดียวกับเกจวงกลมเล็ก ซึ่งพิสูจน์แล้วว่าแคปออกมาครบ
+     หลักการ: วาดวงกลมเต็มวง แล้วให้เห็นแค่ครึ่งบน โดยกำหนดความยาวเส้นเป็นครึ่งเส้นรอบวง
+     แล้วหมุน 180° รอบจุดศูนย์กลาง เพื่อให้ครึ่งที่เห็นอยู่ด้านบน */
   const v = Math.max(0, Math.min(value ?? 0, 100))
   const c = color || statusColor(v)
-  const cx = size/2, cy = size/2, r = size/2 - strokeWidth/2 - 2
-  const pt = deg => {
-    const rad = deg*Math.PI/180
-    return [cx + r*Math.cos(rad), cy - r*Math.sin(rad)]
-  }
-  const [x1,y1] = pt(180)
-  const [x2,y2] = pt(0)
-  const angleV = 180 - 180*(v/100)
-  const [xv,yv] = pt(angleV)
-  const bgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`
-  const fgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${xv} ${yv}`
-  /* 2026-08-08: ตอนกดบันทึกภาพ เกจครึ่งวงกลมออกมาไม่ครบ (เห็นแค่เสี้ยวเดียว)
-     สาเหตุ: html2canvas แปลง SVG เป็นรูปภาพก่อนวาด ถ้าไม่ระบุ xmlns และ viewBox
-     ตัวแปลงจะเดาขนาดเอง ทำให้ภาพถูกย่อ/ตัดผิดตำแหน่ง
-     (เกจวงกลมเล็กที่ใช้ <circle> ออกมาครบ เพราะรูปทรงง่ายกว่า)
-     แก้โดยระบุ xmlns + viewBox ให้ตรงกับขนาดจริง */
+  const cx = size/2, cy = size/2
+  const r  = size/2 - strokeWidth/2 - 2
+  const circumference = 2 * Math.PI * r
+  const half = circumference / 2          // ครึ่งวงกลม = ส่วนที่แสดง
   const vbH = size/2 + strokeWidth/2 + 2
   return (
     <svg xmlns="http://www.w3.org/2000/svg"
          width={size} height={vbH}
          viewBox={`0 0 ${size} ${vbH}`}
-         preserveAspectRatio="xMidYMid meet"
-         style={{display:'block',margin:'0 auto',overflow:'visible'}}>
-      <path d={bgPath} fill="none" stroke={trackColor} strokeWidth={strokeWidth} strokeLinecap="round"/>
-      {v>0 && <path d={fgPath} fill="none" stroke={c} strokeWidth={strokeWidth} strokeLinecap="round"/>}
+         style={{display:'block',margin:'0 auto'}}>
+      <g transform={`rotate(180 ${cx} ${cy})`}>
+        <circle cx={cx} cy={cy} r={r} fill="none"
+                stroke={trackColor} strokeWidth={strokeWidth} strokeLinecap="round"
+                strokeDasharray={`${half} ${circumference}`}/>
+        {v > 0 && (
+          <circle cx={cx} cy={cy} r={r} fill="none"
+                  stroke={c} strokeWidth={strokeWidth} strokeLinecap="round"
+                  strokeDasharray={`${half * v / 100} ${circumference}`}/>
+        )}
+      </g>
     </svg>
   )
 }

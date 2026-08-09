@@ -460,36 +460,49 @@ function GaugeBar({ value, height=8 }) {
 }
 
 /* ── Gauge ครึ่งวงกลม — เทียบเป้าแบบสปีดมิเตอร์ ใช้ร่วมกันได้ทุกแท็บ ── */
-function SemiGauge({ value, size=88, strokeWidth=10, color, trackColor='#E3E3DE' }) {
-  /* 2026-08-08 (แก้รอบสอง): เดิมวาดด้วยเส้นโค้ง <path> ซึ่งตอนกดบันทึกภาพ
-     ตัวแปลง SVG→รูป วาดออกมาไม่ครบ (เหลือแค่เสี้ยวเดียว) แม้ใส่ viewBox แล้วก็ตาม
-     เปลี่ยนมาใช้ <circle> + เส้นประ แบบเดียวกับเกจวงกลมเล็ก ซึ่งพิสูจน์แล้วว่าแคปออกมาครบ
-     หลักการ: วาดวงกลมเต็มวง แล้วให้เห็นแค่ครึ่งบน โดยกำหนดความยาวเส้นเป็นครึ่งเส้นรอบวง
-     แล้วหมุน 180° รอบจุดศูนย์กลาง เพื่อให้ครึ่งที่เห็นอยู่ด้านบน */
+function SemiGauge({ value, size=88, strokeWidth=10, color, trackColor='#E3E3DE', bg='#FFFFFF' }) {
+  /* 2026-08-09 (แก้รอบสี่ — วาดลงบน canvas จริง)
+     ที่ลองมาแล้วและยังแคปออกมาไม่ครบ:
+       1) SVG <path> + viewBox        2) SVG <circle> + เส้นประ
+       3) CSS สี่เหลี่ยมมุมโค้ง + หมุน
+     วิธีนี้ต่างออกไป: วาดลงบน <canvas> ด้วยคำสั่งวาดโดยตรง
+     ตัวจับภาพจะคัดลอกพิกเซลจาก canvas ไปเลย ไม่ต้องแปลงหรือตีความ CSS
+     จึงได้ภาพเหมือนที่เห็นบนหน้าจอ */
   const v = Math.max(0, Math.min(value ?? 0, 100))
-  const c = color || statusColor(v)
-  const cx = size/2, cy = size/2
-  const r  = size/2 - strokeWidth/2 - 2
-  const circumference = 2 * Math.PI * r
-  const half = circumference / 2          // ครึ่งวงกลม = ส่วนที่แสดง
-  const vbH = size/2 + strokeWidth/2 + 2
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg"
-         width={size} height={vbH}
-         viewBox={`0 0 ${size} ${vbH}`}
-         style={{display:'block',margin:'0 auto'}}>
-      <g transform={`rotate(180 ${cx} ${cy})`}>
-        <circle cx={cx} cy={cy} r={r} fill="none"
-                stroke={trackColor} strokeWidth={strokeWidth} strokeLinecap="round"
-                strokeDasharray={`${half} ${circumference}`}/>
-        {v > 0 && (
-          <circle cx={cx} cy={cy} r={r} fill="none"
-                  stroke={c} strokeWidth={strokeWidth} strokeLinecap="round"
-                  strokeDasharray={`${half * v / 100} ${circumference}`}/>
-        )}
-      </g>
-    </svg>
-  )
+  const col = color || statusColor(v)
+  const ref = useRef(null)
+  const h = size / 2 + strokeWidth / 2 + 2
+
+  useEffect(() => {
+    const cv = ref.current
+    if (!cv) return
+    const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 3)
+    cv.width  = Math.round(size * dpr)
+    cv.height = Math.round(h * dpr)
+    const ctx = cv.getContext('2d')
+    if (!ctx) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, size, h)
+
+    const cx = size / 2, cy = size / 2
+    const r  = size / 2 - strokeWidth / 2 - 2
+    ctx.lineCap = 'round'
+    ctx.lineWidth = strokeWidth
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI)
+    ctx.strokeStyle = trackColor
+    ctx.stroke()
+
+    if (v > 0) {
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * (v / 100))
+      ctx.strokeStyle = col
+      ctx.stroke()
+    }
+  }, [v, col, size, strokeWidth, trackColor, h])
+
+  return <canvas ref={ref} style={{display:'block',margin:'0 auto',width:size,height:h}}/>
 }
 
 /* สีกำกับตัวเลขจริง vs เป้า — เขียว=เกินเป้า, ดำ=มีตัวเลขแล้ว(กำลังทำ), แดง=ยังไม่มียอดเลย */
@@ -720,6 +733,8 @@ export default function App() {
     const fullWidth  = Math.max(el.scrollWidth,  el.getBoundingClientRect().width)
     const fullHeight = Math.max(el.scrollHeight, el.getBoundingClientRect().height)
     try {
+      // รอให้เบราว์เซอร์วาดหน้าจอเสร็จ (เกจวาดบน canvas ใน useEffect)
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
       const canvas = await html2canvas(el, {
         backgroundColor: '#0d1117',
         useCORS: true,
@@ -731,6 +746,8 @@ export default function App() {
         // 2026-08-08: บังคับให้ SVG ทุกตัวมี xmlns + ขนาดชัดเจนก่อนแปลงเป็นรูป
         //   html2canvas จะ clone หน้าจอก่อนวาด ถ้า SVG ไม่มี xmlns ตอน serialize
         //   จะโหลดเป็นรูปไม่ได้ ทำให้เกจหายหรือวาดไม่ครบ
+        // canvas ที่ยังไม่ถูกวาดจะออกมาว่าง — รอ 1 เฟรมให้ useEffect วาดเสร็จก่อน
+        // (ทำใน onclone ไม่ได้ เพราะ clone ไม่รัน React จึงต้องรอก่อนเรียก html2canvas)
         onclone: (doc) => {
           doc.querySelectorAll('svg').forEach(sv => {
             if (!sv.getAttribute('xmlns')) sv.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
@@ -1568,7 +1585,7 @@ function ReservationTab({ctx}) {
                   <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center'}}>
                     <div style={{fontSize:9,color:'#666',fontWeight:700,marginBottom:1}}>🛞 ยอดรวม</div>
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:800,color:CI.red}}>{N(r.total)}</div>
-                    <SemiGauge value={r.pct} color={statusColor(r.pct)} size={52}/>
+                    <SemiGauge value={r.pct} color={statusColor(r.pct)} size={52} bg={CI.paper}/>
                     <div style={{fontSize:11,fontWeight:800,color:statusColor(r.pct),marginTop:-1}}>{r.pct.toFixed(1)}%</div>
                   </div>
                   <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:8,padding:'5px 4px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
@@ -2563,7 +2580,7 @@ function Tracker({ctx}) {
                   return <>
                 <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
                   <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>💰 ยอดขายวันนี้</div>
-                  <SemiGauge value={sp} color={sCol} size={74}/>
+                  <SemiGauge value={sp} color={sCol} size={74} bg={CI.paper}/>
                   <div style={{fontSize:19,fontWeight:900,color:sCol,marginTop:1}}>{sp.toFixed(0)}%</div>
                   <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:8,marginTop:4}}>
                     <div>
@@ -2579,7 +2596,7 @@ function Tracker({ctx}) {
                 </div>
                 <div style={{background:CI.paper,border:`1px solid ${CI.line}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
                   <div style={{fontSize:10.5,color:'#666',fontWeight:700,marginBottom:2}}>🏷️ ยางวันนี้</div>
-                  <SemiGauge value={tp} color={tCol} size={74}/>
+                  <SemiGauge value={tp} color={tCol} size={74} bg={CI.paper}/>
                   <div style={{fontSize:19,fontWeight:900,color:tCol,marginTop:1}}>{tp.toFixed(0)}%</div>
                   <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:8,marginTop:4}}>
                     <div>

@@ -460,6 +460,85 @@ function GaugeBar({ value, height=8 }) {
 }
 
 /* ── Gauge ครึ่งวงกลม — เทียบเป้าแบบสปีดมิเตอร์ ใช้ร่วมกันได้ทุกแท็บ ── */
+function NeedleGauge({ value, size=150, color, trackColor='#E3E3DE', label }) {
+  /* เกจครึ่งวงกลมพร้อมเข็มชี้ สำหรับหน้า MTD
+     วาดบน <canvas> เหมือน SemiGauge เพราะเป็นวิธีเดียวที่กดบันทึกภาพแล้วออกมาครบ
+     สเกล 0–150% เพื่อให้เห็นได้ว่าทำเกินเป้าไปเท่าไร (ถ้าจบที่ 100 เข็มจะตันตลอด) */
+  const MAXP = 150
+  const raw  = value ?? 0
+  const v    = Math.max(0, Math.min(raw, MAXP))
+  const col  = color || statusColor(raw)
+  const ref  = useRef(null)
+  const sw   = Math.round(size * 0.115)          // ความหนาวงแหวน
+  const h    = size / 2 + sw / 2 + 16            // เผื่อที่ให้ตัวเลขใต้เกจ
+
+  useEffect(() => {
+    const cv = ref.current
+    if (!cv) return
+    const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 3)
+    cv.width = Math.round(size * dpr); cv.height = Math.round(h * dpr)
+    const ctx = cv.getContext('2d'); if (!ctx) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, size, h)
+
+    const cx = size / 2, cy = size / 2
+    const r  = size / 2 - sw / 2 - 2
+    const ang = p => Math.PI + Math.PI * (Math.max(0, Math.min(p, MAXP)) / MAXP)
+
+    // วงแหวนพื้นหลัง
+    ctx.lineCap = 'round'; ctx.lineWidth = sw
+    ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI)
+    ctx.strokeStyle = trackColor; ctx.stroke()
+
+    // ส่วนที่ทำได้
+    if (v > 0) {
+      ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, ang(v))
+      ctx.strokeStyle = col; ctx.stroke()
+    }
+
+    // ขีดบอกระดับ 100% (เส้นเป้าหมาย)
+    const a100 = ang(100)
+    ctx.beginPath()
+    ctx.moveTo(cx + Math.cos(a100) * (r - sw / 2), cy + Math.sin(a100) * (r - sw / 2))
+    ctx.lineTo(cx + Math.cos(a100) * (r + sw / 2), cy + Math.sin(a100) * (r + sw / 2))
+    ctx.lineWidth = 2; ctx.lineCap = 'butt'
+    ctx.strokeStyle = '#15181C'; ctx.stroke()
+
+    // เข็มชี้
+    const a = ang(v), nr = r - sw / 2 - 3
+    ctx.beginPath()
+    ctx.moveTo(cx + Math.cos(a + Math.PI / 2) * 4, cy + Math.sin(a + Math.PI / 2) * 4)
+    ctx.lineTo(cx + Math.cos(a) * nr, cy + Math.sin(a) * nr)
+    ctx.lineTo(cx + Math.cos(a - Math.PI / 2) * 4, cy + Math.sin(a - Math.PI / 2) * 4)
+    ctx.closePath()
+    ctx.fillStyle = '#15181C'; ctx.fill()
+
+    // ดุมเข็ม
+    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, 2 * Math.PI)
+    ctx.fillStyle = '#15181C'; ctx.fill()
+    ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, 2 * Math.PI)
+    ctx.fillStyle = '#FFFFFF'; ctx.fill()
+
+    // ป้ายปลายสเกล
+    ctx.fillStyle = '#9AA1AC'
+    ctx.font = `700 ${Math.round(size * 0.075)}px 'Barlow Condensed', sans-serif`
+    ctx.textBaseline = 'top'
+    ctx.textAlign = 'left';  ctx.fillText('0', 1, cy + 3)
+    ctx.textAlign = 'right'; ctx.fillText(String(MAXP), size - 1, cy + 3)
+  }, [v, col, size, sw, trackColor, h])
+
+  return (
+    <div style={{textAlign:'center'}}>
+      <canvas ref={ref} style={{display:'block',margin:'0 auto',width:size,height:h}}/>
+      <div style={{marginTop:-12,fontSize:Math.round(size*0.19),fontWeight:900,color:col,
+                   fontFamily:"'JetBrains Mono',monospace",lineHeight:1}}>
+        {raw.toFixed(1)}%
+      </div>
+      {label && <div style={{fontSize:10,color:'#777',marginTop:3,fontFamily:'Barlow Condensed',fontWeight:700,letterSpacing:1}}>{label}</div>}
+    </div>
+  )
+}
+
 function SemiGauge({ value, size=88, strokeWidth=10, color, trackColor='#E3E3DE', bg='#FFFFFF' }) {
   /* 2026-08-09 (แก้รอบสี่ — วาดลงบน canvas จริง)
      ที่ลองมาแล้วและยังแคปออกมาไม่ครบ:
@@ -1818,9 +1897,16 @@ function MTDTab({ctx}) {
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
           <Card label="ยอดขาย MTD" value={fM(ts)} target={fM(Math.round(t.sales*MTD_R))}/>
-          <Card label="% เทียบเป้า" value={P(ts,t.sales*MTD_R).toFixed(1)+'%'} color={statusColor(P(ts,t.sales*MTD_R))}/>
+          {/* เกจเข็มชี้ — เห็นได้ทันทีว่าห่างเป้าแค่ไหน (ขีดดำ = เส้นเป้า 100%) */}
+          <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,
+                       padding:'8px 6px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <NeedleGauge value={P(ts,t.sales*MTD_R)} size={mobile?128:150} label="% เทียบเป้า"/>
+          </div>
           <Card label="ยาง MTD" value={N(m.tire)+' เส้น'} target={N(Math.round(t.tire*MTD_R))} color="#15181C"/>
-          <Card label="% เทียบเป้ายาง" value={P(m.tire,t.tire*MTD_R).toFixed(1)+'%'} color={statusColor(P(m.tire,t.tire*MTD_R))}/>
+          <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,
+                       padding:'8px 6px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <NeedleGauge value={P(m.tire,t.tire*MTD_R)} size={mobile?128:150} label="% เทียบเป้ายาง"/>
+          </div>
         </div>
         <div style={{background:'#161b25',border:'1px solid #2d3548',borderRadius:8,padding:12,marginBottom:10}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>

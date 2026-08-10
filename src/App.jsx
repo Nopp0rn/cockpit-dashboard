@@ -460,17 +460,18 @@ function GaugeBar({ value, height=8 }) {
 }
 
 /* ── Gauge ครึ่งวงกลม — เทียบเป้าแบบสปีดมิเตอร์ ใช้ร่วมกันได้ทุกแท็บ ── */
-function NeedleGauge({ value, size=150, color, trackColor='#E3E3DE', label }) {
-  /* เกจครึ่งวงกลมพร้อมเข็มชี้ สำหรับหน้า MTD
-     วาดบน <canvas> เหมือน SemiGauge เพราะเป็นวิธีเดียวที่กดบันทึกภาพแล้วออกมาครบ
-     สเกล 0–150% เพื่อให้เห็นได้ว่าทำเกินเป้าไปเท่าไร (ถ้าจบที่ 100 เข็มจะตันตลอด) */
-  const MAXP = 150
-  const raw  = value ?? 0
-  const v    = Math.max(0, Math.min(raw, MAXP))
-  const col  = color || statusColor(raw)
-  const ref  = useRef(null)
-  const sw   = Math.round(size * 0.115)          // ความหนาวงแหวน
-  const h    = size / 2 + sw / 2 + 16            // เผื่อที่ให้ตัวเลขใต้เกจ
+/* ── เกจวัดมาตรฐานของระบบ ──────────────────────────────────────────
+   ใช้แบบเดียวกันทุกหน้า: ครึ่งวงกลม + เข็มชี้ + สี 3 สถานะ
+     0–89.99%  แดง      90–99.99% เหลือง      100%+ เขียว
+   สเกลตันที่ 100% (ทำเกินเป้า เข็มชี้สุดขวา)
+   วาดบน <canvas> เพราะเป็นวิธีเดียวที่กดบันทึกภาพแล้วออกมาครบ
+   (SVG และ CSS ลองแล้วตัวจับภาพวาดไม่ครบ) */
+function GaugeCanvas({ value, size=88, strokeWidth, color, trackColor='#E3E3DE', needle=true }) {
+  const pct = Math.max(0, Math.min(value ?? 0, 100))     // ตันที่ 100
+  const col = color || statusColor(value ?? 0)           // สีดูจากค่าจริง (เกิน 100 ก็ยังเขียว)
+  const sw  = strokeWidth || Math.max(6, Math.round(size * 0.115))
+  const ref = useRef(null)
+  const h   = size / 2 + sw / 2 + 2
 
   useEffect(() => {
     const cv = ref.current
@@ -483,105 +484,54 @@ function NeedleGauge({ value, size=150, color, trackColor='#E3E3DE', label }) {
 
     const cx = size / 2, cy = size / 2
     const r  = size / 2 - sw / 2 - 2
-    const ang = p => Math.PI + Math.PI * (Math.max(0, Math.min(p, MAXP)) / MAXP)
+    const ang = p => Math.PI + Math.PI * (p / 100)
 
-    // วงแหวนพื้นหลัง
     ctx.lineCap = 'round'; ctx.lineWidth = sw
     ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI)
     ctx.strokeStyle = trackColor; ctx.stroke()
 
-    // ส่วนที่ทำได้
-    if (v > 0) {
-      ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, ang(v))
+    if (pct > 0) {
+      ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, ang(pct))
       ctx.strokeStyle = col; ctx.stroke()
     }
 
-    // ขีดบอกระดับ 100% (เส้นเป้าหมาย)
-    const a100 = ang(100)
-    ctx.beginPath()
-    ctx.moveTo(cx + Math.cos(a100) * (r - sw / 2), cy + Math.sin(a100) * (r - sw / 2))
-    ctx.lineTo(cx + Math.cos(a100) * (r + sw / 2), cy + Math.sin(a100) * (r + sw / 2))
-    ctx.lineWidth = 2; ctx.lineCap = 'butt'
-    ctx.strokeStyle = '#15181C'; ctx.stroke()
+    if (needle && size >= 48) {
+      const a = ang(pct), nr = r - sw / 2 - Math.max(2, size * 0.03)
+      const hub = Math.max(3, size * 0.045)
+      ctx.beginPath()
+      ctx.moveTo(cx + Math.cos(a + Math.PI/2) * hub*0.6, cy + Math.sin(a + Math.PI/2) * hub*0.6)
+      ctx.lineTo(cx + Math.cos(a) * nr, cy + Math.sin(a) * nr)
+      ctx.lineTo(cx + Math.cos(a - Math.PI/2) * hub*0.6, cy + Math.sin(a - Math.PI/2) * hub*0.6)
+      ctx.closePath(); ctx.fillStyle = '#15181C'; ctx.fill()
+      ctx.beginPath(); ctx.arc(cx, cy, hub, 0, 2*Math.PI)
+      ctx.fillStyle = '#15181C'; ctx.fill()
+      ctx.beginPath(); ctx.arc(cx, cy, hub*0.4, 0, 2*Math.PI)
+      ctx.fillStyle = '#FFFFFF'; ctx.fill()
+    }
+  }, [pct, col, size, sw, trackColor, h, needle])
 
-    // เข็มชี้
-    const a = ang(v), nr = r - sw / 2 - 3
-    ctx.beginPath()
-    ctx.moveTo(cx + Math.cos(a + Math.PI / 2) * 4, cy + Math.sin(a + Math.PI / 2) * 4)
-    ctx.lineTo(cx + Math.cos(a) * nr, cy + Math.sin(a) * nr)
-    ctx.lineTo(cx + Math.cos(a - Math.PI / 2) * 4, cy + Math.sin(a - Math.PI / 2) * 4)
-    ctx.closePath()
-    ctx.fillStyle = '#15181C'; ctx.fill()
+  return <canvas ref={ref} style={{display:'block',margin:'0 auto',width:size,height:h}}/>
+}
 
-    // ดุมเข็ม
-    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, 2 * Math.PI)
-    ctx.fillStyle = '#15181C'; ctx.fill()
-    ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, 2 * Math.PI)
-    ctx.fillStyle = '#FFFFFF'; ctx.fill()
+/* ใช้แทนของเดิมได้เลย — รับพารามิเตอร์ชุดเดิม */
+function SemiGauge({ value, size=88, strokeWidth, color, trackColor='#E3E3DE', bg }) {
+  return <GaugeCanvas value={value} size={size} strokeWidth={strokeWidth} color={color} trackColor={trackColor}/>
+}
 
-    // ป้ายปลายสเกล
-    ctx.fillStyle = '#9AA1AC'
-    ctx.font = `700 ${Math.round(size * 0.075)}px 'Barlow Condensed', sans-serif`
-    ctx.textBaseline = 'top'
-    ctx.textAlign = 'left';  ctx.fillText('0', 1, cy + 3)
-    ctx.textAlign = 'right'; ctx.fillText(String(MAXP), size - 1, cy + 3)
-  }, [v, col, size, sw, trackColor, h])
-
+/* เกจพร้อมตัวเลข % และป้ายกำกับ — ใช้ในหน้า MTD */
+function NeedleGauge({ value, size=150, color, trackColor='#E3E3DE', label, decimals=1 }) {
+  const raw = value ?? 0
+  const col = color || statusColor(raw)
   return (
     <div style={{textAlign:'center'}}>
-      <canvas ref={ref} style={{display:'block',margin:'0 auto',width:size,height:h}}/>
-      <div style={{marginTop:-12,fontSize:Math.round(size*0.19),fontWeight:900,color:col,
+      <GaugeCanvas value={raw} size={size} color={col} trackColor={trackColor}/>
+      <div style={{marginTop:2,fontSize:Math.round(size*0.19),fontWeight:900,color:col,
                    fontFamily:"'JetBrains Mono',monospace",lineHeight:1}}>
-        {raw.toFixed(1)}%
+        {raw.toFixed(decimals)}%
       </div>
       {label && <div style={{fontSize:10,color:'#777',marginTop:3,fontFamily:'Barlow Condensed',fontWeight:700,letterSpacing:1}}>{label}</div>}
     </div>
   )
-}
-
-function SemiGauge({ value, size=88, strokeWidth=10, color, trackColor='#E3E3DE', bg='#FFFFFF' }) {
-  /* 2026-08-09 (แก้รอบสี่ — วาดลงบน canvas จริง)
-     ที่ลองมาแล้วและยังแคปออกมาไม่ครบ:
-       1) SVG <path> + viewBox        2) SVG <circle> + เส้นประ
-       3) CSS สี่เหลี่ยมมุมโค้ง + หมุน
-     วิธีนี้ต่างออกไป: วาดลงบน <canvas> ด้วยคำสั่งวาดโดยตรง
-     ตัวจับภาพจะคัดลอกพิกเซลจาก canvas ไปเลย ไม่ต้องแปลงหรือตีความ CSS
-     จึงได้ภาพเหมือนที่เห็นบนหน้าจอ */
-  const v = Math.max(0, Math.min(value ?? 0, 100))
-  const col = color || statusColor(v)
-  const ref = useRef(null)
-  const h = size / 2 + strokeWidth / 2 + 2
-
-  useEffect(() => {
-    const cv = ref.current
-    if (!cv) return
-    const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 3)
-    cv.width  = Math.round(size * dpr)
-    cv.height = Math.round(h * dpr)
-    const ctx = cv.getContext('2d')
-    if (!ctx) return
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, size, h)
-
-    const cx = size / 2, cy = size / 2
-    const r  = size / 2 - strokeWidth / 2 - 2
-    ctx.lineCap = 'round'
-    ctx.lineWidth = strokeWidth
-
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI)
-    ctx.strokeStyle = trackColor
-    ctx.stroke()
-
-    if (v > 0) {
-      ctx.beginPath()
-      ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * (v / 100))
-      ctx.strokeStyle = col
-      ctx.stroke()
-    }
-  }, [v, col, size, strokeWidth, trackColor, h])
-
-  return <canvas ref={ref} style={{display:'block',margin:'0 auto',width:size,height:h}}/>
 }
 
 /* สีกำกับตัวเลขจริง vs เป้า — เขียว=เกินเป้า, ดำ=มีตัวเลขแล้ว(กำลังทำ), แดง=ยังไม่มียอดเลย */
@@ -591,51 +541,6 @@ function actualColor(actualVal, pct) {
 }
 
 /* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
-/* ── Ring — เกจวงกลมเทียบเป้า ใช้ร่วมกันได้ทุกแท็บ ── */
-function Ring({ value, size=62, stroke=8, color }) {
-  const v = Math.max(0, Math.min(value ?? 0, 100))
-  const c = color || statusColor(v)
-  const r = (size - stroke) / 2
-  const circ = 2 * Math.PI * r
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size}
-         viewBox={`0 0 ${size} ${size}`}
-         style={{display:'block',transform:'rotate(-90deg)'}}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E3E3DE" strokeWidth={stroke}/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={c} strokeWidth={stroke}
-              strokeDasharray={`${(v/100)*circ} ${circ}`} strokeLinecap="round"/>
-    </svg>
-  )
-}
-
-function BranchSelect({sel, onSel, showAll=true, mobile}) {
-  if (mobile) return (
-    <div style={{marginBottom:12}}>
-      <select value={sel} onChange={e=>onSel(e.target.value)}
-        style={{width:'100%',background:'#1e2538',border:`1px solid ${CI.yellow}`,borderRadius:8,padding:'12px 14px',color:CI.yellow,fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,outline:'none'}}>
-        {showAll && <option value="ALL">🌐 รวมทุกสาขา</option>}
-        {BRANCHES.map(b=><option key={b.id} value={b.id}>{b.id} — {b.short}</option>)}
-      </select>
-    </div>
-  )
-  return (
-    <div style={{width:165,flexShrink:0}}>
-      <div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:6,fontFamily:'Barlow Condensed'}}>เลือกสาขา</div>
-      {showAll && <>
-        <button onClick={()=>onSel('ALL')} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',marginBottom:5,borderRadius:6,cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,background:sel==='ALL'?'#1e2538':'transparent',border:sel==='ALL'?`1px solid ${CI.yellow}`:'1px solid #2d3548',color:sel==='ALL'?CI.yellow:'#9ca3af'}}>
-          🌐 รวมทุกสาขา
-        </button>
-        <div style={{borderBottom:'1px solid #2d3548',marginBottom:5}}/>
-      </>}
-      {BRANCHES.map((b,i) => (
-        <button key={b.id} onClick={()=>onSel(b.id)} style={{display:'block',width:'100%',textAlign:'left',padding:'7px 10px',marginBottom:3,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:600,fontFamily:'Barlow',background:sel===b.id?'#1e2538':'transparent',border:sel===b.id?`1px solid ${BCLR[i]}`:'1px solid transparent',color:sel===b.id?BCLR[i]:'#9ca3af',transition:'all .15s'}}>
-          <span style={{fontSize:9,marginRight:3,color:BCLR[i]}}>●</span><span style={{fontSize:9,color:'#4b5563',marginRight:3}}>{b.id}</span>{b.short}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 /* ════════════════════════════════════════════════════════
    LOCK SCREEN — ก่อนเข้าแอปต้องใส่รหัสผ่าน
    - authHash=null (ยังไม่มีใครตั้งรหัส) → โหมดตั้งรหัสผ่านครั้งแรก
@@ -1435,9 +1340,7 @@ function Overview({ctx}) {
             </div>
           </div>
           <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
-            <Ring value={P(totS,totT)}/>
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                         fontSize:13,fontWeight:900,color:statusColor(P(totS,totT))}}>{P(totS,totT).toFixed(0)}%</div>
+            <NeedleGauge value={P(totS,totT)} size={64} decimals={0}/>
           </div>
         </div>
         <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
@@ -1455,9 +1358,7 @@ function Overview({ctx}) {
             </div>
           </div>
           <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
-            <Ring value={P(totTire,totTireT)}/>
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                         fontSize:13,fontWeight:900,color:statusColor(P(totTire,totTireT))}}>{P(totTire,totTireT).toFixed(0)}%</div>
+            <NeedleGauge value={P(totTire,totTireT)} size={64} decimals={0}/>
           </div>
         </div>
 
@@ -2598,11 +2499,7 @@ function Tracker({ctx}) {
             <div style={{fontSize:10,color:'#777'}}>เป้า/วัน {fM(todayTotTgt)}</div>
           </div>
           <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
-            <Ring value={todayTotTgt>0?P(todayTotSales,todayTotTgt):0} size={56} stroke={7}/>
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                         fontSize:11.5,fontWeight:900,color:statusColor(todayTotTgt>0?P(todayTotSales,todayTotTgt):0)}}>
-              {todayTotTgt>0?P(todayTotSales,todayTotTgt).toFixed(0):0}%
-            </div>
+            <NeedleGauge value={todayTotTgt>0?P(todayTotSales,todayTotTgt):0} size={56} decimals={0}/>
           </div>
         </div>
         <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
@@ -2612,11 +2509,7 @@ function Tracker({ctx}) {
             <div style={{fontSize:10,color:'#777'}}>เป้า/วัน {N(todayTotTireT)} เส้น</div>
           </div>
           <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
-            <Ring value={todayTotTireT>0?P(todayTotTire,todayTotTireT):0} size={56} stroke={7}/>
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                         fontSize:11.5,fontWeight:900,color:statusColor(todayTotTireT>0?P(todayTotTire,todayTotTireT):0)}}>
-              {todayTotTireT>0?P(todayTotTire,todayTotTireT).toFixed(0):0}%
-            </div>
+            <NeedleGauge value={todayTotTireT>0?P(todayTotTire,todayTotTireT):0} size={56} decimals={0}/>
           </div>
         </div>
 
@@ -2627,9 +2520,7 @@ function Tracker({ctx}) {
             <div style={{fontSize:18,fontWeight:900,color:CI.red,fontFamily:"'JetBrains Mono',monospace"}}>{fM(totTS)}</div>
           </div>
           <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
-            <Ring value={P(totTS,totTgt)} size={54} stroke={7}/>
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                         fontSize:11,fontWeight:900,color:statusColor(P(totTS,totTgt))}}>{P(totTS,totTgt).toFixed(0)}%</div>
+            <NeedleGauge value={P(totTS,totTgt)} size={54} decimals={0}/>
           </div>
         </div>
         <div style={{background:CI.white,border:`1px solid ${CI.line}`,borderRadius:10,padding:'10px 12px',display:'flex',justifyContent:'space-between',gap:6}}>
@@ -2638,9 +2529,7 @@ function Tracker({ctx}) {
             <div style={{fontSize:18,fontWeight:900,color:'#15181C',fontFamily:"'JetBrains Mono',monospace"}}>{N(totTire)} <span style={{fontSize:12}}>เส้น</span></div>
           </div>
           <div style={{position:'relative',flexShrink:0,alignSelf:'center'}}>
-            <Ring value={P(totTire,totTireT)} size={54} stroke={7}/>
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-                         fontSize:11,fontWeight:900,color:statusColor(P(totTire,totTireT))}}>{P(totTire,totTireT).toFixed(0)}%</div>
+            <NeedleGauge value={P(totTire,totTireT)} size={54} decimals={0}/>
           </div>
         </div>
       </div>

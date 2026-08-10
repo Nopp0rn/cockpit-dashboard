@@ -541,6 +541,34 @@ function actualColor(actualVal, pct) {
 }
 
 /* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
+function BranchSelect({sel, onSel, showAll=true, mobile}) {
+  if (mobile) return (
+    <div style={{marginBottom:12}}>
+      <select value={sel} onChange={e=>onSel(e.target.value)}
+        style={{width:'100%',background:'#1e2538',border:`1px solid ${CI.yellow}`,borderRadius:8,padding:'12px 14px',color:CI.yellow,fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,outline:'none'}}>
+        {showAll && <option value="ALL">🌐 รวมทุกสาขา</option>}
+        {BRANCHES.map(b=><option key={b.id} value={b.id}>{b.id} — {b.short}</option>)}
+      </select>
+    </div>
+  )
+  return (
+    <div style={{width:165,flexShrink:0}}>
+      <div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:6,fontFamily:'Barlow Condensed'}}>เลือกสาขา</div>
+      {showAll && <>
+        <button onClick={()=>onSel('ALL')} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',marginBottom:5,borderRadius:6,cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,background:sel==='ALL'?'#1e2538':'transparent',border:sel==='ALL'?`1px solid ${CI.yellow}`:'1px solid #2d3548',color:sel==='ALL'?CI.yellow:'#9ca3af'}}>
+          🌐 รวมทุกสาขา
+        </button>
+        <div style={{borderBottom:'1px solid #2d3548',marginBottom:5}}/>
+      </>}
+      {BRANCHES.map((b,i) => (
+        <button key={b.id} onClick={()=>onSel(b.id)} style={{display:'block',width:'100%',textAlign:'left',padding:'7px 10px',marginBottom:3,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:600,fontFamily:'Barlow',background:sel===b.id?'#1e2538':'transparent',border:sel===b.id?`1px solid ${BCLR[i]}`:'1px solid transparent',color:sel===b.id?BCLR[i]:'#9ca3af',transition:'all .15s'}}>
+          <span style={{fontSize:9,marginRight:3,color:BCLR[i]}}>●</span><span style={{fontSize:9,color:'#4b5563',marginRight:3}}>{b.id}</span>{b.short}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /* ════════════════════════════════════════════════════════
    LOCK SCREEN — ก่อนเข้าแอปต้องใส่รหัสผ่าน
    - authHash=null (ยังไม่มีใครตั้งรหัส) → โหมดตั้งรหัสผ่านครั้งแรก

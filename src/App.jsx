@@ -2338,8 +2338,15 @@ function Monthly({ctx}) {
     // 2024/2025: getTireQByMonth ใช้ uploadedMtAll/EXCEL_MT_ALL (Total sheet) ก่อนเสมอ
     row[2024] = getTireQByMonth(bid, 2024, i)
     row[2025] = getTireQByMonth(bid, 2025, i)
-    // 2026: uploadedMtAll (upload ล่าสุด) > EXCEL_MT_ALL > EXCEL_MT per branch > MTD de
-    if (isAll) {
+    /* 2026-08-16 (แก้ยอดยางเดือนปัจจุบันไม่ตรง):
+       เดิมเดือนปัจจุบันใช้ข้อมูลจาก Excel ก่อนเสมอ แต่ไฟล์ Excel เป็นข้อมูล ณ วันที่ export
+       (เดือน ส.ค. มีแค่ 188 เส้น) ทั้งที่สาขากรอกจริงแล้ว 1,765 เส้น
+       เดือนที่ยังไม่จบจึงต้องใช้ยอดที่สาขากรอกรายวัน (MTD) ซึ่งสดกว่าเสมอ
+       ส่วนเดือนที่ผ่านมาแล้วยังใช้ Excel ตามเดิม เพราะเป็นตัวเลขปิดเดือนที่ถูกต้องกว่า */
+    const isCurMonth = (i + 1) === cfg.month
+    if (isCurMonth && tire2026[i] > 0) {
+      row[2026] = tire2026[i]                    // เดือนปัจจุบัน = ยอดกรอกจริง
+    } else if (isAll) {
       const u=uploadedMtAll?.['2026']?.[String(i+1)]
       const e=EXCEL_MT_ALL['2026']?.[String(i+1)]
       if (u>0) row[2026]=u
@@ -2419,7 +2426,7 @@ function Monthly({ctx}) {
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
             <div>
               <div style={{fontFamily:'Barlow Condensed',fontWeight:700,fontSize:14,color:'#FFFFFF'}}>🏷️ ยางรายเดือน (เส้น)</div>
-              <div style={{fontSize:9,color:Object.keys(histTireQ).length>0?'#FFFFFF':'#6b7280'}}>{Object.keys(histTireQ).length>0?`📊 ข้อมูลจาก Excel (${Object.keys(histTireQ).length} สาขา)`:"2026 = เฉพาะเดือนที่กรอกข้อมูลแล้ว"}</div>
+              <div style={{fontSize:9,color:Object.keys(histTireQ).length>0?'#FFFFFF':'#6b7280'}}>{`📊 เดือนก่อนหน้า = Excel · เดือนนี้ = ยอดกรอกจริง (MTD)`}</div>
             </div>
             <div style={{display:'flex',gap:5}}>
               {[2024,2025,2026].map(yr=>(

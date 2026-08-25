@@ -589,7 +589,7 @@ function BranchSelect({sel, onSel, showAll=true, mobile}) {
           border:`1px solid ${locked?'#4b5563':CI.yellow}`,borderRadius:8,padding:'12px 14px',
           color:locked?'#9ca3af':CI.yellow,fontFamily:'Barlow Condensed',fontWeight:700,
           fontSize:15,outline:'none',opacity:locked?0.75:1}}>
-        {showAll && <option value="ALL">🌐 รวมทุกสาขา</option>}
+        {showAll && !locked && <option value="ALL">🌐 รวมทุกสาขา</option>}
         {BRANCHES.map(b=><option key={b.id} value={b.id}>{b.id} — {b.short}</option>)}
       </select>
       <LockBtn size={46}/>
@@ -602,7 +602,7 @@ function BranchSelect({sel, onSel, showAll=true, mobile}) {
         <LockBtn size={26}/>
       </div>
       {locked && <div style={{fontSize:10,color:CI.yellow,marginBottom:6}}>🔒 ล็อกที่ {locked}</div>}
-      {showAll && <>
+      {showAll && !locked && <>
         <button disabled={!!locked} onClick={()=>onSel('ALL')} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',marginBottom:5,borderRadius:6,cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,background:sel==='ALL'?'#1e2538':'transparent',border:sel==='ALL'?`1px solid ${CI.yellow}`:'1px solid #2d3548',color:sel==='ALL'?CI.yellow:'#9ca3af'}}>
           🌐 รวมทุกสาขา
         </button>
@@ -1341,6 +1341,14 @@ export default function App() {
 
       {/* CONTENT — scrollable */}
       <div ref={contentRef} style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:compact?'10px 10px':'18px 20px',paddingBottom:`calc(${compact?'10px':'18px'} + env(safe-area-inset-bottom,0px))`,maxWidth:1440,margin:'0 auto',width:'100%'}}>
+        {/* 2026-08-25: ย้ายตัวเลือกสาขามาไว้ที่เดียว ใช้ร่วมกันทุกหน้า
+            เดิมแต่ละหน้าวางเอง 10 จุด ทำให้ต้องแก้ 10 ที่ทุกครั้ง และเคยตกหล่นจนสาขาไม่ตรงกัน
+            หน้าที่ไม่ต้องเลือกสาขา (Excel / ตั้งค่า) จะไม่แสดง
+            หน้ากรอกยอดเลือก "รวมทุกสาขา" ไม่ได้ จึงซ่อนตัวเลือกนั้นเฉพาะหน้านั้น */}
+        {!['upload','settings'].includes(tab) && (
+          <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}
+            showAll={tab !== 'entry'}/>
+        )}
         {tab==='overview' && <Overview ctx={ctx}/>}
         {tab==='morning'  && <MorningBrief ctx={ctx} selBr={selBr} setSelBr={setSelBr}/>}
         {tab==='mtd'      && <MTDTab ctx={ctx}/>}
@@ -1397,8 +1405,7 @@ function Overview({ctx}) {
   const gc = p => (p>=100?STATUS.over:p>=90?STATUS.near:STATUS.push)
 
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1,minWidth:0}}>
       {/* Summary cards row */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
@@ -1586,8 +1593,7 @@ function ReservationTab({ctx}) {
   if (loading) return <div style={{padding:30,textAlign:'center',color:'#94a3b8',fontFamily:'Barlow Condensed'}}>กำลังโหลดยอดจองยาง...</div>
 
   return (
-    <div style={{display:'flex',gap:14,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?14:18,color:CI.red,marginBottom:3}}>
           🛞 ยอดจองยาง — {MONTH_TH} {cfg.year} {isAll?'(ทุกสาขา)':`(${BRANCHES.find(x=>x.id===selBr)?.name})`}
@@ -1748,8 +1754,7 @@ function MTDTab({ctx}) {
   const READCLR2 = ['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
   if (isAll) return (
     /* ══ ALL BRANCHES — white-card style เหมือนหน้าหลัก/Tracker/สินค้า ══ */
-    <div style={{display:'flex',gap:14,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?14:18,color:CI.red,marginBottom:3}}>
           MTD VS เป้า — ทุกสาขา (1–{TODAY_D} {MONTH_TH} {cfg.year})
@@ -1867,8 +1872,7 @@ function MTDTab({ctx}) {
 
   /* ══ SINGLE BRANCH — daily + monthly trend ══ */
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:CI.red,letterSpacing:2,marginBottom:10}}>
           {selBr} — {BRANCHES.find(x=>x.id===selBr)?.name}
@@ -1952,8 +1956,7 @@ function Products({ctx}) {
   ]
 
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?13:16,color:CI.red,marginBottom:10,letterSpacing:1}}>
           สินค้า MTD — {isAll?'ทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}
@@ -2227,8 +2230,7 @@ function Daily({ctx}) {
 
   // ── JSX ────────────────────────────────────────────────────────
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
           <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:CI.red}}>
@@ -2434,8 +2436,7 @@ function Monthly({ctx}) {
   const hasTireSalesData = tireSalesData.some(r => r[2024] || r[2025] || r[2026])
 
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:CI.red,letterSpacing:2,marginBottom:12}}>
           รายเดือน — {isAll?'รวมทุกสาขา':BRANCHES.find(x=>x.id===selBr)?.name}
@@ -2564,8 +2565,7 @@ function Tracker({ctx}) {
 
 
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1,minWidth:0}}>
       <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:22,color:CI.red,letterSpacing:2,marginBottom:6}}>
         🎯 TRACKER — {TODAY_D} {MONTH_TH} {cfg.year}
@@ -2746,8 +2746,7 @@ function ASP({ctx}) {
   const aM=getAllMTD(),aTS=getAllTS(),aASP=aM.tire>0&&aM.tireSales>0?aM.tireSales/aM.tire:0,aSPD=aM.jobOrder>0?aTS/aM.jobOrder:0
   const READCLR=['#B45309','#1D4ED8','#047857','#B91C1C','#6D28D9','#C2410C','#0E7490','#BE123C','#4D7C0F','#BE185D']
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
-      <BranchSelect sel={selBr} onSel={setSelBr} mobile={mobile}/>
+    <div style={{display:'block',width:'100%'}}>
       <div style={{flex:1}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:CI.red,letterSpacing:2,marginBottom:10}}>💰 ASP & SPD</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
@@ -2803,18 +2802,24 @@ function ASP({ctx}) {
 
 /* ════ ENTRY — กรอกยอดรายวัน ════ */
 function Entry({ctx}) {
-  const {de,saveDay,delDay,getMTD,getTS,getT,MTD_R,TODAY_D,TOTAL_D,MONTH_TH,cfg,mobile} = ctx
-  const [selBr, setSelBr] = useState('009')
+  /* 2026-08-25 (แก้สาขาไม่ตรงกับหน้าอื่น):
+     เดิมหน้านี้เก็บสาขาของตัวเองแยก และตั้งค่าเริ่มต้นเป็น '009' ตายตัว
+     ทำให้เลือกสาขาที่หน้าอื่นแล้ว พอมาหน้ากรอกยอดกลับเป็นคนละสาขา
+     — เสี่ยงกรอกยอดผิดสาขาโดยไม่รู้ตัว และทำให้ระบบล็อกสาขาไม่มีผลกับหน้านี้
+     แก้เป็นใช้สาขาร่วมกับทั้งแอป (ctx) เหมือนหน้าอื่นทุกหน้า */
+  const {de,saveDay,delDay,getMTD,getTS,getT,MTD_R,TODAY_D,TOTAL_D,MONTH_TH,cfg,mobile,
+         selBr: ctxSel, setSelBr} = ctx
+  // หน้านี้เลือก "รวมทุกสาขา" ไม่ได้ ถ้ามาจากหน้าอื่นที่เลือก ALL ให้ตกไปที่สาขาแรก
+  const selBr = (ctxSel && ctxSel !== 'ALL') ? ctxSel : BRANCHES[0].id
   const [selDay, setSelDay] = useState(TODAY_D)
   const t=getT(selBr), row=de[selBr]?.[selDay]||EMPTY_ROW(), mtd=getMTD(selBr), ts=getTS(selBr)
   const filled=Object.keys(de[selBr]||{}).map(Number).sort((a,b)=>a-b)
   return (
-    <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
+    <div style={{display:'block',width:'100%'}}>
       {/* Branch sidebar (no ALL) */}
       {/* 2026-08-25: เดิมหน้านี้เขียนตัวเลือกสาขาแยกของตัวเอง ทำให้ปุ่มล็อกไม่ขึ้น
           เปลี่ยนมาใช้ BranchSelect ตัวเดียวกับหน้าอื่น จะได้มีปุ่มล็อกครบทุกหน้า
           showAll={false} เพราะหน้ากรอกยอดต้องเลือกสาขาเดียวเท่านั้น */}
-      <BranchSelect sel={selBr} onSel={setSelBr} showAll={false} mobile={mobile}/>
       <div style={{flex:1}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#E2231A',letterSpacing:2,marginBottom:10}}>✏️ กรอกยอดรายวัน — {BRANCHES.find(x=>x.id===selBr)?.name}</div>
         {/* Day picker */}

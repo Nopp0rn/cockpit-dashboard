@@ -583,12 +583,16 @@ function BranchSelect({sel, onSel, showAll=true, mobile}) {
   )
 
   if (mobile) return (
-    <div style={{marginBottom:12}}>
-      <select value={sel} onChange={e=>onSel(e.target.value)}
-        style={{width:'100%',background:'#1e2538',border:`1px solid ${CI.yellow}`,borderRadius:8,padding:'12px 14px',color:CI.yellow,fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,outline:'none'}}>
+    <div style={{marginBottom:12,display:'flex',gap:8,alignItems:'stretch'}}>
+      <select value={sel} onChange={e=>onSel(e.target.value)} disabled={!!locked}
+        style={{flex:1,minWidth:0,background:'#1e2538',
+          border:`1px solid ${locked?'#4b5563':CI.yellow}`,borderRadius:8,padding:'12px 14px',
+          color:locked?'#9ca3af':CI.yellow,fontFamily:'Barlow Condensed',fontWeight:700,
+          fontSize:15,outline:'none',opacity:locked?0.75:1}}>
         {showAll && <option value="ALL">🌐 รวมทุกสาขา</option>}
         {BRANCHES.map(b=><option key={b.id} value={b.id}>{b.id} — {b.short}</option>)}
       </select>
+      <LockBtn size={46}/>
     </div>
   )
   return (
@@ -2807,23 +2811,10 @@ function Entry({ctx}) {
   return (
     <div style={{display:'flex',gap:16,flexDirection:mobile?'column':'row'}}>
       {/* Branch sidebar (no ALL) */}
-      {mobile ? (
-        <div style={{marginBottom:0}}>
-          <select value={selBr} onChange={e=>setSelBr(e.target.value)}
-            style={{width:'100%',background:'#1e2538',border:'1px solid #E2231A',borderRadius:8,padding:'11px 14px',color:'#E2231A',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:15,outline:'none',marginBottom:10}}>
-            {BRANCHES.map(b=><option key={b.id} value={b.id}>{b.id} — {b.short}</option>)}
-          </select>
-        </div>
-      ) : (
-        <div style={{width:165,flexShrink:0}}>
-          <div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:6,fontFamily:'Barlow Condensed'}}>เลือกสาขา</div>
-          {BRANCHES.map((b,i)=>(
-            <button key={b.id} onClick={()=>setSelBr(b.id)} style={{display:'block',width:'100%',textAlign:'left',padding:'7px 10px',marginBottom:3,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:600,fontFamily:'Barlow',background:selBr===b.id?'#1e2538':'transparent',border:selBr===b.id?`1px solid ${BCLR[i]}`:'1px solid transparent',color:selBr===b.id?BCLR[i]:'#9ca3af'}}>
-              <span style={{fontSize:9,color:BCLR[i],marginRight:4}}>●</span><span style={{fontSize:9,color:'#4b5563',marginRight:3}}>{b.id}</span>{b.short}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 2026-08-25: เดิมหน้านี้เขียนตัวเลือกสาขาแยกของตัวเอง ทำให้ปุ่มล็อกไม่ขึ้น
+          เปลี่ยนมาใช้ BranchSelect ตัวเดียวกับหน้าอื่น จะได้มีปุ่มล็อกครบทุกหน้า
+          showAll={false} เพราะหน้ากรอกยอดต้องเลือกสาขาเดียวเท่านั้น */}
+      <BranchSelect sel={selBr} onSel={setSelBr} showAll={false} mobile={mobile}/>
       <div style={{flex:1}}>
         <div style={{fontFamily:'Barlow Condensed',fontWeight:900,fontSize:mobile?16:20,color:'#E2231A',letterSpacing:2,marginBottom:10}}>✏️ กรอกยอดรายวัน — {BRANCHES.find(x=>x.id===selBr)?.name}</div>
         {/* Day picker */}

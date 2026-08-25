@@ -541,7 +541,47 @@ function actualColor(actualVal, pct) {
 }
 
 /* ── Branch Selector (dropdown on mobile, sidebar on desktop) ── */
+/* ── ล็อกสาขา (2026-08-25) ─────────────────────────────────────────
+   ปัญหา: แท็บเล็ตที่สาขาเผลอกดเปลี่ยนสาขา แล้วกรอกยอดผิดสาขา
+   แก้: ล็อกไว้ที่สาขาของตัวเอง กดเปลี่ยนไม่ได้จนกว่าจะใส่รหัสปลดล็อก
+   เก็บในเครื่อง (ไม่ใช่ฐานข้อมูล) เพราะแต่ละเครื่องล็อกคนละสาขากัน */
+const LOCK_KEY = 'cp_lock_branch'
+const LOCK_PIN = '1369'          // รหัสปลดล็อก (เปลี่ยนได้ที่นี่)
+function getLockedBranch() {
+  try { return localStorage.getItem(LOCK_KEY) || null } catch { return null }
+}
+function setLockedBranch(bid) {
+  try { bid ? localStorage.setItem(LOCK_KEY, bid) : localStorage.removeItem(LOCK_KEY) } catch {}
+}
+
 function BranchSelect({sel, onSel, showAll=true, mobile}) {
+  const locked = getLockedBranch()
+
+  const toggleLock = () => {
+    if (locked) {
+      const pin = window.prompt('ใส่รหัสเพื่อปลดล็อกสาขา')
+      if (pin === null) return
+      if (pin !== LOCK_PIN) { alert('รหัสไม่ถูกต้อง'); return }
+      setLockedBranch(null); alert('ปลดล็อกแล้ว — เลือกสาขาอื่นได้')
+    } else {
+      if (sel === 'ALL') { alert('กรุณาเลือกสาขาที่ต้องการล็อกก่อน\n(ล็อก "รวมทุกสาขา" ไม่ได้)'); return }
+      const b = BRANCHES.find(x => x.id === sel)
+      if (!window.confirm(`ล็อกเครื่องนี้ไว้ที่สาขา ${sel} — ${b?.short||''} ?\n\nจะเปลี่ยนสาขาไม่ได้จนกว่าจะใส่รหัสปลดล็อก`)) return
+      setLockedBranch(sel); alert(`ล็อกที่สาขา ${sel} แล้ว`)
+    }
+    location.reload()
+  }
+
+  const LockBtn = ({size=38}) => (
+    <button onClick={toggleLock} title={locked?'แตะเพื่อปลดล็อก':'แตะเพื่อล็อกสาขานี้'}
+      style={{flexShrink:0,width:size,height:size,borderRadius:8,cursor:'pointer',
+        background: locked ? CI.yellow : 'transparent',
+        border: `1px solid ${locked ? CI.yellow : '#2d3548'}`,
+        fontSize:size>32?16:12,lineHeight:1,padding:0}}>
+      {locked ? '🔒' : '🔓'}
+    </button>
+  )
+
   if (mobile) return (
     <div style={{marginBottom:12}}>
       <select value={sel} onChange={e=>onSel(e.target.value)}
@@ -553,15 +593,19 @@ function BranchSelect({sel, onSel, showAll=true, mobile}) {
   )
   return (
     <div style={{width:165,flexShrink:0}}>
-      <div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:6,fontFamily:'Barlow Condensed'}}>เลือกสาขา</div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+        <span style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:1,fontFamily:'Barlow Condensed'}}>เลือกสาขา</span>
+        <LockBtn size={26}/>
+      </div>
+      {locked && <div style={{fontSize:10,color:CI.yellow,marginBottom:6}}>🔒 ล็อกที่ {locked}</div>}
       {showAll && <>
-        <button onClick={()=>onSel('ALL')} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',marginBottom:5,borderRadius:6,cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,background:sel==='ALL'?'#1e2538':'transparent',border:sel==='ALL'?`1px solid ${CI.yellow}`:'1px solid #2d3548',color:sel==='ALL'?CI.yellow:'#9ca3af'}}>
+        <button disabled={!!locked} onClick={()=>onSel('ALL')} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',marginBottom:5,borderRadius:6,cursor:'pointer',fontFamily:'Barlow Condensed',fontWeight:700,fontSize:13,background:sel==='ALL'?'#1e2538':'transparent',border:sel==='ALL'?`1px solid ${CI.yellow}`:'1px solid #2d3548',color:sel==='ALL'?CI.yellow:'#9ca3af'}}>
           🌐 รวมทุกสาขา
         </button>
         <div style={{borderBottom:'1px solid #2d3548',marginBottom:5}}/>
       </>}
       {BRANCHES.map((b,i) => (
-        <button key={b.id} onClick={()=>onSel(b.id)} style={{display:'block',width:'100%',textAlign:'left',padding:'7px 10px',marginBottom:3,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:600,fontFamily:'Barlow',background:sel===b.id?'#1e2538':'transparent',border:sel===b.id?`1px solid ${BCLR[i]}`:'1px solid transparent',color:sel===b.id?BCLR[i]:'#9ca3af',transition:'all .15s'}}>
+        <button key={b.id} disabled={!!locked} onClick={()=>onSel(b.id)} style={{display:'block',width:'100%',textAlign:'left',padding:'7px 10px',marginBottom:3,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:600,fontFamily:'Barlow',background:sel===b.id?'#1e2538':'transparent',border:sel===b.id?`1px solid ${BCLR[i]}`:'1px solid transparent',color:sel===b.id?BCLR[i]:'#9ca3af',transition:'all .15s'}}>
           <span style={{fontSize:9,marginRight:3,color:BCLR[i]}}>●</span><span style={{fontSize:9,color:'#4b5563',marginRight:3}}>{b.id}</span>{b.short}
         </button>
       ))}
@@ -702,7 +746,8 @@ export default function App() {
   const mobile = useIsMobile()
   const compact = useViewportMobile()   // true เมื่อจอแคบ (มือถือ) · false บนจอกว้าง (PC/แท็บเล็ต)
   const [tab, setTab]   = useState('overview')
-  const [selBr, setSelBr] = useState('ALL')
+  // ถ้าเครื่องนี้ถูกล็อกไว้ที่สาขาใด ให้เปิดมาที่สาขานั้นเสมอ
+  const [selBr, setSelBr] = useState(() => getLockedBranch() || 'ALL')
   const [ready, setReady] = useState(false)
   const [connErr, setConnErr] = useState(false)
   const contentRef = useRef(null)
